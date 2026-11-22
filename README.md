@@ -22,13 +22,13 @@ Sketching is the best place to start. The walkthrough below takes you from a sna
 
 ## Screenshots
 
-**Part workspace and feature tree.** Ribbon commands across the top, model history and the blue rollback bar on the left, and a two-hole mounting plate in the viewport.
+**Part workspace and feature tree.** Ribbon commands across the top, model history and the blue rollback bar on the left, and a bearing mount in the viewport.
 
-![FreeWorks part workspace showing the ribbon, feature tree, rollback bar, and a two-hole mounting plate](docs/images/interface-feature-tree.png)
+![FreeWorks part workspace showing the ribbon, feature tree, rollback bar, and a bearing mount](docs/images/interface-feature-tree.png)
 
-**Sketch editing.** The same plate in sketch mode, showing the sketch tools, shaded contour, constraint indicators, and hole diameters.
+**Sketch editing.** The same bearing mount in sketch mode, showing the sketch tools and shaded mounting profile.
 
-![FreeWorks sketch editor showing a shaded rectangular profile with two dimensioned holes](docs/images/sketching.png)
+![FreeWorks sketch editor showing the shaded bearing mount profile and its holes](docs/images/sketching.png)
 
 ## Requirements and quick install
 
