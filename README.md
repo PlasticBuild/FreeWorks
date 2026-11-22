@@ -20,6 +20,16 @@ FreeWorks is an independent add-on for FreeCAD. Install it into your existing Fr
 
 Sketching is the best place to start. The walkthrough below takes you from a snapped rectangle to an extruded part. This is an early alpha, so expect rough edges and verify results before relying on them.
 
+## Screenshots
+
+**Part workspace and feature tree.** Ribbon commands across the top, model history and the blue rollback bar on the left, and a two-hole mounting plate in the viewport.
+
+![FreeWorks part workspace showing the ribbon, feature tree, rollback bar, and a two-hole mounting plate](docs/images/interface-feature-tree.png)
+
+**Sketch editing.** The same plate in sketch mode, showing the sketch tools, shaded contour, constraint indicators, and hole diameters.
+
+![FreeWorks sketch editor showing a shaded rectangular profile with two dimensioned holes](docs/images/sketching.png)
+
 ## Requirements and quick install
 
 - Use stock FreeCAD **1.1.4**. Windows has been tested. Other operating systems are untested.
