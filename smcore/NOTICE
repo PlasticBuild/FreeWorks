@@ -1,0 +1,15 @@
+smcore: third-party code bundled in FreeWorks
+
+Source:   FreeCAD SheetMetal workbench, https://github.com/shaise/FreeCAD_SheetMetal
+Version:  0.8.26 (package.xml in this folder; installed via the FreeCAD Addon Manager)
+Licence:  LGPL-2.1-or-later, full text in LICENSE in this folder. Copyright stays with the original
+          authors; every file keeps its original header.
+
+What FreeWorks changed:
+- The .py files are copied unmodified, except SheetMetalUnfoldCmd.py (FreeWorks, 2026-11-20): the start-up
+  warning about the missing networkx package, with its reinstall hint, is replaced by one plain note printed
+  the first time an unfold runs without networkx (_note_networkx). The unfolding itself is unchanged.
+- Left out: InitGui.py, TestSheetMetal.py, current.py, SMTests/, Macros/, MDS/, Resources/translations,
+  and the docs and images in Resources. FreeWorks does not register the SheetMetal workbench.
+- FreeWorks' swstyle/smengine.py puts this folder on sys.path only when the SheetMetal add-on is not
+  installed. An installed add-on always takes precedence.

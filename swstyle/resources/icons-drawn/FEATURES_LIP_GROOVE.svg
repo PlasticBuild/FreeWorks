@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><defs>
+<linearGradient id="sf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9f1fb"/><stop offset="1" stop-color="#9fb9d8"/></linearGradient>
+<linearGradient id="sf2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6e7c8"/><stop offset="1" stop-color="#d9b16a"/></linearGradient>
+<linearGradient id="sol" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d7dde5"/><stop offset="1" stop-color="#8e9aa8"/></linearGradient>
+<linearGradient id="cyl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8e9aa8"/><stop offset="0.45" stop-color="#eef2f6"/><stop offset="1" stop-color="#7d8996"/></linearGradient>
+<linearGradient id="fold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#e2a92a"/></linearGradient>
+</defs><path stroke="#3d4f66" stroke-width="1" stroke-linejoin="round" fill="url(#sol)"  d="M3 28 L3 18 L13 18 L13 22 L17 22 L17 28 Z"/><path stroke="#3d4f66" stroke-width="1" stroke-linejoin="round" fill="url(#sf2)"  d="M15 16 L15 6 L29 6 L29 16 L25 16 L25 12 L19 12 L19 16 Z"/><path fill="#3a9a4a" stroke="#256c31" stroke-width="0.6" stroke-linejoin="round" d="M9.8 15.0 L9.8 12.0 L11.4 12.0 L9.0 9.0 L6.6 12.0 L8.2 12.0 L8.2 15.0 Z"/></svg>
