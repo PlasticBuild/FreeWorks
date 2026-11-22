@@ -4,11 +4,21 @@
 
 **0.3.0-alpha1 · Windows tested · Other operating systems untested**
 
-This add-on gives stock FreeCAD 1.1.4 a familiar commercial-CAD workflow, from sketching and part modeling to assemblies and drawings. It runs as an add-on to stock FreeCAD. The application is still called **FreeCAD** inside the app.
+**Like the SOLIDWORKS interface and want to work in FreeCAD?** FreeWorks brings a familiar commercial-CAD workflow to stock FreeCAD 1.1.4, from the first sketch through parts, assemblies, and drawings.
 
-## Who it’s for
+FreeWorks is an independent add-on for FreeCAD. Install it into your existing FreeCAD setup. The application still appears as **FreeCAD**.
 
-If you’re switching from commercial CAD and prefer ribbon-style tabs, a feature tree, and task panels, start with the sketching walkthrough below. Invited alpha testers can send feedback through the private tester channel.
+## What you can try
+
+| Area | Workflow |
+| --- | --- |
+| Interface | Find commands on ribbon-style tabs, edit feature settings in task panels, and step through the model with the feature tree and rollback bar. Light and dark themes are available. |
+| Sketching | Snap to endpoints, midpoints, and centres. Use inference lines and automatic relations as you draw, then set sizes with Smart Dimension. |
+| Part modelling | Turn sketches into parts with extrudes, revolves, sweeps, and lofts. Refine them with fillets, holes, patterns, and mirrors. |
+| Assemblies | Insert components and position them with mates. Check for interference or create an exploded view. |
+| Drawings | Create projected, section, and detail views, add dimensions and annotations, and export to PDF or DXF. |
+
+Sketching is the best place to start. The walkthrough below takes you from a snapped rectangle to an extruded part. This is an early alpha, so expect rough edges and verify results before relying on them.
 
 ## Requirements and quick install
 
