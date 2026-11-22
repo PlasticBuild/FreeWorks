@@ -1,6 +1,6 @@
 # FreeWorks 0.3.0-alpha1 status
 
-These notes cover the private alpha test build. If you're an invited tester, report issues in **GitHub Issues in the private tester repository** using the link in your invitation. See the [feedback guide](docs/FEEDBACK.md) for what to include.
+These notes cover 0.3.0-alpha1. Everyone is welcome to report bugs, suggest features, or share feedback in [GitHub Issues](https://github.com/PlasticBuild/FreeWorks/issues). See the [feedback guide](docs/FEEDBACK.md) for what to include.
 
 ## Known problems
 
