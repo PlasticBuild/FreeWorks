@@ -8,7 +8,7 @@ Use the manual installation steps below for this alpha.
 
 ## Manual install
 
-1. Get the alpha ZIP from your tester invitation.
+1. Download **FreeWorks-0.3.0-alpha1.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.0-alpha1).
 2. Close FreeCAD. Extract the add-on into your user `Mod` folder as `FreeWorks`. Check that `InitGui.py` sits directly inside `Mod/FreeWorks`.
 3. Restart FreeCAD.
 

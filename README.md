@@ -8,6 +8,8 @@
 
 FreeWorks is an independent add-on for FreeCAD. Install it into your existing FreeCAD setup. The application still appears as **FreeCAD**.
 
+[**Download FreeWorks 0.3.0-alpha1**](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.0-alpha1)
+
 ## What you can try
 
 | Area | Workflow |
@@ -29,7 +31,7 @@ Sketching is the best place to start. The walkthrough below takes you from a sna
 ## Requirements and quick install
 
 - Use stock FreeCAD **1.1.4**. Windows has been tested. Other operating systems are untested.
-- Follow the [manual installation guide](docs/INSTALL.md). Alpha access is by invitation. The public repository is the place to read the documentation.
+- Download **FreeWorks-0.3.0-alpha1.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.0-alpha1), then follow the [manual installation guide](docs/INSTALL.md).
 
 Orca, Bambu, PrusaSlicer, and Diotopo are optional in-app downloads. Each is downloaded separately. The add-on package excludes all four.
 
