@@ -8,7 +8,7 @@ Use the manual installation steps below for this alpha.
 
 ## Manual install
 
-1. Download **FreeWorks-0.3.1-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.1-alpha).
+1. Download **FreeWorks-0.3.2-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.2-alpha).
 2. Close FreeCAD. Extract the add-on into your user `Mod` folder as `FreeWorks`. Check that `InitGui.py` sits directly inside `Mod/FreeWorks`.
 3. Restart FreeCAD.
 
@@ -26,7 +26,7 @@ Open FreeCAD and choose **Set Up FreeCAD** when the Welcome box offers it. Open 
 
 ## Update
 
-In 0.3.1-alpha, open **Options > General > Software updates** and set the repository to PlasticBuild/FreeWorks. When FreeWorks offers an update, accept it and restart FreeCAD to apply it. You can turn off checks or roll back from the same page.
+In FreeWorks, open **Options > General > Software updates** and set the repository to PlasticBuild/FreeWorks. When FreeWorks offers an update, accept it and restart FreeCAD to apply it. You can turn off checks or roll back from the same page.
 
 For a manual update, close FreeCAD, keep a backup of your installed FreeWorks folder, and copy in the new release. Restart FreeCAD.
 
