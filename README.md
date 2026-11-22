@@ -44,6 +44,39 @@ Orca, Bambu, PrusaSlicer, and Diotopo are optional in-app downloads. Each is dow
 3. Remove the practice line so the rectangle is the only profile. Use Smart Dimension on two adjacent edges and enter their lengths in the Modify box.
 4. Exit the sketch, select the rectangle sketch, and use Extrude. Enter a depth and accept the preview.
 
+## Status · 0.3.0-alpha1
+
+These notes cover the private alpha test build. If you're an invited tester, report issues in **GitHub Issues in the private tester repository** using the link in your invitation. See the [feedback guide](docs/FEEDBACK.md) for what to include.
+
+### Known problems
+
+- **Parting Surface.** The Sharp and Smooth corner options leave corners unfilled.
+- **Dimension Text.** Inspection, Justify, Offset, and the second text line are unavailable. Add Parentheses works.
+- A Distance-Distance chamfer that meets a Vertex chamfer corner can fail to build.
+- Some files may freeze when rebuilding complex surfaces after an edit or during certain drawing steps. Save often.
+- Some drawings may reopen blank. If that happens, try rebuilding with **Ctrl+Q**.
+- Some panel wording and layouts may differ from the intended workflow.
+
+### Shortcomings
+
+- FreeWorks runs on stock FreeCAD 1.1.4 and inherits limits from its geometry kernel and assembly solver.
+- Sheet metal, weldments, and mold tools have had less testing than parts, assemblies, and drawings.
+- Drawing flat patterns, weldment cut-list tables, and the Sketch Blocks and Library Feature panels are still pending.
+
+### Actively being worked on
+
+- Checking alpha stability on clean installs.
+- Confirming and fixing issues found by automated tutorial walkthroughs.
+- Completing the Dimension Text options and fixing Parting Surface corners.
+
+### Planned next
+
+- Include the fixes for thin cuts from an open line and Full Round on slot ends in the next build.
+- Add drawing flat patterns and weldment cut lists, and test sheet metal and weldments more thoroughly.
+- Add Sketch Blocks, Library Feature, and Make Independent.
+- Refine sketch snapping and automatic relations.
+- Fix issues reported by testers.
+
 ## Guides
 
 - [Install, update, or remove FreeWorks](docs/INSTALL.md)
