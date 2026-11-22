@@ -20,6 +20,12 @@ FreeWorks is an independent add-on for FreeCAD. Install it into your existing Fr
 
 Sketching is the best place to start. The walkthrough below takes you from a snapped rectangle to an extruded part. This is an early alpha, so expect rough edges and verify results before relying on them.
 
+## Screenshots
+
+![FreeWorks part workspace showing the bearing mount, ribbon, feature tree, and rollback bar](docs/images/freeworks-part-alpha1.png)
+
+![FreeWorks sketch editor showing the shaded bearing mount profile](docs/images/freeworks-sketch-alpha1.png)
+
 ## Requirements and quick install
 
 - Use stock FreeCAD **1.1.4**. Windows has been tested. Other operating systems are untested.
