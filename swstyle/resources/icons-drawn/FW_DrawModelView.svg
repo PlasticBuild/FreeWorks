@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><defs>
+<linearGradient id="sol" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dfe5ec"/><stop offset="1" stop-color="#97a4b3"/></linearGradient>
+<linearGradient id="top" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3f6f9"/><stop offset="1" stop-color="#c9d3de"/></linearGradient>
+<linearGradient id="side" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9eabba"/><stop offset="1" stop-color="#6f7f92"/></linearGradient>
+<linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dde4ec"/></linearGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbe9b8"/><stop offset="1" stop-color="#e2b04a"/></linearGradient>
+</defs><path fill="none" stroke="#2a73c9" stroke-width="0.9" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="1.6 1.2" d="M2 4 h28 v25 h-28 Z"/><path fill="url(#side)" stroke="#3d4f66" stroke-width="0.9" stroke-linejoin="round" stroke-linecap="round" d="M15 25 L23.31 20.2 L23.31 11.8 L15 16.6 Z"/><path fill="url(#sol)" stroke="#3d4f66" stroke-width="0.9" stroke-linejoin="round" stroke-linecap="round" d="M15 25 L8.76 21.4 L8.76 13 L15 16.6 Z"/><path fill="url(#top)" stroke="#3d4f66" stroke-width="0.9" stroke-linejoin="round" stroke-linecap="round" d="M15 16.6 L23.31 11.8 L17.08 8.2 L8.76 13 Z"/></svg>

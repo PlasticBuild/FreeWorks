@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><defs>
+<linearGradient id="sf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9f1fb"/><stop offset="1" stop-color="#9fb9d8"/></linearGradient>
+<linearGradient id="sf2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6e7c8"/><stop offset="1" stop-color="#d9b16a"/></linearGradient>
+<linearGradient id="sol" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d7dde5"/><stop offset="1" stop-color="#8e9aa8"/></linearGradient>
+<linearGradient id="cyl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8e9aa8"/><stop offset="0.45" stop-color="#eef2f6"/><stop offset="1" stop-color="#7d8996"/></linearGradient>
+<linearGradient id="fold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#e2a92a"/></linearGradient>
+</defs><path stroke="#3d4f66" stroke-width="1" stroke-linejoin="round" fill="url(#sf)"  d="M2 22 L12 15 L30 15 L20 22 Z"/><path stroke="#3d4f66" stroke-width="1" stroke-linejoin="round" fill="url(#sol)"  d="M10 28 L10 12 C10 8 22 8 22 12 L22 28 Z"/><ellipse stroke="#3d4f66" stroke-width="1" stroke-linejoin="round" fill="#eef2f6" cx="16" cy="12" rx="6" ry="2.4"/><path fill="none" stroke="#cc3b2f" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"  d="M10 18.5 C10 21 22 21 22 18.5"/></svg>

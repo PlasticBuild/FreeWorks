@@ -1,0 +1,1857 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Command reference: assemblies and drawings</title><link rel="stylesheet" href="guide.css"><style>body { font-family: Segoe UI, Arial, sans-serif; font-size: 10pt; color: #1e1e1e; background: #ffffff; margin: 12px 18px; }
+h1 { font-size: 18pt; color: #1b4f8a; margin: 4px 0 8px 0; }
+h2 { font-size: 13pt; color: #1b4f8a; margin: 16px 0 6px 0; }
+h3 { font-size: 11pt; color: #333333; margin: 12px 0 4px 0; }
+table { border-collapse: collapse; margin: 6px 0; }
+th { background: #e8eef5; text-align: left; padding: 3px 8px; border: 1px solid #c8d2de; }
+td { padding: 3px 8px; border: 1px solid #d8dee6; vertical-align: top; }
+code { font-family: Consolas, monospace; background: #f2f4f7; }
+blockquote { color: #555555; margin: 6px 0 6px 12px; }
+.nav { font-size: 9pt; color: #666666; border-bottom: 1px solid #d8dee6; padding-bottom: 4px; margin-bottom: 8px; }
+a { color: #1565c0; }
+</style></head>
+<body>
+<div class="nav"><a href="index.html">Contents</a> | <a href="17-reference-part.html">Previous: Command reference: parts and sketches</a> | <a href="19-reference-other.html">Next: Command reference: views, relations and the rest</a></div>
+<h1 id="18-command-reference-assemblies-and-drawings"><a name="18-command-reference-assemblies-and-drawings"></a>18. Command reference: assemblies and drawings</h1>
+<p>Every command on the assembly and drawing tabs of the ribbon, in the order the tabs show them.</p>
+<p>Click <b>?</b> on a PropertyManager, or press F1 over a command, to come straight to its entry here.</p>
+<ul><li><a href="#drawing-drawing">Drawing: Drawing</a></li><li><a href="#drawing-annotation">Drawing: Annotation</a></li><li><a href="#drawing-sketch">Drawing: Sketch</a></li><li><a href="#drawing-sheet-format">Drawing: Sheet Format</a></li><li><a href="#drawing-markup">Drawing: Markup</a></li><li><a href="#assembly-assembly">Assembly: Assembly</a></li><li><a href="#assembly-layout">Assembly: Layout</a></li><li><a href="#drawing-inspection">Drawing: Inspection</a></li><li><a href="#assembly-evaluate">Assembly: Evaluate</a></li><li><a href="#assembly-freecad-assembly">Assembly: FreeCAD Assembly</a></li><li><a href="#drawing-drawing-tools">Drawing: Drawing Tools</a></li></ul>
+<h2 id="drawing-drawing"><a name="drawing-drawing"></a>Drawing: Drawing</h2>
+<h3 id="standard-3-view"><a name="standard-3-view"></a>Standard 3 View</h3>
+<p>Adds a part's or assembly's Front, Top and Right views to the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a part or assembly from the list, or Browse... for one.</li><li>OK puts its Front, Top and Right views on the sheet, lined up.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="model-view"><a name="model-view"></a>Model View</h3>
+<p>Adds one view of a part or assembly in the orientation you pick, then views projected from it.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the part or assembly in the list of open documents, or Browse... for a file, then click Next .</li><li>Pick a view in Orientation (Front, Top, Isometric and so on). Create multiple views places several at once.</li><li>Set the Display Style and the Scale, then click on the sheet where the view goes.</li><li>With Auto-start projected view on, move the pointer away from the view and click to add projected views of it; OK when you have enough.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="01-getting-started.html#8-make-a-drawing">8. Make a drawing</a>.</p>
+<h3 id="projected-view"><a name="projected-view"></a>Projected View</h3>
+<p>Adds a view projected from the picked view: click to its right, left, above or below.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the view to project from (or pick it first, then the command).</li><li>Move the pointer to the side, above or below it: the preview shows the view from that direction.</li><li>Click to place it. It lines up with its parent and uses the parent's scale and display style until you change them in the PropertyManager.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="auxiliary-view"><a name="auxiliary-view"></a>Auxiliary View</h3>
+<p>Adds a view square to the picked straight edge of a view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click a straight edge in a view: the new view looks square onto it.</li><li>Click where the view goes.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="section-view"><a name="section-view"></a>Section View</h3>
+<p>Cuts a view along a line you sketch and adds the section as a new view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the cutting line type: Vertical, Horizontal, Auxiliary or Aligned (or a Half Section shape).</li><li>Click in a view to place the cutting line; it snaps to centres and edges. A pop-up offers offsets (arc, single or notch) before you go on.</li><li>Click OK in the pop-up, then click where the section view goes. Flip Direction turns the arrows round.</li><li>Set the hatch, Partial section, Slice section or Section depth in the PropertyManager, then OK.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="detail-view"><a name="detail-view"></a>Detail View</h3>
+<p>Circles part of a view and adds it enlarged as a new view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click in a view for the centre of the detail circle, then click again to set its size (or pick Profile and click the corners of your own outline).</li><li>Click on the sheet where the detail view goes.</li><li>Set its scale (parent, sheet or your own), its outline and its label in the PropertyManager, then OK.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="break-view"><a name="break-view"></a>Break View</h3>
+<p>Breaks a long view in two with a gap, keeping its scale.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click in a view for the first break line, then for the second.</li><li>Change the gap and the line style, then OK. The view keeps its scale.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="crop-view"><a name="crop-view"></a>Crop View</h3>
+<p>Keeps only the part of a view inside a closed sketch.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click one corner of the area of the view to keep, then the opposite corner.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="relative-view"><a name="relative-view"></a>Relative View</h3>
+<p>A view oriented by two faces of the model you pick.</p>
+<p><b>How to use it</b></p>
+<ul><li>In the model's window pick a face for the first orientation and one for the second, then OK.</li><li>Click on the sheet to place the view.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="empty-view"><a name="empty-view"></a>Empty View</h3>
+<p>An empty view to sketch in.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click on the sheet to place the empty view, then sketch in it.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="predefined-view"><a name="predefined-view"></a>Predefined View</h3>
+<p>A view placed now and filled with a model later.</p>
+<p><b>How to use it</b></p>
+<ul><li>Set the orientation and scale, then click on the sheet to place the view.</li><li>Tick Insert a model now to fill it at once, or leave it empty and put a model in later.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="removed-section"><a name="removed-section"></a>Removed Section</h3>
+<p>A section through a view at a line, shown as a slice between two picked edges.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click one edge of the view, then the opposite edge.</li><li>Click to place the section: it shows the slice between the two edges.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="broken-out-section"><a name="broken-out-section"></a>Broken-out Section</h3>
+<p>Cuts away part of a view inside a closed profile to show what is behind it.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click two corners of the area to break out.</li><li>Set the depth (or click an edge in a side view for it), then OK.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="alternate-position-view"><a name="alternate-position-view"></a>Alternate Position View</h3>
+<p>Shows the assembly in a second position over the view, in phantom lines.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the assembly view, choose a component and move it with the boxes, then OK.</li><li>The second position is drawn over the view in phantom lines.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="update-view"><a name="update-view"></a>Update View</h3>
+<p>Redraws the picked views from their models.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the views (or none, for every view) and click it: they are drawn again from their models.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="replace-model"><a name="replace-model"></a>Replace Model</h3>
+<p>Swaps the model behind the picked views.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the drawing views to change and the new model, then OK.</li><li>The views then show the new model.</li></ul>
+<p><b>Where:</b> the Drawing tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h2 id="drawing-annotation"><a name="drawing-annotation"></a>Drawing: Annotation</h2>
+<h3 id="model-items"><a name="model-items"></a>Model Items</h3>
+<p>Brings the model's sketch dimensions into the drawing views.</p>
+<p><b>How to use it</b></p>
+<ul><li>Choose what to bring in: dimensions, annotations or reference geometry, and from the whole model or the picked feature.</li><li>OK (or a click on a feature in a view) adds the model's own dimensions to the views.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#dimensions-and-annotations">Dimensions and annotations</a>.</p>
+<h3 id="hole-callout"><a name="hole-callout"></a>Hole Callout</h3>
+<p>A callout with a hole's diameter and depth: click the hole's edge, then where the note goes.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the edge of a hole in a view, then click where the callout goes.</li><li>The callout lists the hole's size, depth and thread for a Hole Wizard hole, and the diameter for other round edges. Once it is placed, Callout variables... puts a value (depth, counterbore, thread...) into its text.</li><li>Change the tolerance, precision and text in the PropertyManager. The tool stays on for the next hole: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#dimensions-and-annotations">Dimensions and annotations</a>.</p>
+<h3 id="center-mark"><a name="center-mark"></a>Center Mark</h3>
+<p>Marks the centre of circles and arcs.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click circles or arcs in a view to put center marks on them. The tool stays on for the next one: OK or Esc ends it.</li><li>Auto Insert, For all holes, marks every hole of the view you click at once.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#dimensions-and-annotations">Dimensions and annotations</a>.</p>
+<h3 id="centerline"><a name="centerline"></a>Centerline</h3>
+<p>A centerline between two parallel edges.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click two edges of a view (the sides of a cylinder or a slot): a centerline goes between them. The tool stays on for the next one.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="09-shortcuts.html#the-s-key-shortcut-bar">The S key: shortcut bar</a>.</p>
+<h3 id="note"><a name="note"></a>Note</h3>
+<p>A text note on the sheet, with or without a leader.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a leader type in Leader. No Leader gives plain text; Auto Leader adds one only when you start on a view.</li><li>With a leader, click where it points, then where the note goes; without one, just click where the note goes.</li><li>Type the text in the Text box. Text Format sets the font, and adds symbols, geometric tolerances, hole callouts or links to properties.</li><li>The tool stays on for the next note: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="07-slicer.html#licence-note">Licence note</a>.</p>
+<h3 id="balloon"><a name="balloon"></a>Balloon</h3>
+<p>An item-number balloon on a component in a view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click on a part in a view, then click where the balloon goes. It shows the part's item number from the Bill of Materials (add one first to number balloons in order).</li><li>Settings chooses the shape, the size and what it shows (item number, quantity, text, a custom property or the file name).</li><li>The tool stays on: click the next part, then OK. Auto Balloon does every part of a view at once.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#dimensions-and-annotations">Dimensions and annotations</a>.</p>
+<h3 id="auto-balloon"><a name="auto-balloon"></a>Auto Balloon</h3>
+<p>Balloons for every component in the view at once.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click a view: every part in it gets a balloon, laid out by the pattern you pick (square, circular, top, bottom...).</li><li>Click more views, then OK.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#dimensions-and-annotations">Dimensions and annotations</a>.</p>
+<h3 id="surface-finish"><a name="surface-finish"></a>Surface Finish</h3>
+<p>A surface finish symbol on an edge or face.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the symbol and type the roughness.</li><li>Click where it points (an edge), then where the symbol goes. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#dimensions-and-annotations">Dimensions and annotations</a>.</p>
+<h3 id="geometric-tolerance"><a name="geometric-tolerance"></a>Geometric Tolerance</h3>
+<p>A feature control frame: tolerance symbol, value and datums.</p>
+<p><b>How to use it</b></p>
+<ul><li>Build the feature control frame: the symbol, the tolerance value and the datums.</li><li>Click where it points, then where the frame goes. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#dimensions-and-annotations">Dimensions and annotations</a>.</p>
+<h3 id="datum-feature"><a name="datum-feature"></a>Datum Feature</h3>
+<p>A datum feature symbol on an edge.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the edge the datum goes on, then where its label goes.</li><li>The next one takes the next letter. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#dimensions-and-annotations">Dimensions and annotations</a>.</p>
+<h3 id="revision-symbol"><a name="revision-symbol"></a>Revision Symbol</h3>
+<p>A revision symbol tied to the revision table.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click where the leader points, then where the symbol goes.</li><li>It shows the current revision of the revision table.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="general-table"><a name="general-table"></a>General Table</h3>
+<p>A table of rows and columns you fill in.</p>
+<p><b>How to use it</b></p>
+<ul><li>Set the number of rows and columns.</li><li>Click where the table goes (or OK for the anchor point). Double-click a cell to type in it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="title-block-table"><a name="title-block-table"></a>Title Block Table</h3>
+<p>A table of the title block's fields (drawings-land32).</p>
+<p><b>How to use it</b></p>
+<ul><li>Set the options, then OK (it goes to the anchor point) or click where the table goes.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="hole-table"><a name="hole-table"></a>Hole Table</h3>
+<p>A table of the holes in a view: tag, X, Y, size.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the origin in a view (a corner of the part, or an X edge then a Y edge).</li><li>Click the holes, or a face for all its holes, then click where the table goes (or OK for the anchor point). Next View adds holes from another view.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#tables">Tables</a>.</p>
+<h3 id="bill-of-materials"><a name="bill-of-materials"></a>Bill of Materials</h3>
+<p>A bill of materials of the assembly in a view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click a view of the assembly (or part) for its Bill of Materials.</li><li>Choose the BOM type (Top-level only, Parts only or Indented), the template and the item numbers' start and step.</li><li>With Attach to anchor point on, the table goes to the sheet's table anchor; otherwise click where it goes.</li><li>Double-click a cell to edit it; right-click the table for its insert, sort and format commands.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#tables">Tables</a>.</p>
+<h3 id="revision-table"><a name="revision-table"></a>Revision Table</h3>
+<p>A revision table on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Set the options, then OK (it goes to the anchor point) or click where the table goes.</li><li>Right-click the table, Revisions  Add Revision for each new revision.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#tables">Tables</a>.</p>
+<h3 id="weld-table"><a name="weld-table"></a>Weld Table</h3>
+<p>A table of the weld symbols on the sheet. Greyed until the sheet has a weld symbol.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click a drawing view whose model has welds, then OK (anchor point) or click where the table goes.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#tables">Tables</a>.</p>
+<h3 id="bend-table"><a name="bend-table"></a>Bend Table</h3>
+<p>A table of the bends in a flat pattern view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the sheet metal view, then click where the table goes (or OK for the anchor point).</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#tables">Tables</a>.</p>
+<h3 id="punch-table"><a name="punch-table"></a>Punch Table</h3>
+<p>A table of the forming tool punches in a flat pattern view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the origin (a corner of the part) in a view, then click where the table goes.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="stacked-balloon"><a name="stacked-balloon"></a>Stacked Balloon</h3>
+<p>Balloons stacked on one leader.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click a part for the first balloon, then click where the stack goes.</li><li>Click more parts to add their balloons to the stack, then OK.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="weld-symbol"><a name="weld-symbol"></a>Weld Symbol</h3>
+<p>A weld symbol on an edge.</p>
+<p><b>How to use it</b></p>
+<ul><li>Set the weld symbol and size for the Arrow Side (and the other side if needed).</li><li>Click the weld on the part, then where the symbol goes. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#dimensions-and-annotations">Dimensions and annotations</a>.</p>
+<h3 id="datum-target"><a name="datum-target"></a>Datum Target</h3>
+<p>A datum target point or area.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the target point on the part, then where the symbol goes. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="revision-cloud"><a name="revision-cloud"></a>Revision Cloud</h3>
+<p>A cloud drawn round a changed area.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click two opposite corners of the area that changed: the cloud is drawn round it. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="area-hatch-fill"><a name="area-hatch-fill"></a>Area Hatch/Fill</h3>
+<p>Hatches or fills a closed area of a view or sketch.</p>
+<p><b>How to use it</b></p>
+<ul><li>Choose Hatch, Solid or None, and the pattern, its scale and angle.</li><li>Click inside a closed area of a view to hatch it (or pick Boundary and click the edges that close it). The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="linear-note-pattern"><a name="linear-note-pattern"></a>Linear Note Pattern</h3>
+<p>Copies a note in rows and columns.</p>
+<p><b>How to use it</b></p>
+<ul><li>Set the spacing, number of instances and angle of each direction.</li><li>Click the note, balloon or symbol to pattern.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="circular-note-pattern"><a name="circular-note-pattern"></a>Circular Note Pattern</h3>
+<p>Copies a note round a centre.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the pattern centre, then the note, balloon or symbol to pattern.</li><li>Set the number of instances and the angle.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="magnetic-line"><a name="magnetic-line"></a>Magnetic Line</h3>
+<p>A line that balloons snap to and line up on.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the start and the end of the line.</li><li>Balloons, notes and symbols dragged near it snap onto it, evenly spaced.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="caterpillar"><a name="caterpillar"></a>Caterpillar</h3>
+<p>A caterpillar weld along an edge.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the weld edge in a view: weld bead arcs are drawn along it. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="end-treatment"><a name="end-treatment"></a>End Treatment</h3>
+<p>A weld end treatment on a structural member's end.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click near the end of a weld edge in a view: a filled weld end is drawn there. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="autodimension"><a name="autodimension"></a>Autodimension</h3>
+<p>Dimensions a view's entities at once, baseline, chain or ordinate.</p>
+<p><b>How to use it</b></p>
+<ul><li>Choose all entities in the view or only the picked ones, and the scheme (baseline, chain or ordinate) for each direction.</li><li>Click the view to dimension it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="ordinate-dimension"><a name="ordinate-dimension"></a>Ordinate Dimension</h3>
+<p>Ordinate dimensions from a zero point on the view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the vertex that is the zero, then each vertex to dimension from it.</li><li>OK places them; texts that crowd are jogged apart.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="horizontal-ordinate-dimension"><a name="horizontal-ordinate-dimension"></a>Horizontal Ordinate Dimension</h3>
+<p>Horizontal ordinate dimensions from a zero point.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the vertex that is the zero, then each vertex to dimension from it.</li><li>OK places the horizontal ordinate dimensions.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="vertical-ordinate-dimension"><a name="vertical-ordinate-dimension"></a>Vertical Ordinate Dimension</h3>
+<p>Vertical ordinate dimensions from a zero point.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the vertex that is the zero, then each vertex to dimension from it.</li><li>OK places the vertical ordinate dimensions.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="baseline-dimension"><a name="baseline-dimension"></a>Baseline Dimension</h3>
+<p>Dimensions measured from one baseline.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the base vertex, then the vertices to dimension from it.</li><li>OK places them, each measured from the base.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="chamfer-dimension"><a name="chamfer-dimension"></a>Chamfer Dimension</h3>
+<p>Dimensions a chamfer's distance and angle.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the chamfer edge, then a lead-in edge next to it, then where the text goes.</li><li>The text shows the chamfer's distance and angle.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="format-painter"><a name="format-painter"></a>Format Painter</h3>
+<p>Copies one annotation's format onto others.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the dimension or annotation to copy the format from.</li><li>Then click the ones to paste it to; OK when done.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="spell-checker"><a name="spell-checker"></a>Spell Checker</h3>
+<p>Checks the spelling of the sheet's notes (F7).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it (or press F7): each word of the sheet's notes that is not in the word list comes up in turn, with suggestions.</li><li>Change or Change All puts in the suggestion; Ignore, Ignore All or Add skip the word.</li></ul>
+<p><b>Shortcut:</b> F7.</p>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="make-block"><a name="make-block"></a>Make Block</h3>
+<p>Makes a block from the picked sheet entities.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the sketch entities and annotations for the block (or click them now).</li><li>Click on empty sheet for the insertion point, then OK.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="edit-block"><a name="edit-block"></a>Edit Block</h3>
+<p>Edits the picked block's entities.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a block, then click it: its entities come apart so you can move them or change the text.</li><li>OK rebuilds the block and every copy of it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="insert-block"><a name="insert-block"></a>Insert Block</h3>
+<p>Places a saved block on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick one of this drawing's blocks, or Browse... for a block file.</li><li>Set the scale and angle, then click on the sheet to place it. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="save-block"><a name="save-block"></a>Save Block</h3>
+<p>Saves the picked block to a file.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a block, then click it and choose where to save the block file.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="explode-block"><a name="explode-block"></a>Explode Block</h3>
+<p>Breaks the picked block into its entities.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a block, then click it: the block is broken back into its entities.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="horizontal-dimension"><a name="horizontal-dimension"></a>Horizontal Dimension</h3>
+<p>Dimensions the horizontal distance between two points or along a line.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click two points, or a line, in a view: the horizontal distance follows the pointer.</li><li>Click where the dimension goes. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="vertical-dimension"><a name="vertical-dimension"></a>Vertical Dimension</h3>
+<p>Dimensions the vertical distance between two points or along a line.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click two points, or a line, in a view: the vertical distance follows the pointer.</li><li>Click where the dimension goes. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="angular-dimension"><a name="angular-dimension"></a>Angular Dimension</h3>
+<p>Dimensions the angle between two lines or three points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click two lines in a view: the angle between them follows the pointer.</li><li>Click where the dimension goes; which side you click picks which angle. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="radius-diameter-dimension"><a name="radius-diameter-dimension"></a>Radius/Diameter Dimension</h3>
+<p>Dimensions the radius of an arc or the diameter of a circle.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click a circle or an arc in a view, then click where the dimension goes.</li><li>Switch between radius and diameter in the Dimension PropertyManager. The tool stays on for the next one: OK or Esc ends it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="chain-dimension"><a name="chain-dimension"></a>Chain Dimension</h3>
+<p>Dimensions a run of points or edges, each measured from the one before it.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the first vertex, then the next ones in turn.</li><li>OK places the chain, each dimension running from the vertex before it.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#dimensions-and-annotations">Dimensions and annotations</a>.</p>
+<h3 id="angular-running-dimension"><a name="angular-running-dimension"></a>Angular Running Dimension</h3>
+<p>Dimensions a set of angles, all measured from the same zero line.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the centre (a vertex), then the vertex at 0 degrees, then the vertices to dimension.</li><li>OK places the angles, all measured from the same zero line.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="path-length-dimension"><a name="path-length-dimension"></a>Path Length Dimension</h3>
+<p>The total length of a chain of sketch entities, driving or driven.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the chain of edges or arcs in a view first, then click it: their total length is written next to them.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="symmetric-linear-diameter-dimension"><a name="symmetric-linear-diameter-dimension"></a>Symmetric Linear Diameter Dimension</h3>
+<p>Dimensions the diameter of a revolved profile, measured across its centreline.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the edge, then the centerline it turns about (they must be parallel), then where the dimension goes.</li><li>It shows the diameter across the centerline.</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="family-table"><a name="family-table"></a>Family Table</h3>
+<p>A row per configuration with the dimensions shown as letters.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the view of the part family (a part with configurations).</li><li>Pick the columns and the dimensions that show letters, then click where the table goes (or OK for the anchor point).</li></ul>
+<p><b>Where:</b> the Annotation tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h2 id="drawing-sketch"><a name="drawing-sketch"></a>Drawing: Sketch</h2>
+<h3 id="line"><a name="line"></a>Line</h3>
+<p>Sketches a line on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the start, then the end; keep clicking to chain. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="centerline-1"><a name="centerline-1"></a>Centerline</h3>
+<p>Sketches a centerline on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the start, then the end of the centerline. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="09-shortcuts.html#the-s-key-shortcut-bar">The S key: shortcut bar</a>.</p>
+<h3 id="corner-rectangle"><a name="corner-rectangle"></a>Corner Rectangle</h3>
+<p>Sketches a rectangle on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click one corner, then the opposite corner. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="09-shortcuts.html#mouse-gestures">Mouse gestures</a>.</p>
+<h3 id="circle"><a name="circle"></a>Circle</h3>
+<p>Sketches a circle on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the centre, then the radius. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#views">Views</a>.</p>
+<h3 id="centerpoint-arc"><a name="centerpoint-arc"></a>Centerpoint Arc</h3>
+<p>Sketches an arc from its center on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the centre, then the start, then the end. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="point"><a name="point"></a>Point</h3>
+<p>Sketches a point on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click where each point goes. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="spline"><a name="spline"></a>Spline</h3>
+<p>Sketches a spline on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the points it runs through; double-click ends it. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="center-rectangle"><a name="center-rectangle"></a>Center Rectangle</h3>
+<p>Sketches a rectangle from its center on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the centre, then a corner. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="straight-slot"><a name="straight-slot"></a>Straight Slot</h3>
+<p>Sketches a straight slot on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the start and end of the centre line, then the width. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="perimeter-circle"><a name="perimeter-circle"></a>Perimeter Circle</h3>
+<p>Sketches a circle through three points on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click three points on the rim. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="3-point-arc"><a name="3-point-arc"></a>3 Point Arc</h3>
+<p>Sketches an arc through three points on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the start, the end, then a point on the arc. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="polygon"><a name="polygon"></a>Polygon</h3>
+<p>Sketches a polygon on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Set the sides, then click the centre and a corner. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="ellipse"><a name="ellipse"></a>Ellipse</h3>
+<p>Sketches an ellipse on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the centre, then each axis. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="midpoint-line"><a name="midpoint-line"></a>Midpoint Line</h3>
+<p>Sketches a line from its midpoint on the drawing sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the middle, then one end. Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.</li><li>Esc ends the tool.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="sketch-fillet"><a name="sketch-fillet"></a>Sketch Fillet</h3>
+<p>Rounds the corner between two sketch entities on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick two entities that meet, set the radius, then OK.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="sketch-chamfer"><a name="sketch-chamfer"></a>Sketch Chamfer</h3>
+<p>Bevels the corner between two sketch entities on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick two entities that meet, set the distances, then OK.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="trim-entities"><a name="trim-entities"></a>Trim Entities</h3>
+<p>Trims or extends sketch entities on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Drag across the bits to remove, or click them.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="convert-entities"><a name="convert-entities"></a>Convert Entities</h3>
+<p>Converts model edges of a view to sketch entities.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick model edges in a view, then OK: they become sketch entities.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="offset-entities"><a name="offset-entities"></a>Offset Entities</h3>
+<p>Offsets sketch entities on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the entities, set the distance, then OK.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="mirror-entities"><a name="mirror-entities"></a>Mirror Entities</h3>
+<p>Mirrors sketch entities about a line.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the entities and the line to mirror about, then OK.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="linear-sketch-pattern"><a name="linear-sketch-pattern"></a>Linear Sketch Pattern</h3>
+<p>Repeats sketch entities in a row.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the entities, set the spacing and count, then OK.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="circular-sketch-pattern"><a name="circular-sketch-pattern"></a>Circular Sketch Pattern</h3>
+<p>Repeats sketch entities about a point.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the entities and the centre, set the count, then OK.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="move-entities"><a name="move-entities"></a>Move Entities</h3>
+<p>Moves selected sketch entities.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the entities, then the base point and where it goes, then OK.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="copy-entities"><a name="copy-entities"></a>Copy Entities</h3>
+<p>Copies selected sketch entities.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the entities, then the base point and where the copy goes, then OK.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="rotate-entities"><a name="rotate-entities"></a>Rotate Entities</h3>
+<p>Rotates selected sketch entities.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the entities, the centre and the angle, then OK.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="scale-entities"><a name="scale-entities"></a>Scale Entities</h3>
+<p>Scales selected sketch entities.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the entities, the base point and the factor, then OK.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="display-delete-relations"><a name="display-delete-relations"></a>Display/Delete Relations</h3>
+<p>Lists the relations of the picked sketch entities, to delete them.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick sketch entities on the sheet, then click it: their relations are listed; pick one and Delete.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="add-relation"><a name="add-relation"></a>Add Relation</h3>
+<p>Adds a relation between picked sketch entities.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick sketch entities on the sheet, then click it: only the relations that fit them are offered.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h3 id="quick-snaps"><a name="quick-snaps"></a>Quick Snaps</h3>
+<p>Sketch snap options on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it for the sketch snap options on the sheet.</li></ul>
+<p><b>Where:</b> the Sketch tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html">3. Sketching</a>.</p>
+<h2 id="drawing-sheet-format"><a name="drawing-sheet-format"></a>Drawing: Sheet Format</h2>
+<h3 id="edit-sheet-format"><a name="edit-sheet-format"></a>Edit Sheet Format</h3>
+<p>Edits the sheet format (the border and title block) instead of the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: the border, the title block and its texts can be changed; the views are hidden meanwhile.</li><li>Edit Sheet goes back to the sheet.</li></ul>
+<p><b>Where:</b> the Sheet Format tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="edit-sheet"><a name="edit-sheet"></a>Edit Sheet</h3>
+<p>Back to the sheet from editing its format.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to leave the sheet format and go back to the sheet.</li></ul>
+<p><b>Where:</b> the Sheet Format tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="title-block-fields"><a name="title-block-fields"></a>Title Block Fields</h3>
+<p>Marks the title block's fields while the sheet format is being edited.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: a table lists the title block's fields. Type the text of each one, then OK.</li></ul>
+<p><b>Where:</b> the Sheet Format tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="automatic-border"><a name="automatic-border"></a>Automatic Border</h3>
+<p>The sheet format's border and zone marks, kept to the sheet size (while editing the format).</p>
+<p><b>How to use it</b></p>
+<ul><li>While editing the sheet format, click it.</li><li>Set the zones (rows, columns, labels, start corner), the margins and the formatting, then OK.</li></ul>
+<p><b>Where:</b> the Sheet Format tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h2 id="drawing-markup"><a name="drawing-markup"></a>Drawing: Markup</h2>
+<h3 id="markup"><a name="markup"></a>Markup</h3>
+<p>Turns markup mode on or off.</p>
+<p><b>How to use it</b></p>
+<ul><li>Draw with the pen, pick a colour and width, erase; the markup is kept with the view.</li></ul>
+<p><b>Where:</b> the Markup tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="touch"><a name="touch"></a>Touch</h3>
+<p>Draws markup by touch or pen.</p>
+<p><b>How to use it</b></p>
+<ul><li>Turn Markup on first, then click it to draw on the sheet with a finger or a pen.</li></ul>
+<p><b>Where:</b> the Markup tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="draw"><a name="draw"></a>Draw</h3>
+<p>Draws an ink markup on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Turn Markup on first, then press and drag on the sheet to draw; each stroke is one markup.</li></ul>
+<p><b>Where:</b> the Markup tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="note-1"><a name="note-1"></a>Note</h3>
+<p>Writes a markup note on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Turn Markup on first, then click it and click on the sheet where the note goes.</li></ul>
+<p><b>Where:</b> the Markup tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="07-slicer.html#licence-note">Licence note</a>.</p>
+<h3 id="eraser"><a name="eraser"></a>Eraser</h3>
+<p>Rubs out ink markup.</p>
+<p><b>How to use it</b></p>
+<ul><li>Turn Markup on first, then click the markups to erase. OK when done.</li></ul>
+<p><b>Where:</b> the Markup tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="zoom-to-markup-view"><a name="zoom-to-markup-view"></a>Zoom to Markup View</h3>
+<p>Zooms to the markup's view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to zoom to the sheet's markups (there must be one on the sheet).</li></ul>
+<p><b>Where:</b> the Markup tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="markup-options"><a name="markup-options"></a>Markup Options</h3>
+<p>The markup pen's colour and width.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to set the markup pen's colour and width.</li></ul>
+<p><b>Where:</b> the Markup tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="color"><a name="color"></a>Color</h3>
+<p>The markup pen's colour.</p>
+<p><b>How to use it</b></p>
+<ul><li>Turn Markup on first, then click it and pick the markup pen's colour.</li></ul>
+<p><b>Where:</b> the Markup tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="select"><a name="select"></a>Select</h3>
+<p>Selects ink markup to move or delete it.</p>
+<p><b>How to use it</b></p>
+<ul><li>Turn Markup on first, then click a markup to pick it, to move or delete it.</li></ul>
+<p><b>Where:</b> the Markup tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h2 id="assembly-assembly"><a name="assembly-assembly"></a>Assembly: Assembly</h2>
+<h3 id="take-snapshot"><a name="take-snapshot"></a>Take Snapshot</h3>
+<p>Remembers the view to come back to.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: the view and which components show are kept as a snapshot. Double-click a snapshot in the tree to go back to it.</li></ul>
+<p><b>Shortcut:</b> Alt+Space.</p>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="edit-component"><a name="edit-component"></a>Edit Component</h3>
+<p>Edits the selected part in the context of the assembly; click again to go back.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a part in the assembly, then click it: you edit it in place while the others fade. Click it again (or the corner check) to go back to the assembly.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#motion-studies">Motion studies</a>.</p>
+<h3 id="no-external-references"><a name="no-external-references"></a>No External References</h3>
+<p>When on, editing a part in the assembly makes no external references.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the button with an assembly open. If a PropertyManager opens, fill it from the top down and click OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="insert-components"><a name="insert-components"></a>Insert Components</h3>
+<p>Brings a part or subassembly into the assembly.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a part or assembly from the list of open documents, or Browse... for one.</li><li>It follows the pointer: click to drop it (or OK to put it at the origin). Pick more and click again for each copy.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="new-part"><a name="new-part"></a>New Part</h3>
+<p>Creates a new part in the assembly: select a plane or face for it.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a plane or a flat face: a new part goes in the tree and opens with a sketch on that face. Esc instead leaves it at the origin.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="01-getting-started.html#1-new-part">1. New Part</a>.</p>
+<h3 id="copy-with-mates"><a name="copy-with-mates"></a>Copy with Mates</h3>
+<p>Copies a component together with its mates; pick the new mate entities.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the components to copy, then Next. For each of their mates pick the new face or edge the copy mates to (or Repeat). The copy is placed; OK starts the next one.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="mate"><a name="mate"></a>Mate</h3>
+<p>Places two components against each other with a mate.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick two faces, edges or points on two components: the mate that fits is applied at once as a preview, and a small mate toolbar opens by the pointer.</li><li>Pick another mate on the toolbar or in the PropertyManager if needed, then the check keeps it. The PropertyManager stays open for the next pair.</li><li>Quick mates: with no command running, Ctrl+pick two items and pick the mate on the toolbar.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#mates">Mates</a>.</p>
+<h3 id="component-preview-window"><a name="component-preview-window"></a>Component Preview Window</h3>
+<p>Shows the selected component alone in a window beside the assembly; pick its faces there.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a component, then click it: it shows alone in a window beside the assembly. Picks there count in the assembly, so Mate takes them. Click again to close it.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="linear-component-pattern"><a name="linear-component-pattern"></a>Linear Component Pattern</h3>
+<p>Patterns components in a linear direction.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick an edge or axis for the direction, the spacing and count, then the components to repeat, then OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="circular-component-pattern"><a name="circular-component-pattern"></a>Circular Component Pattern</h3>
+<p>Patterns components around an axis.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick an axis (a round face or edge), the angle and count, then the components to repeat, then OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="pattern-driven-component-pattern"><a name="pattern-driven-component-pattern"></a>Pattern Driven Component Pattern</h3>
+<p>Patterns components after a pattern in a part.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the components to repeat, then a pattern feature in a part: a copy goes on each instance of the pattern. Then OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="sketch-driven-component-pattern"><a name="sketch-driven-component-pattern"></a>Sketch Driven Component Pattern</h3>
+<p>Patterns components at the points of a sketch.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a sketch whose points place the copies, then the components to repeat, then OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="curve-driven-component-pattern"><a name="curve-driven-component-pattern"></a>Curve Driven Component Pattern</h3>
+<p>Patterns components along a curve.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a curve or edge, the spacing and count, then the components to repeat, then OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="chain-component-pattern"><a name="chain-component-pattern"></a>Chain Component Pattern</h3>
+<p>Patterns components along a path, as the links of a chain.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the path and the link components, choose Distance, Distance Linkage or Connection Linkage, set the spacing or Fill path, then OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="mirror-components"><a name="mirror-components"></a>Mirror Components</h3>
+<p>Mirrors components about a plane or a flat face.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a plane or flat face to mirror about, then the components, then OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="smart-fasteners"><a name="smart-fasteners"></a>Smart Fasteners</h3>
+<p>Adds fasteners (screws, nuts, washers) to the assembly.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it with holes in the assembly: fasteners are added to them. It needs the Fasteners add-on and says how to get it when it is not there.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#fasteners">Fasteners</a>.</p>
+<h3 id="move-component"><a name="move-component"></a>Move Component</h3>
+<p>Slides a component as far as its mates allow.</p>
+<p><b>How to use it</b></p>
+<ul><li>Drag a component in the view: it moves as far as its mates allow.</li><li>The PropertyManager also offers Along Assembly XYZ, Along Entity, By Delta XYZ and To XYZ Position, and Collision Detection.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#mates">Mates</a>.</p>
+<h3 id="rotate-component"><a name="rotate-component"></a>Rotate Component</h3>
+<p>Turns a component as far as its mates allow.</p>
+<p><b>How to use it</b></p>
+<ul><li>Drag a component in the view: it turns as far as its mates allow. About Entity and By Delta XYZ are in the PropertyManager.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#mates">Mates</a>.</p>
+<h3 id="fix"><a name="fix"></a>Fix</h3>
+<p>Locks the component where it is.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick components, then click it: they are held where they are, (f) in the tree.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="float"><a name="float"></a>Float</h3>
+<p>Lets the component move; mates position it.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick fixed components, then click it: they can move again, and mates position them.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="show-hidden-components"><a name="show-hidden-components"></a>Show Hidden Components</h3>
+<p>Shows hidden components.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: the hidden components come up alone. Click the ones to show, then Exit Show-Hidden (or Esc).</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="update-speedpak"><a name="update-speedpak"></a>Update SpeedPak</h3>
+<p>Updates the SpeedPak components of the assembly from their parts.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: every SpeedPak in the assembly is made again from its part.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="bill-of-materials-1"><a name="bill-of-materials-1"></a>Bill of Materials</h3>
+<p>Adds a bill of materials.</p>
+<p><b>How to use it</b></p>
+<ul><li>Set the template, BOM type and item numbers, then OK: the table floats over the view and follows the assembly.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#tables">Tables</a>.</p>
+<h3 id="exploded-view"><a name="exploded-view"></a>Exploded View</h3>
+<p>Separates the components into an exploded view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick components and drag an arrow of the handle: the step is added with that direction and distance. Add more steps the same way, then OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#exploded-views">Exploded views</a>.</p>
+<h3 id="explode-collapse"><a name="explode-collapse"></a>Explode / Collapse</h3>
+<p>Collapses the exploded assembly, or explodes it again.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to collapse the exploded view, or explode it again.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="explode-line-sketch"><a name="explode-line-sketch"></a>Explode Line Sketch</h3>
+<p>A 3D sketch for the explode lines (Route Line, Jog).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the button with an assembly open. If a PropertyManager opens, fill it from the top down and click OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#exploded-views">Exploded views</a>.</p>
+<h3 id="new-motion-study"><a name="new-motion-study"></a>New Motion Study</h3>
+<p>Inserts a new motion study.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: a motion study pane opens under the view. Add a Motor to a component, set the duration, then Calculate and Play.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="large-assembly-settings"><a name="large-assembly-settings"></a>Large Assembly Settings</h3>
+<p>Large Assembly Mode and the settings it turns on.</p>
+<p><b>How to use it</b></p>
+<ul><li>Opens Large Assembly Mode and the settings it turns on, each with a tick.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="assembly-features"><a name="assembly-features"></a>Assembly Features</h3>
+<p>Cuts made in the assembly: the parts are not changed.</p>
+<p><b>How to use it</b></p>
+<ul><li>Opens the assembly feature tools (cuts, holes, fillets, weld beads, belts...). They cut through the components in the assembly only; the part files are not changed.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#assembly-features">Assembly features</a>.</p>
+<h3 id="hole-series"><a name="hole-series"></a>Hole Series</h3>
+<p>One hole through a stack of parts: the head in the first, clearance in the middle, tapped in the last.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the face of the first part and the hole's position, then set the head, middle and last part's holes on their tabs, then OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#fasteners">Fasteners</a>.</p>
+<h3 id="hole-wizard"><a name="hole-wizard"></a>Hole Wizard</h3>
+<p>Holes from the Hole Wizard's types and sizes, through the components, in the assembly only.</p>
+<p><b>How to use it</b></p>
+<ul><li>Type tab: the hole type, Standard, Type and Size, the End Condition and the Options (near and far side countersinks, cosmetic thread). Favorites keep a set of choices.</li><li>Positions tab: the face the holes go on, then one click per hole; the sketch closes with the feature. With a sketch of points picked first, OK makes the holes on them.</li><li>Edit Feature on a hole opens the same page with its values.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="simple-hole"><a name="simple-hole"></a>Simple Hole</h3>
+<p>A round hole through the components from a picked flat face, in the assembly only.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a flat face where the hole goes, set the diameter and depth, then OK: it cuts through the components in the assembly only.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="extruded-cut"><a name="extruded-cut"></a>Extruded Cut</h3>
+<p>Cuts the components with an extruded sketch, in the assembly only.</p>
+<p><b>How to use it</b></p>
+<ul><li>As Boss-Extrude, taking material away. Flip side to cut removes everything outside the profile instead of inside it.</li><li>Feature Scope (several bodies): the bodies the cut applies to, or Auto-select.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="revolved-cut"><a name="revolved-cut"></a>Revolved Cut</h3>
+<p>Cuts the components by revolving a sketch about its centerline, in the assembly only.</p>
+<p><b>How to use it</b></p>
+<ul><li>As Revolve, taking material away.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="swept-cut"><a name="swept-cut"></a>Swept Cut</h3>
+<p>Cuts the components with a profile swept along a path, in the assembly only.</p>
+<p><b>How to use it</b></p>
+<ul><li>As Sweep, taking material away.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="fillet"><a name="fillet"></a>Fillet</h3>
+<p>Rounds edges of components, in the assembly only.</p>
+<p><b>How to use it</b></p>
+<ul><li>Fillet Type: Constant Size, Variable Size, Face Fillet, Full Round Fillet.</li><li>Items To Fillet: edges, faces, features or loops; Tangent propagation follows the edge round tangent neighbours.</li><li>Fillet Parameters: the radius (symmetric or asymmetric); Multiple radius fillet gives each edge its own value.</li><li>Setback Parameters and Fillet Options: how fillets meet at a vertex, Keep features, overflow.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="01-getting-started.html#5-fillet">5. Fillet</a>.</p>
+<h3 id="chamfer"><a name="chamfer"></a>Chamfer</h3>
+<p>Bevels edges of components, in the assembly only.</p>
+<p><b>How to use it</b></p>
+<ul><li>Chamfer Type: Angle Distance, Distance Distance, Vertex, Offset Face, Face Face.</li><li>Items To Chamfer: the edges, faces or vertex; Chamfer Parameters: the distance and angle (Flip direction swaps the sides).</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="04-features.html#edges-and-faces">Edges and faces</a>.</p>
+<h3 id="weld-bead"><a name="weld-bead"></a>Weld Bead</h3>
+<p>A weld bead where the Weld From faces meet the Weld To faces.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the Weld From faces of one component and the Weld To faces of another (or drag across them with Smart Weld Selection), set the bead size, then OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="belt-chain"><a name="belt-chain"></a>Belt/Chain</h3>
+<p>A belt or chain round the pulleys picked; Engage belt makes them turn together.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the pulleys or sprockets in order, set the belt thickness; Engage belt makes them turn together. Then OK.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="linear-pattern"><a name="linear-pattern"></a>Linear Pattern</h3>
+<p>Linear Pattern of assembly cuts and holes, in the assembly only.</p>
+<p><b>How to use it</b></p>
+<ul><li>Direction 1: an edge, axis or dimension, the spacing (or the total length with Up to reference) and the number of instances.</li><li>Direction 2: a second direction; Pattern seed only repeats the seed, not Direction 1.</li><li>Features and Faces / Bodies: what is repeated.</li><li>Instances to Skip: click the instances in the view to leave out. Instances to Vary: increments per instance.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="circular-pattern"><a name="circular-pattern"></a>Circular Pattern</h3>
+<p>Circular Pattern of assembly cuts and holes, in the assembly only.</p>
+<p><b>How to use it</b></p>
+<ul><li>Direction 1: the axis (an edge, a cylindrical face, an axis), Equal spacing over the total angle or a spacing per instance, and the number of instances.</li><li>Symmetric: the same instances the other way; Direction 2 for a second set.</li><li>Instances to Skip: click the instances to leave out.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="mirror"><a name="mirror"></a>Mirror</h3>
+<p>Mirror of assembly cuts and holes, in the assembly only.</p>
+<p><b>How to use it</b></p>
+<ul><li>Mirror Face/Plane: the plane or flat face. Features to Mirror / Faces to Mirror / Bodies to Mirror: what is mirrored. Merge solids joins a mirrored body to the original.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="table-driven-pattern"><a name="table-driven-pattern"></a>Table Driven Pattern</h3>
+<p>Table Driven Pattern of assembly cuts and holes, in the assembly only.</p>
+<p><b>How to use it</b></p>
+<ul><li>Coordinate system: the origin of the table; Points: the X, Y of each instance (Browse to load, Save to keep). Geometry pattern; Features / Bodies to Copy.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="sketch-driven-pattern"><a name="sketch-driven-pattern"></a>Sketch Driven Pattern</h3>
+<p>Sketch Driven Pattern of assembly cuts and holes, in the assembly only.</p>
+<p><b>How to use it</b></p>
+<ul><li>Selections: the point sketch; Reference point: Centroid or Selected point of the seed. Features and Faces / Bodies: what is repeated.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="large-assembly-mode"><a name="large-assembly-mode"></a>Large Assembly Mode</h3>
+<p>Turns on the checked settings below for a faster assembly.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn the mode on: the ticked settings below it are applied to the assembly. Click again to put everything back.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="do-not-save-auto-recover-info"><a name="do-not-save-auto-recover-info"></a>Do not save auto recover info</h3>
+<p>Do not save auto recover info.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click to tick or untick it. Ticked settings apply while Large Assembly Mode is on; a change made while it is on applies at once.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="do-not-rebuild-when-switching-to-assembly-window"><a name="do-not-rebuild-when-switching-to-assembly-window"></a>Do not rebuild when switching to assembly window</h3>
+<p>Do not rebuild when switching to assembly window.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click to tick or untick it. Ticked settings apply while Large Assembly Mode is on; a change made while it is on applies at once.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="hide-all-planes-axes-sketches-curves-annotations-etc"><a name="hide-all-planes-axes-sketches-curves-annotations-etc"></a>Hide all planes, axes, sketches, curves, annotations, etc.</h3>
+<p>Hide all planes, axes, sketches, curves, annotations, etc..</p>
+<p><b>How to use it</b></p>
+<ul><li>Click to tick or untick it. Ticked settings apply while Large Assembly Mode is on; a change made while it is on applies at once.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="do-not-display-edges-in-shaded-mode"><a name="do-not-display-edges-in-shaded-mode"></a>Do not display edges in shaded mode</h3>
+<p>Do not display edges in shaded mode.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click to tick or untick it. Ticked settings apply while Large Assembly Mode is on; a change made while it is on applies at once.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="do-not-preview-hidden-components"><a name="do-not-preview-hidden-components"></a>Do not preview hidden components</h3>
+<p>Do not preview hidden components.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click to tick or untick it. Ticked settings apply while Large Assembly Mode is on; a change made while it is on applies at once.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="disable-verification-on-rebuild"><a name="disable-verification-on-rebuild"></a>Disable verification on rebuild</h3>
+<p>Disable verification on rebuild.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click to tick or untick it. Ticked settings apply while Large Assembly Mode is on; a change made while it is on applies at once.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="optimize-image-quality-for-better-performance"><a name="optimize-image-quality-for-better-performance"></a>Optimize image quality for better performance</h3>
+<p>Optimize image quality for better performance.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click to tick or untick it. Ticked settings apply while Large Assembly Mode is on; a change made while it is on applies at once.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="suspend-automatic-rebuild"><a name="suspend-automatic-rebuild"></a>Suspend automatic rebuild</h3>
+<p>Suspend automatic rebuild.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click to tick or untick it. Ticked settings apply while Large Assembly Mode is on; a change made while it is on applies at once.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="new-assembly"><a name="new-assembly"></a>New Assembly</h3>
+<p>Makes a new subassembly in the assembly.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: a new empty subassembly is added to the assembly.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="coordinate-system"><a name="coordinate-system"></a>Coordinate System</h3>
+<p>A coordinate system in the assembly.</p>
+<p><b>How to use it</b></p>
+<ul><li>Selections: the origin, then the X, Y or Z axis direction; flip each axis.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="point-1"><a name="point-1"></a>Point</h3>
+<p>A reference point in the assembly.</p>
+<p><b>How to use it</b></p>
+<ul><li>Selections: Arc Center, Center of Face, Intersection, Projection, On point, Along curve distance or multiple reference point.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="mate-reference"><a name="mate-reference"></a>Mate Reference</h3>
+<p>Entities a component mates with when it is inserted.</p>
+<p><b>How to use it</b></p>
+<ul><li>Name the reference, then pick up to three faces, edges or points with their mate type, then OK. When the component is inserted, those references mate first.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="ground-plane"><a name="ground-plane"></a>Ground Plane</h3>
+<p>The floor components rest on.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a plane or a flat face, set the offset (Flip turns it over), then OK: components rest on it in motion and physics.</li></ul>
+<p><b>Where:</b> the Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h2 id="assembly-layout"><a name="assembly-layout"></a>Assembly: Layout</h2>
+<h3 id="make-block-1"><a name="make-block-1"></a>Make Block</h3>
+<p>Makes a block from the selected sketch entities.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the sketch entities for the block, click the insertion point, then OK.</li></ul>
+<p><b>Where:</b> the Layout tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="edit-block-1"><a name="edit-block-1"></a>Edit Block</h3>
+<p>Edits the selected block.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a block, then click it: its entities can be changed; click entities to add or remove them. The check rebuilds the block.</li></ul>
+<p><b>Where:</b> the Layout tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="insert-block-1"><a name="insert-block-1"></a>Insert Block</h3>
+<p>Inserts a block of this document or of a block file.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a block of this document or Browse... for a block file, set the angle and scale, then click where each copy goes.</li></ul>
+<p><b>Where:</b> the Layout tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="add-remove-entities"><a name="add-remove-entities"></a>Add/Remove Entities</h3>
+<p>Adds entities to the selected block or takes them out.</p>
+<p><b>How to use it</b></p>
+<ul><li>With a block open in Edit Block, click sketch entities to add them to it or take them out.</li></ul>
+<p><b>Where:</b> the Layout tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="save-block-1"><a name="save-block-1"></a>Save Block</h3>
+<p>Saves the selected block to a file.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a block, then click it and choose where to save the block file.</li></ul>
+<p><b>Where:</b> the Layout tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="explode-block-1"><a name="explode-block-1"></a>Explode Block</h3>
+<p>Breaks the selected block into its sketch entities.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a block, then click it: it is broken back into plain sketch entities.</li></ul>
+<p><b>Where:</b> the Layout tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="layout"><a name="layout"></a>Layout</h3>
+<p>Makes or edits the assembly's layout sketch.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to open the assembly's layout sketch (made the first time); click again to close it.</li></ul>
+<p><b>Where:</b> the Layout tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#dimensions-and-annotations">Dimensions and annotations</a>.</p>
+<h3 id="make-part-from-block"><a name="make-part-from-block"></a>Make Part from Block</h3>
+<p>Makes a part from a block of the layout.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a block of the layout sketch, then click it: a part is made from it and follows the block.</li></ul>
+<p><b>Where:</b> the Layout tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h2 id="drawing-inspection"><a name="drawing-inspection"></a>Drawing: Inspection</h2>
+<h3 id="create-inspection-project"><a name="create-inspection-project"></a>Create Inspection Project</h3>
+<p>Create Inspection Project</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it with the drawing open: the sheet's dimensions are numbered top to bottom, left to right, and the inspection report opens.</li></ul>
+<p><b>Where:</b> the Inspection tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="template-editor"><a name="template-editor"></a>Template Editor</h3>
+<p>Template Editor</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the button with a drawing open. If a PropertyManager opens, pick the view or entity it asks for and click OK.</li></ul>
+<p><b>Where:</b> the Inspection tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="edit-inspection-project"><a name="edit-inspection-project"></a>Edit Inspection Project</h3>
+<p>Edit Inspection Project</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the button with a drawing open. If a PropertyManager opens, pick the view or entity it asks for and click OK.</li></ul>
+<p><b>Where:</b> the Inspection tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="add-characteristic"><a name="add-characteristic"></a>Add Characteristic</h3>
+<p>Add Characteristic</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the button with a drawing open. If a PropertyManager opens, pick the view or entity it asks for and click OK.</li></ul>
+<p><b>Where:</b> the Inspection tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="update-inspection-project"><a name="update-inspection-project"></a>Update Inspection Project</h3>
+<p>Update Inspection Project</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the button with a drawing open. If a PropertyManager opens, pick the view or entity it asks for and click OK.</li></ul>
+<p><b>Where:</b> the Inspection tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="export-inspection-to-pdf"><a name="export-inspection-to-pdf"></a>Export Inspection to PDF</h3>
+<p>Export Inspection to PDF</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the button with a drawing open. If a PropertyManager opens, pick the view or entity it asks for and click OK.</li></ul>
+<p><b>Where:</b> the Inspection tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="delete-inspection-project"><a name="delete-inspection-project"></a>Delete Inspection Project</h3>
+<p>Delete Inspection Project</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the button with a drawing open. If a PropertyManager opens, pick the view or entity it asks for and click OK.</li></ul>
+<p><b>Where:</b> the Inspection tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="balloon-characteristics"><a name="balloon-characteristics"></a>Balloon Characteristics</h3>
+<p>Balloon Characteristics</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: a numbered balloon goes next to every dimension. They move and print like any balloon.</li></ul>
+<p><b>Where:</b> the Inspection tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="remove-inspection-balloons"><a name="remove-inspection-balloons"></a>Remove Inspection Balloons</h3>
+<p>Remove Inspection Balloons</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to take the inspection balloons off the sheet again.</li></ul>
+<p><b>Where:</b> the Inspection tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="inspection-report"><a name="inspection-report"></a>Inspection Report</h3>
+<p>Inspection Report</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: the report lists each dimension with its nominal value and limits.</li><li>Type what was measured; the result says Pass or Fail. Update from Drawing picks up changes.</li></ul>
+<p><b>Where:</b> the Inspection tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="export-inspection-to-excel"><a name="export-inspection-to-excel"></a>Export Inspection to Excel</h3>
+<p>Export Inspection to Excel</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it and choose where to save: the report is saved as an Excel file.</li></ul>
+<p><b>Where:</b> the Inspection tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="export-inspection-to-csv"><a name="export-inspection-to-csv"></a>Export Inspection to CSV</h3>
+<p>Export Inspection to CSV</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it and choose where to save: the report is saved as a CSV file.</li></ul>
+<p><b>Where:</b> the Inspection tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h2 id="assembly-evaluate"><a name="assembly-evaluate"></a>Assembly: Evaluate</h2>
+<h3 id="clearance-verification"><a name="clearance-verification"></a>Clearance Verification</h3>
+<p>Checks the gaps between components against a minimum clearance.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the components (or none, for every pair), set the minimum clearance, then Calculate: the gaps under it are listed.</li></ul>
+<p><b>Where:</b> the Evaluate tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#checking-and-output">Checking and output</a>.</p>
+<h3 id="hole-alignment"><a name="hole-alignment"></a>Hole Alignment</h3>
+<p>Finds holes in different components that line up but are off centre.</p>
+<p><b>How to use it</b></p>
+<ul><li>Set the hole centre deviation, then Calculate: holes in different components that line up but are off centre are listed.</li></ul>
+<p><b>Where:</b> the Evaluate tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#checking-and-output">Checking and output</a>.</p>
+<h3 id="assembly-visualization"><a name="assembly-visualization"></a>Assembly Visualization</h3>
+<p>Lists and colours the components by a property.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it and pick a property (mass, volume, faces, rebuild time...): the components are listed by it and coloured from blue (least) to red (most).</li></ul>
+<p><b>Where:</b> the Evaluate tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#checking-and-output">Checking and output</a>.</p>
+<h3 id="performance-evaluation"><a name="performance-evaluation"></a>Performance Evaluation</h3>
+<p>The assembly's counts and rebuild times, with advice.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: the assembly's counts and its components' rebuild times are listed, with advice.</li></ul>
+<p><b>Where:</b> the Evaluate tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="04-features.html#evaluate">Evaluate</a>.</p>
+<h3 id="previous-release-check"><a name="previous-release-check"></a>Previous Release Check</h3>
+<p>What an older setup cannot open.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: the objects that an older setup could not open or rebuild are listed.</li></ul>
+<p><b>Where:</b> the Evaluate tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="04-features.html#evaluate">Evaluate</a>.</p>
+<h3 id="check-active-document"><a name="check-active-document"></a>Check Active Document</h3>
+<p>Runs the Design Checker standard on this document.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: the Design Checker standard runs on this document and each check shows Pass or Fail.</li></ul>
+<p><b>Where:</b> the Evaluate tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="04-features.html#evaluate">Evaluate</a>.</p>
+<h3 id="check-against-existing-file"><a name="check-against-existing-file"></a>Check Against Existing File</h3>
+<p>Checks against the checks of another file.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick another model file: its settings become the standard this document is checked against.</li></ul>
+<p><b>Where:</b> the Evaluate tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="04-features.html#evaluate">Evaluate</a>.</p>
+<h3 id="build-checks"><a name="build-checks"></a>Build Checks</h3>
+<p>Builds a Design Checker standard.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the checks and their values, then save the standard.</li></ul>
+<p><b>Where:</b> the Evaluate tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="04-features.html#evaluate">Evaluate</a>.</p>
+<h3 id="learn-checks-wizard"><a name="learn-checks-wizard"></a>Learn Checks Wizard</h3>
+<p>Learns checks from a reference document.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: the checks are filled in from the active document, ready to save as a standard.</li></ul>
+<p><b>Where:</b> the Evaluate tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="04-features.html#evaluate">Evaluate</a>.</p>
+<h3 id="design-checker"><a name="design-checker"></a>Design Checker</h3>
+<p>Design Checker</p>
+<p><b>How to use it</b></p>
+<ul><li>Opens the Design Checker tools: Check Active Document, Check Against Existing File, Build Checks and Learn Checks Wizard.</li></ul>
+<p><b>Where:</b> the Evaluate tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="04-features.html#evaluate">Evaluate</a>.</p>
+<h2 id="assembly-freecad-assembly"><a name="assembly-freecad-assembly"></a>Assembly: FreeCAD Assembly</h2>
+<h3 id="solve-assembly"><a name="solve-assembly"></a>Solve Assembly</h3>
+<p>FreeCAD's solver on the active assembly.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: the joints of the active assembly are solved again.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="activate-assembly"><a name="activate-assembly"></a>Activate Assembly</h3>
+<p>Makes the picked assembly the active one.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick an assembly in the tree, then click it: it becomes the active one that new components and joints go into.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="insert-component"><a name="insert-component"></a>Insert Component</h3>
+<p>FreeCAD's Insert Component panel.</p>
+<p><b>How to use it</b></p>
+<ul><li>Part/Assembly to Insert: Browse or pick an open document; click in the view to place it (the first component is fixed at the origin). Options: Start command when creating new assembly, Graphics preview, Make virtual, Envelope.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="insert-link"><a name="insert-link"></a>Insert Link</h3>
+<p>Inserts a part or assembly as a link.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, pick the part or assembly from the list, then click to place it.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="insert-new-part"><a name="insert-new-part"></a>Insert New Part</h3>
+<p>Makes a new part in the assembly.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, name the part and pick where it goes, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="toggle-grounded"><a name="toggle-grounded"></a>Toggle Grounded</h3>
+<p>Grounds the picked component, or frees it.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a component, then click it: it is held where it is, or freed again.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="fixed-joint"><a name="fixed-joint"></a>Fixed Joint</h3>
+<p>FreeCAD's Fixed joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="revolute-joint"><a name="revolute-joint"></a>Revolute Joint</h3>
+<p>FreeCAD's Revolute joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="cylindrical-joint"><a name="cylindrical-joint"></a>Cylindrical Joint</h3>
+<p>FreeCAD's Cylindrical joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="slider-joint"><a name="slider-joint"></a>Slider Joint</h3>
+<p>FreeCAD's Slider joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="ball-joint"><a name="ball-joint"></a>Ball Joint</h3>
+<p>FreeCAD's Ball joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="distance-joint"><a name="distance-joint"></a>Distance Joint</h3>
+<p>FreeCAD's Distance joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="parallel-joint"><a name="parallel-joint"></a>Parallel Joint</h3>
+<p>FreeCAD's Parallel joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="perpendicular-joint"><a name="perpendicular-joint"></a>Perpendicular Joint</h3>
+<p>FreeCAD's Perpendicular joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="angle-joint"><a name="angle-joint"></a>Angle Joint</h3>
+<p>FreeCAD's Angle joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="rack-and-pinion-joint"><a name="rack-and-pinion-joint"></a>Rack and Pinion Joint</h3>
+<p>FreeCAD's Rack and Pinion joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="screw-joint"><a name="screw-joint"></a>Screw Joint</h3>
+<p>FreeCAD's Screw joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="gears-belt-joint"><a name="gears-belt-joint"></a>Gears/Belt Joint</h3>
+<p>FreeCAD's Gears and Belt joints.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="gears-joint"><a name="gears-joint"></a>Gears Joint</h3>
+<p>FreeCAD's Gears joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="belt-joint"><a name="belt-joint"></a>Belt Joint</h3>
+<p>FreeCAD's Belt joint.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then pick a face, edge or point on each of the two components the joint ties together. Set the offset or value if it has one, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="exploded-view-1"><a name="exploded-view-1"></a>Exploded View</h3>
+<p>FreeCAD's exploded view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, pick components and drag them to add explode steps, then OK.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html#exploded-views">Exploded views</a>.</p>
+<h3 id="simulation"><a name="simulation"></a>Simulation</h3>
+<p>FreeCAD's assembly simulation.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: a simulation is added. Add motions to its joints and run it.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="02-interface.html#add-in-tabs">Add-in tabs</a>.</p>
+<h3 id="bill-of-materials-2"><a name="bill-of-materials-2"></a>Bill of Materials</h3>
+<p>FreeCAD's bill of materials spreadsheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: a bill of materials spreadsheet of the active assembly is made.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#tables">Tables</a>.</p>
+<h3 id="export-asmt"><a name="export-asmt"></a>Export ASMT</h3>
+<p>Writes the assembly as an OndselSolver .asmt file.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it and choose where to save the assembly's .asmt file.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="new-assembly-1"><a name="new-assembly-1"></a>New Assembly</h3>
+<p>FreeCAD's Create Assembly (an assembly in this document).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: a new assembly is added to this document.</li></ul>
+<p><b>Where:</b> the FreeCAD Assembly tab of the assembly ribbon.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h2 id="drawing-drawing-tools"><a name="drawing-drawing-tools"></a>Drawing: Drawing Tools</h2>
+<h3 id="update-template-fields"><a name="update-template-fields"></a>Update Template Fields</h3>
+<p>Fills the title block fields from the document's properties.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: tick the title block fields to fill from the document's properties, then OK.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="redraw-sheet"><a name="redraw-sheet"></a>Redraw Sheet</h3>
+<p>Draws the whole sheet again.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it: the whole sheet is drawn again.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="bring-to-front"><a name="bring-to-front"></a>Bring to Front</h3>
+<p>Draws the picked view over all others.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view, then click it: it is drawn over all the others.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="send-to-back"><a name="send-to-back"></a>Send to Back</h3>
+<p>Draws the picked view under all others.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view, then click it: it is drawn under all the others.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="bring-forward"><a name="bring-forward"></a>Bring Forward</h3>
+<p>Draws the picked view one step further up.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view, then click it: it moves one step up in the stack.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="send-backward"><a name="send-backward"></a>Send Backward</h3>
+<p>Draws the picked view one step further down.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view, then click it: it moves one step down in the stack.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="move-view-to-sheet"><a name="move-view-to-sheet"></a>Move View to Sheet</h3>
+<p>Moves the picked view to another sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, choose the view, the sheet it is on and the sheet to move it to, then OK.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="share-view"><a name="share-view"></a>Share View</h3>
+<p>Shows the picked view on another sheet too.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view, then click it and choose the other sheet that shows it too.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="active-3d-view"><a name="active-3d-view"></a>Active 3D View</h3>
+<p>Places a picture of the 3D window on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, set the picture's size and background, then OK: the 3D window is put on the sheet.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="draft-objects-view"><a name="draft-objects-view"></a>Draft Objects View</h3>
+<p>Shows picked Draft or Arch objects on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick 2D drafting or BIM objects in the tree, then click it: they show on the sheet.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="simple-section"><a name="simple-section"></a>Simple Section</h3>
+<p>FreeCAD's section of a picked view along a plane.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view, then click it. Choose the direction of the cut and its position, then OK.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="complex-section"><a name="complex-section"></a>Complex Section</h3>
+<p>FreeCAD's section along a picked profile (offset or aligned).</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view and the sketch of the cutting profile, then click it. Set the options, then OK.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="position-section-view"><a name="position-section-view"></a>Position Section View</h3>
+<p>Lines a section view up with its parent view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a section view, then click it: it lines up with its parent view.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="toggle-view-lock"><a name="toggle-view-lock"></a>Toggle View Lock</h3>
+<p>Locks or unlocks the picked views' position.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick views, then click it: their position is locked, or unlocked again.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="bim-view"><a name="bim-view"></a>BIM View</h3>
+<p>Shows a BIM section plane's cut on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a BIM section plane in the tree, then click it: its cut shows on the sheet.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="add-view-to-clip-group"><a name="add-view-to-clip-group"></a>Add View to Clip Group</h3>
+<p>Puts the picked view in the picked clip group.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view and a clip group, then click it: the view is shown inside the clip.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="freecad-dimension"><a name="freecad-dimension"></a>FreeCAD Dimension</h3>
+<p>FreeCAD's own dimension tool, by what is picked.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick edges or points in a view, then click it: the dimension that fits what is picked is added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="length-dimension"><a name="length-dimension"></a>Length Dimension</h3>
+<p>A true length between two points or along an edge.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick an edge, or two points, in a view, then click it: the true length is added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="horizontal-dimension-1"><a name="horizontal-dimension-1"></a>Horizontal Dimension</h3>
+<p>A horizontal distance.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick an edge, or two points, in a view, then click it: the horizontal distance is added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="vertical-dimension-1"><a name="vertical-dimension-1"></a>Vertical Dimension</h3>
+<p>A vertical distance.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick an edge, or two points, in a view, then click it: the vertical distance is added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="radius-dimension"><a name="radius-dimension"></a>Radius Dimension</h3>
+<p>The radius of a circle or arc.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a circle or an arc in a view, then click it: its radius is added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="diameter-dimension"><a name="diameter-dimension"></a>Diameter Dimension</h3>
+<p>The diameter of a circle or arc.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a circle or an arc in a view, then click it: its diameter is added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="angle-dimension"><a name="angle-dimension"></a>Angle Dimension</h3>
+<p>The angle between two edges.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick two straight edges in a view, then click it: the angle between them is added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="3-point-angle-dimension"><a name="3-point-angle-dimension"></a>3 Point Angle Dimension</h3>
+<p>The angle at a vertex between two points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick three points in a view (the corner second), then click it: the angle at the corner is added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="area-annotation"><a name="area-annotation"></a>Area Annotation</h3>
+<p>The area of a picked face.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a face in a view, then click it: its area is added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html#views">Views</a>.</p>
+<h3 id="arc-length-dimension"><a name="arc-length-dimension"></a>Arc Length Dimension</h3>
+<p>The length along an arc.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick an arc in a view, then click it: the length along it is added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="horizontal-extent"><a name="horizontal-extent"></a>Horizontal Extent</h3>
+<p>The overall width of picked edges.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick edges in a view, then click it: their overall width is added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="vertical-extent"><a name="vertical-extent"></a>Vertical Extent</h3>
+<p>The overall height of picked edges.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick edges in a view, then click it: their overall height is added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="horizontal-chain"><a name="horizontal-chain"></a>Horizontal Chain</h3>
+<p>Horizontal dimensions end to end.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick three or more points in a view, then click it: horizontal dimensions are added end to end.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="vertical-chain"><a name="vertical-chain"></a>Vertical Chain</h3>
+<p>Vertical dimensions end to end.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick three or more points in a view, then click it: vertical dimensions are added end to end.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="oblique-chain"><a name="oblique-chain"></a>Oblique Chain</h3>
+<p>Aligned dimensions end to end.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick three or more points in a view, then click it: aligned dimensions are added end to end.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="horizontal-coordinate"><a name="horizontal-coordinate"></a>Horizontal Coordinate</h3>
+<p>Horizontal dimensions from one base point.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the base point first, then more points, then click it: horizontal dimensions from the base are added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="vertical-coordinate"><a name="vertical-coordinate"></a>Vertical Coordinate</h3>
+<p>Vertical dimensions from one base point.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the base point first, then more points, then click it: vertical dimensions from the base are added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="oblique-coordinate"><a name="oblique-coordinate"></a>Oblique Coordinate</h3>
+<p>Aligned dimensions from one base point.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the base point first, then more points, then click it: aligned dimensions from the base are added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="horizontal-chamfer"><a name="horizontal-chamfer"></a>Horizontal Chamfer</h3>
+<p>A chamfer's size and angle.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the two end points of a chamfer edge, then click it: its size and angle are added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="vertical-chamfer"><a name="vertical-chamfer"></a>Vertical Chamfer</h3>
+<p>A chamfer's size and angle.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the two end points of a chamfer edge, then click it: its size and angle are added.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="horizontal-cascade"><a name="horizontal-cascade"></a>Horizontal Cascade</h3>
+<p>Spaces picked horizontal dimensions evenly in a stair.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the dimensions first (Ctrl+click for more), then click it. The horizontal dimensions are spaced evenly in a stair.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="vertical-cascade"><a name="vertical-cascade"></a>Vertical Cascade</h3>
+<p>Spaces picked vertical dimensions evenly in a stair.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the dimensions first (Ctrl+click for more), then click it. The vertical dimensions are spaced evenly in a stair.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="oblique-cascade"><a name="oblique-cascade"></a>Oblique Cascade</h3>
+<p>Spaces picked aligned dimensions evenly in a stair.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the dimensions first (Ctrl+click for more), then click it. The aligned dimensions are spaced evenly in a stair.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="line-up-horizontal-chain"><a name="line-up-horizontal-chain"></a>Line Up Horizontal Chain</h3>
+<p>Puts picked horizontal dimensions on one line.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the dimensions first (Ctrl+click for more), then click it. The horizontal dimensions line up on one line.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="line-up-vertical-chain"><a name="line-up-vertical-chain"></a>Line Up Vertical Chain</h3>
+<p>Puts picked vertical dimensions on one line.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the dimensions first (Ctrl+click for more), then click it. The vertical dimensions line up on one line.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="line-up-oblique-chain"><a name="line-up-oblique-chain"></a>Line Up Oblique Chain</h3>
+<p>Puts picked aligned dimensions on one line.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the dimensions first (Ctrl+click for more), then click it. The aligned dimensions line up on one line.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="area-annotation-faces"><a name="area-annotation-faces"></a>Area Annotation (Faces)</h3>
+<p>Writes the area of picked faces.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick faces in a view, then click it: their area is written next to them.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="axonometric-length"><a name="axonometric-length"></a>Axonometric Length</h3>
+<p>A length in an isometric view.</p>
+<p><b>How to use it</b></p>
+<ul><li>In an isometric view pick an edge along the length, a second edge in the same plane and the two points to measure between, then click it.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="hole-shaft-fit"><a name="hole-shaft-fit"></a>Hole/Shaft Fit</h3>
+<p>Adds an ISO fit (H7/g6 and so on) to a dimension.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a diameter or length dimension, then click it and choose the fit (H7/g6 and so on).</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="insert-diameter-prefix"><a name="insert-diameter-prefix"></a>Insert Diameter Prefix</h3>
+<p>Puts a diameter sign before the value.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the dimensions first (Ctrl+click for more), then click it. A diameter sign goes before each value.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="insert-square-prefix"><a name="insert-square-prefix"></a>Insert Square Prefix</h3>
+<p>Puts a square sign before the value.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the dimensions first (Ctrl+click for more), then click it. A square sign goes before each value.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="insert-repeat-prefix"><a name="insert-repeat-prefix"></a>Insert Repeat Prefix</h3>
+<p>Puts 'n x' before the value.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the dimensions first (Ctrl+click for more), then click it. Type the count: 'n x' goes before each value.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="remove-prefix"><a name="remove-prefix"></a>Remove Prefix</h3>
+<p>Takes the prefix off the value.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the dimensions first (Ctrl+click for more), then click it. The prefix comes off each value.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="increase-decimal-places"><a name="increase-decimal-places"></a>Increase Decimal Places</h3>
+<p>One more decimal place.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the dimensions first (Ctrl+click for more), then click it. Each one shows one more decimal place.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="decrease-decimal-places"><a name="decrease-decimal-places"></a>Decrease Decimal Places</h3>
+<p>One decimal place less.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the dimensions first (Ctrl+click for more), then click it. Each one shows one decimal place less.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="customize-format-label"><a name="customize-format-label"></a>Customize Format Label</h3>
+<p>Edits the format text of a dimension or label.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a dimension or a label, then click it and edit its format text, then OK.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="line-attributes"><a name="line-attributes"></a>Line Attributes</h3>
+<p>Sets the line style, width and color the next two tools use.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it and set the line style, width and colour that the next cosmetic lines use.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="change-line-attributes"><a name="change-line-attributes"></a>Change Line Attributes</h3>
+<p>Gives picked cosmetic lines the line attributes set.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick cosmetic lines or centerlines, then click it: they take the line attributes set.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="extend-line"><a name="extend-line"></a>Extend Line</h3>
+<p>Makes a cosmetic line or centerline longer.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a cosmetic line or centerline, then click it: it gets longer at both ends.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="shorten-line"><a name="shorten-line"></a>Shorten Line</h3>
+<p>Makes a cosmetic line or centerline shorter.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a cosmetic line or centerline, then click it: it gets shorter at both ends.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="toggle-edge-visibility"><a name="toggle-edge-visibility"></a>Toggle Edge Visibility</h3>
+<p>Shows or hides the hidden edges of a view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view, then click it: its hidden edges show, or hide again.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="circle-centerlines"><a name="circle-centerlines"></a>Circle Centerlines</h3>
+<p>Center marks on picked circles.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick circles or arcs in a view, then click it: each gets center marks.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="bolt-circle-centerlines"><a name="bolt-circle-centerlines"></a>Bolt Circle Centerlines</h3>
+<p>A bolt circle through three or more picked holes.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick three or more hole circles in a view, then click it: a bolt circle goes through them.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="centerline-faces"><a name="centerline-faces"></a>Centerline Faces</h3>
+<p>A centerline across a picked face.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a face in a view, then click it: a centerline goes across it.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="centerline-2-lines"><a name="centerline-2-lines"></a>Centerline 2 Lines</h3>
+<p>A centerline between two lines.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick two edges in a view, then click it: a centerline goes between them.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="centerline-2-points"><a name="centerline-2-points"></a>Centerline 2 Points</h3>
+<p>A centerline through two points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick two points in a view, then click it: a centerline goes through them.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="thread-hole-side-view"><a name="thread-hole-side-view"></a>Thread Hole Side View</h3>
+<p>Cosmetic thread of a hole, side on.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the two side edges of a hole in a view, then click it: the cosmetic thread is drawn.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="thread-hole-bottom-view"><a name="thread-hole-bottom-view"></a>Thread Hole Bottom View</h3>
+<p>Cosmetic thread of a hole, end on.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the hole's circle in an end view, then click it: the cosmetic thread is drawn.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="thread-bolt-side-view"><a name="thread-bolt-side-view"></a>Thread Bolt Side View</h3>
+<p>Cosmetic thread of a bolt, side on.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the two side edges of a bolt in a view, then click it: the cosmetic thread is drawn.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="thread-bolt-bottom-view"><a name="thread-bolt-bottom-view"></a>Thread Bolt Bottom View</h3>
+<p>Cosmetic thread of a bolt, end on.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the bolt's circle in an end view, then click it: the cosmetic thread is drawn.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="cosmetic-vertex"><a name="cosmetic-vertex"></a>Cosmetic Vertex</h3>
+<p>Adds a point at a picked place.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view, then click it: click in the view where the point goes (or type its X and Y), then OK.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="midpoint-vertices"><a name="midpoint-vertices"></a>Midpoint Vertices</h3>
+<p>Adds points at the middles of picked edges.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick edges in a view, then click it: a point goes at the middle of each.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="quadrant-vertices"><a name="quadrant-vertices"></a>Quadrant Vertices</h3>
+<p>Adds points at the quadrants of picked circles.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick circles in a view, then click it: points go at their quadrants.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="intersection-vertices"><a name="intersection-vertices"></a>Intersection Vertices</h3>
+<p>Adds points where two picked edges cross.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick two edges that cross in a view, then click it: points go where they cross.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="offset-vertex"><a name="offset-vertex"></a>Offset Vertex</h3>
+<p>Adds a point at an offset from a vertex.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a point in a view, then click it and type the X and Y offset of the new point.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="cosmetic-circle"><a name="cosmetic-circle"></a>Cosmetic Circle</h3>
+<p>A cosmetic circle from a center and a point.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view, then click it: set the circle's centre and radius in the panel, then OK.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="cosmetic-2-point-circle"><a name="cosmetic-2-point-circle"></a>Cosmetic 2 Point Circle</h3>
+<p>A cosmetic circle through two points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the centre point, then a point on the circle, then click it: a cosmetic circle is drawn.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="cosmetic-3-point-circle"><a name="cosmetic-3-point-circle"></a>Cosmetic 3 Point Circle</h3>
+<p>A cosmetic circle through three points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick three points, then click it: a cosmetic circle is drawn through them.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="cosmetic-arc"><a name="cosmetic-arc"></a>Cosmetic Arc</h3>
+<p>A cosmetic arc from a center and two points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the centre, then the start and end points, then click it: a cosmetic arc is drawn.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="cosmetic-parallel-line"><a name="cosmetic-parallel-line"></a>Cosmetic Parallel Line</h3>
+<p>A cosmetic line parallel to an edge.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick an edge and a point in a view, then click it: a cosmetic line parallel to the edge goes through the point.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="cosmetic-perpendicular-line"><a name="cosmetic-perpendicular-line"></a>Cosmetic Perpendicular Line</h3>
+<p>A cosmetic line square to an edge.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick an edge and a point in a view, then click it: a cosmetic line square to the edge goes through the point.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="cosmetic-eraser"><a name="cosmetic-eraser"></a>Cosmetic Eraser</h3>
+<p>Deletes picked cosmetic lines, circles and points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick cosmetic lines, circles or points, then click it: they are deleted.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="align-vertices-horizontally"><a name="align-vertices-horizontally"></a>Align Vertices Horizontally</h3>
+<p>Turns the view so the two picked points lie level.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick two points in a view, then click it: the view turns so they lie level.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="align-vertices-vertically"><a name="align-vertices-vertically"></a>Align Vertices Vertically</h3>
+<p>Turns the view so the two picked points lie one above the other.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick two points in a view, then click it: the view turns so one is above the other.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="cosmetic-line-2-points"><a name="cosmetic-line-2-points"></a>Cosmetic Line 2 Points</h3>
+<p>A cosmetic line between two points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick two points in a view, then click it: a cosmetic line is drawn between them.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="rich-text-annotation"><a name="rich-text-annotation"></a>Rich Text Annotation</h3>
+<p>A formatted text block, with or without a leader.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view to attach it to (or nothing), then click it: type and format the text, then OK.</li></ul>
+<p><b>Where:</b> the Drawing Tools tab of the drawing ribbon.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+</body></html>

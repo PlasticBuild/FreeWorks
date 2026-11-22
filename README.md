@@ -1,85 +1,78 @@
-# FreeWorks — FreeCAD add-on
+# FreeWorks 0.3.3-alpha
 
-[![Donate on Ko-fi](https://img.shields.io/badge/Donate-Ko--fi-FF5E5B?style=for-the-badge)](https://ko-fi.com/plasticbuild)
+FreeWorks gives stock FreeCAD a familiar mainstream-CAD look and feel: a command ribbon, property panels for the
+features, a feature tree with a rollback bar, sketch tools with inference snapping and automatic relations, assemblies,
+drawings, simulation and more. It is a pure Python add-on; FreeCAD itself is not changed. Inside the program it is
+simply called FreeCAD; "FreeWorks" is the name of this add-on and its folder.
 
-**0.3.2-alpha · FreeCAD 1.1.4 · Windows**
+This is the **0.3.3-alpha public alpha**. Download the install ZIP from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.3-alpha) and follow the manual install steps below.
 
-**Like the SOLIDWORKS interface and want to work in FreeCAD?** FreeWorks brings a familiar commercial-CAD workflow to stock FreeCAD 1.1.4, from the first sketch through parts, assemblies, and drawings.
+## What you need
 
-FreeWorks is an independent add-on for FreeCAD. Install it into your existing FreeCAD setup. The application still appears as **FreeCAD**.
+- **FreeCAD 1.1.4**, the official build from freecad.org (Windows installer or portable zip). 1.1.0 or newer should work,
+  but 1.1.4 is what this alpha is tested on. Windows is the main test system; Linux has had less testing and macOS has not
+  been tested.
+- **Graphics:** OpenGL 2.1 or newer (any graphics card or integrated graphics from about 2010 on, with a current driver).
+  On older graphics, FreeCAD 1.1 itself crashes at start, with or without this add-on.
+- Less than 100 MB of disk space, and write access to your FreeCAD user folder.
+- Nothing else. No slicer, no other program and no other add-on is needed (see "Optional downloads").
 
-[**Download FreeWorks 0.3.2-alpha**](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.2-alpha)
+## Install (by hand, on a fresh profile)
 
-0.3.2-alpha adds 219 icons, fixes the Midpoint Line and spline icons, and improves rollback and face-to-feature selection. Add-Ins now groups ScanRuler, Diotopo, and 3D Slicer, and optional workbenches can get their own command tab. See the [release notes](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.2-alpha) for details and known issues.
+Use a fresh FreeCAD profile, so that your own settings are not mixed up with the alpha and you can go back to them.
 
-The icons in this alpha are AI-generated and inspired by SOLIDWORKS icons.
+1. Close FreeCAD.
+2. Keep your own settings: rename the folder `%APPDATA%\FreeCAD` to `FreeCAD-mine`. FreeCAD makes a new, empty one the next time it starts. (If you have never used FreeCAD on this computer there is nothing to rename.)
+3. Start FreeCAD 1.1.4 once and close it, so that the new profile exists.
+4. Unpack the zip. You should have a folder called `FreeWorks` with `InitGui.py` directly inside it. If the zip made a folder with another name, such as `FreeWorks-main`, rename it to `FreeWorks`.
+5. Move that folder to `%APPDATA%\FreeCAD\Mod\FreeWorks`. Create `Mod` if it is not there. Not sure where your user folder is? In FreeCAD's Python console (View, Panels, Python console) type `App.getUserAppDataDir()` and press Enter.
+6. Start FreeCAD. The first start takes a few seconds longer while FreeCAD compiles the add-on's files. On a new profile the Welcome box opens with **Set Up FreeCAD** on it (Theme, Language, Units, Dimension standard, Mouse navigation): pick what you use and press Done. If FreeCAD's own first-start page appears first instead, it offers the same FreeCAD Light and FreeCAD Dark themes: choose one there. The window then changes to the ribbon layout.
+7. Press Ctrl+N to start a part, an assembly or a drawing. Press **F1** at any time for the page of the built-in guide that fits what you are doing (Help, User Guide opens the contents).
 
-[Download the five-column icon comparison PDF](https://raw.githubusercontent.com/PlasticBuild/FreeWorks/main/docs/FreeWorks-Icon-Comparison.pdf)
+New here? `FIRST-15-MINUTES.md` is a one-page walk-through that starts with sketch snapping and relations, and `QUICKSTART-ALPHA.md` takes you from install to a first part.
 
-## What you can try
+## What is in this alpha besides modelling
 
-| Area | Workflow |
-| --- | --- |
-| Interface | Find commands on ribbon-style tabs, edit feature settings in task panels, and step through the model with the feature tree and rollback bar. Light and dark themes are available. |
-| Sketching | Snap to endpoints, midpoints, and centres. Use inference lines and automatic relations as you draw, then set sizes with Smart Dimension. |
-| Part modelling | Turn sketches into parts with extrudes, revolves, sweeps, and lofts. Refine them with fillets, holes, patterns, and mirrors. |
-| Assemblies | Insert components and position them with mates. Check for interference or create an exploded view. |
-| Drawings | Create projected, section, and detail views, add dimensions and annotations, and export to PDF or DXF. |
+- **Design Library** (task pane tab): a folder tree you can search, with Add to Library for parts, components and features. A library feature drops onto a face of another part, and one Undo takes it back. Parts drop into an assembly where you let go.
+- **Toolbox** (inside the Design Library): ANSI Inch, ANSI Metric, DIN and ISO screws, bolts, nuts, pins and washers. Drop a fastener on a hole and it is sized from the hole; Smart Fasteners fills every hole in an assembly.
+- **MBD** (3D annotations on the model): dimensions, datums, geometric tolerances, notes, surface finish and weld symbols; tolerance status and stack-up in the document's unit; Publish to PDF and to STEP with the annotations.
+- **Weld cut list, Hole data, Material, Molds:** lengths, angles and weights per weld profile; standard tap-drill sizes; a material library with density for mass; Parting Line, Shut-Off Surfaces, Parting Surface and Tooling Split.
+- **Opening and saving files:** a file that cannot be opened (moved, damaged, or not what its name says) gets a box that names it and says why, and the other files still open. Open and the first Save As start in the folder you used last. Save As will not write over a file that is open in FreeCAD, and a failed save says why. Open read-only lasts for the session only. While a file is open, FreeCAD keeps a small hidden `.~$<name>.lck` file beside it; a file that is open elsewhere opens read-only, and Save asks before it overwrites a file that changed on disk.
+- **ScanRuler:** a tab that opens a web tool for 3D scans in your browser, and sends a part (STEP) or a mesh (STL) to it. It needs a network connection.
 
-Sketching is the best place to start. The walkthrough below takes you from a snapped rectangle to an extruded part. This is an early alpha, so expect rough edges and verify results before relying on them.
+## Optional downloads (not in this zip)
 
-## Screenshots
+The slicers and Diotopo are not part of this download. Each is a separate program, fetched only when you ask, and everything
+else works without them. Do not download them unless you want to test them.
 
-![FreeWorks part workspace showing the bearing mount, ribbon, feature tree, and rollback bar](docs/images/freeworks-part-alpha1.png)
+- **Slicers** (Orca Slicer, Bambu Studio, PrusaSlicer): the 3D Slicer tab, Slicer Updates.
+- **Diotopo** (topology optimisation, by its own author): Tools, Add-Ins, Download Diotopo... A box explains what it fetches; the default answer is No.
+- Diotopo downloads with a progress box and a Cancel button; a failed or cancelled download installs nothing and says how to try again.
+- Downloads are kept in FreeCAD's user data folder, with a slicer's own settings beside it. A slicer you already have installed is not touched.
 
-![FreeWorks sketch editor showing the shaded bearing mount profile](docs/images/freeworks-sketch-alpha1.png)
+## How to report a problem
 
-## Requirements and quick install
+Send these to **[GitHub Issues](https://github.com/PlasticBuild/FreeWorks/issues)**:
 
-- Use stock FreeCAD **1.1.4**. Windows has been tested. Other operating systems are untested.
-- Download **FreeWorks-0.3.2-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.2-alpha), then follow the [manual installation guide](docs/INSTALL.md).
+1. What you did, step by step, and what you expected to happen.
+2. What happened instead, with a screenshot.
+3. The lines in View, Panels, Report view: right-click it and switch on Log messages first, repeat the step, and copy the lines that mention an error or that start with "FreeWorks".
+4. Your FreeCAD version (Help, About FreeCAD), your Windows version and the add-on version: **0.3.3-alpha**.
+5. If it needs a file to repeat, a small file that shows it (please do not send models that are confidential).
 
-Orca, Bambu, PrusaSlicer, and Diotopo are optional in-app downloads. Each is downloaded separately. The add-on package excludes all four.
+The list of problems already known is in `KNOWN-ISSUES.md`; check it first.
 
-## First 15 minutes
+If FreeCAD does not start, a box asks for a download, you have no network, or you want to reset or remove the add-on, see `TROUBLESHOOTING-ALPHA.md`.
 
-1. Open a new part, select a plane, and open a sketch.
-2. Draw a rectangle. Start a line near a corner or the midpoint of an edge and watch the snap cue. Move the pointer horizontally or vertically to see the inference line and relation appear as you draw.
-3. Remove the practice line so the rectangle is the only profile. Use Smart Dimension on two adjacent edges and enter their lengths in the Modify box.
-4. Exit the sketch, select the rectangle sketch, and use Extrude. Enter a depth and accept the preview.
+## How to remove it
 
-## Status · 0.3.0-alpha1
+**On a fresh profile (recommended).** Close FreeCAD. Delete the new `%APPDATA%\FreeCAD` folder, then rename `FreeCAD-mine` back to `FreeCAD`. Your own FreeCAD is exactly as it was.
 
-These notes cover 0.3.0-alpha1. Everyone is welcome to report bugs, suggest features, or share feedback in [GitHub Issues](https://github.com/PlasticBuild/FreeWorks/issues). See the [feedback guide](docs/FEEDBACK.md) for what to include.
+**Without a fresh profile.** Take care: deleting the folder by hand does **not** run the add-on's uninstall step, so FreeCAD's own settings are not put back. FreeCAD's toolbars come back by themselves, because the add-on shows them again each time FreeCAD closes; if they are ever missing, see `TROUBLESHOOTING-ALPHA.md`, "FreeCAD starts with no toolbars at all".
+- Close FreeCAD normally first (the add-on puts FreeCAD's toolbars back each time it closes), then delete `%APPDATA%\FreeCAD\Mod\FreeWorks`.
+- Some FreeCAD settings that the add-on changed (sketcher options, theme colours, shortcuts, units and a few others) stay as the add-on left them. The values from before the add-on are kept in `%APPDATA%\FreeCAD\FreeWorks\stock-baseline.json`, which stays after you delete the add-on. Do not delete it until you are sure you do not need it.
+- Your documents are ordinary FreeCAD files and open in any FreeCAD.
 
-### Known problems
+## Licence
 
-- **Parting Surface.** The Sharp and Smooth corner options leave corners unfilled.
-- **Dimension Text.** Inspection, Justify, Offset, and the second text line are unavailable. Add Parentheses works.
-- A Distance-Distance chamfer that meets a Vertex chamfer corner can fail to build.
-- Some files may freeze when rebuilding complex surfaces after an edit or during certain drawing steps. Save often.
-- Some drawings may reopen blank. If that happens, try rebuilding with **Ctrl+Q**.
-- Some panel wording and layouts may differ from the intended workflow.
-
-### Shortcomings
-
-- FreeWorks runs on stock FreeCAD 1.1.4 and inherits limits from its geometry kernel and assembly solver.
-- Sheet metal, weldments, and mold tools have had less testing than parts, assemblies, and drawings.
-- Drawing flat patterns, weldment cut-list tables, and the Sketch Blocks and Library Feature panels are still pending.
-
-### Actively being worked on (coming in the next version)
-
-- **Sketching:** smarter snapping and inference lines, and more automatic relations while you draw.
-- **Features:** Thin cut from an open line, Full Round on slot ends, and more fillet and chamfer options on surfaces.
-- **Sheet metal and weldments:** a full pass on flanges, hems, fold and unfold, structural members and cut lists.
-- **Mold tools:** Parting Surface corner options and the rest of the mold panels.
-- **Drawings:** flat pattern views, weldment cut-list tables, and Dimension Text options (Inspection, Justify, Offset, second text line).
-- **Assemblies:** more mate types, Motion Study polish, and Make Independent.
-- **Interface:** panel-by-panel layout and wording polish, Sketch Blocks, and Library Features.
-- **Stability:** fixes from automated tutorial walk-throughs and from tester reports.
-
-## Guides
-
-- [Install, update, or remove FreeWorks](docs/INSTALL.md)
-- [Give feedback](docs/FEEDBACK.md)
-- [Alpha status, known problems, and planned work](STATUS.md)
+LGPL-2.1-or-later, see `LICENSE`. Third-party parts and their licences are listed in `THIRD-PARTY.md`.

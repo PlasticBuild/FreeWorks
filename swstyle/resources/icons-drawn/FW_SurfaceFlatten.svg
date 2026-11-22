@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><defs>
+<linearGradient id="sf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9f1fb"/><stop offset="1" stop-color="#9fb9d8"/></linearGradient>
+<linearGradient id="sf2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6e7c8"/><stop offset="1" stop-color="#d9b16a"/></linearGradient>
+<linearGradient id="sol" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d7dde5"/><stop offset="1" stop-color="#8e9aa8"/></linearGradient>
+</defs><path stroke="#3d4f66" stroke-width="1" stroke-linejoin="round" fill="url(#sf)" d="M4 13 C9 6 15 6 18 12 L18 20 C15 14 9 14 4 21 Z"/><path stroke="#3d4f66" stroke-width="1" stroke-linejoin="round" fill="url(#sf2)" d="M17 26 L29 26 L29 20 L17 20 Z"/><path fill="#2a73c9" stroke="#1d5598" stroke-width="0.6" stroke-linejoin="round" d="M18.0 17.9 L20.5 17.9 L20.5 19.8 L24.0 17.0 L20.5 14.2 L20.5 16.1 L18.0 16.1 Z"/></svg>
