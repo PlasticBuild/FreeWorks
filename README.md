@@ -63,19 +63,16 @@ These notes cover 0.3.0-alpha1. Everyone is welcome to report bugs, suggest feat
 - Sheet metal, weldments, and mold tools have had less testing than parts, assemblies, and drawings.
 - Drawing flat patterns, weldment cut-list tables, and the Sketch Blocks and Library Feature panels are still pending.
 
-### Actively being worked on
+### Actively being worked on (coming in the next version)
 
-- Checking alpha stability on clean installs.
-- Confirming and fixing issues found by automated tutorial walkthroughs.
-- Completing the Dimension Text options and fixing Parting Surface corners.
-
-### Planned next
-
-- Include the fixes for thin cuts from an open line and Full Round on slot ends in the next build.
-- Add drawing flat patterns and weldment cut lists, and test sheet metal and weldments more thoroughly.
-- Add Sketch Blocks, Library Feature, and Make Independent.
-- Refine sketch snapping and automatic relations.
-- Fix issues reported by testers.
+- **Sketching:** smarter snapping and inference lines, and more automatic relations while you draw.
+- **Features:** Thin cut from an open line, Full Round on slot ends, and more fillet and chamfer options on surfaces.
+- **Sheet metal and weldments:** a full pass on flanges, hems, fold and unfold, structural members and cut lists.
+- **Mold tools:** Parting Surface corner options and the rest of the mold panels.
+- **Drawings:** flat pattern views, weldment cut-list tables, and Dimension Text options (Inspection, Justify, Offset, second text line).
+- **Assemblies:** more mate types, Motion Study polish, and Make Independent.
+- **Interface:** panel-by-panel layout and wording polish, Sketch Blocks, and Library Features.
+- **Stability:** fixes from automated tutorial walk-throughs and from tester reports.
 
 ## Guides
 
