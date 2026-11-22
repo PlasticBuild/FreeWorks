@@ -10,6 +10,8 @@ FreeWorks is an independent add-on for FreeCAD. Install it into your existing Fr
 
 [**Download FreeWorks 0.3.0-alpha1**](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.0-alpha1)
 
+The icons in this alpha are AI-generated and inspired by SOLIDWORKS icons.
+
 ## What you can try
 
 | Area | Workflow |
