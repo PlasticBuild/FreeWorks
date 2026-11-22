@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><defs>
+<linearGradient id="a1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f7fb"/><stop offset="1" stop-color="#b7c6d9"/></linearGradient>
+<linearGradient id="a2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbe9b8"/><stop offset="1" stop-color="#e2b04a"/></linearGradient>
+<linearGradient id="a3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e3f0e2"/><stop offset="1" stop-color="#93bf8f"/></linearGradient>
+</defs><path stroke="#3d4f66" stroke-width="0.9" stroke-linejoin="round" fill="url(#a1)" d="M4 13 L18 13 L18 26 L4 26 Z"/><path stroke="#3d4f66" stroke-width="0.9" stroke-linejoin="round" fill="#ffffff" fill-opacity="0.55" d="M4 13 L10 9.4 L24 9.4 L18 13 Z"/><path stroke="#3d4f66" stroke-width="0.9" stroke-linejoin="round" fill="url(#a1)" fill-opacity="0.8" d="M18 13 L24 9.4 L24 22.4 L18 26 Z"/><path fill="#ffffff" stroke="#3d4f66" stroke-width="1" d="M17 10 L17 26 L20.5 22.5 L23.5 29 L26 28 L23 21.5 L28 21.5 Z"/><text x="21" y="9" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#256c31">+</text></svg>

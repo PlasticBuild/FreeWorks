@@ -1,0 +1,11 @@
+body { font-family: Segoe UI, Arial, sans-serif; font-size: 10pt; color: #1e1e1e; background: #ffffff; margin: 12px 18px; }
+h1 { font-size: 18pt; color: #1b4f8a; margin: 4px 0 8px 0; }
+h2 { font-size: 13pt; color: #1b4f8a; margin: 16px 0 6px 0; }
+h3 { font-size: 11pt; color: #333333; margin: 12px 0 4px 0; }
+table { border-collapse: collapse; margin: 6px 0; }
+th { background: #e8eef5; text-align: left; padding: 3px 8px; border: 1px solid #c8d2de; }
+td { padding: 3px 8px; border: 1px solid #d8dee6; vertical-align: top; }
+code { font-family: Consolas, monospace; background: #f2f4f7; }
+blockquote { color: #555555; margin: 6px 0 6px 12px; }
+.nav { font-size: 9pt; color: #666666; border-bottom: 1px solid #d8dee6; padding-bottom: 4px; margin-bottom: 8px; }
+a { color: #1565c0; }

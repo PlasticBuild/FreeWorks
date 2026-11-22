@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- FreeWorks add-on icon: a plain sketch corner with a dimension. Original drawing, LGPL-2.1-or-later like the add-on. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><metadata></metadata>
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="#2b5fa8"/>
+  <path d="M14 46 V18 H42" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 46 L42 46 L42 30" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 9"/>
+  <path d="M20 54 H50" fill="none" stroke="#ffd23f" stroke-width="3" stroke-linecap="round"/>
+  <path d="M20 54 l5 -3 v6 z M50 54 l-5 -3 v6 z" fill="#ffd23f"/>
+  <circle cx="14" cy="18" r="4" fill="#ffd23f"/>
+</svg>
