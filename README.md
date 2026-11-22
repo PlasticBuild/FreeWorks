@@ -2,13 +2,15 @@
 
 [![Donate on Ko-fi](https://img.shields.io/badge/Donate-Ko--fi-FF5E5B?style=for-the-badge)](https://ko-fi.com/plasticbuild)
 
-**0.3.0-alpha1 · Windows tested · Other operating systems untested**
+**0.3.1-alpha · FreeCAD 1.1.4 · Windows**
 
 **Like the SOLIDWORKS interface and want to work in FreeCAD?** FreeWorks brings a familiar commercial-CAD workflow to stock FreeCAD 1.1.4, from the first sketch through parts, assemblies, and drawings.
 
 FreeWorks is an independent add-on for FreeCAD. Install it into your existing FreeCAD setup. The application still appears as **FreeCAD**.
 
-[**Download FreeWorks 0.3.0-alpha1**](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.0-alpha1)
+[**Download FreeWorks 0.3.1-alpha**](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.1-alpha)
+
+0.3.1-alpha adds the new icon pack, the corrected Add-Ins icon, updated command tabs and view toolbar placement, and optional GitHub updates. See the [release notes](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.1-alpha) for details and known issues.
 
 The icons in this alpha are AI-generated and inspired by SOLIDWORKS icons.
 
@@ -35,7 +37,7 @@ Sketching is the best place to start. The walkthrough below takes you from a sna
 ## Requirements and quick install
 
 - Use stock FreeCAD **1.1.4**. Windows has been tested. Other operating systems are untested.
-- Download **FreeWorks-0.3.0-alpha1.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.0-alpha1), then follow the [manual installation guide](docs/INSTALL.md).
+- Download **FreeWorks-0.3.1-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.1-alpha), then follow the [manual installation guide](docs/INSTALL.md).
 
 Orca, Bambu, PrusaSlicer, and Diotopo are optional in-app downloads. Each is downloaded separately. The add-on package excludes all four.
 
