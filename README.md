@@ -2,19 +2,19 @@
 
 [![Donate on Ko-fi](https://img.shields.io/badge/Donate-Ko--fi-FF5E5B?style=for-the-badge)](https://ko-fi.com/plasticbuild)
 
-**0.3.2-alpha · FreeCAD 1.1.4 · Windows**
+**0.3.3-alpha · FreeCAD 1.1.4 · Windows**
 
 **Like the SOLIDWORKS interface and want to work in FreeCAD?** FreeWorks brings a familiar commercial-CAD workflow to stock FreeCAD 1.1.4, from the first sketch through parts, assemblies, and drawings.
 
 FreeWorks is an independent add-on for FreeCAD. Install it into your existing FreeCAD setup. The application still appears as **FreeCAD**.
 
-[**Download FreeWorks 0.3.2-alpha**](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.2-alpha)
+[**Download FreeWorks 0.3.3-alpha**](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.3-alpha)
 
-0.3.2-alpha adds 219 icons, fixes the Midpoint Line and spline icons, and improves rollback and face-to-feature selection. Add-Ins now groups ScanRuler, Diotopo, and 3D Slicer, and optional workbenches can get their own command tab. See the [release notes](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.2-alpha) for details and known issues.
+0.3.3-alpha fixes CommandManager tabs for workbenches that load after startup, including SubD. See the [release notes](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.3-alpha) for details and known issues.
 
 The icons in this alpha are AI-generated and inspired by SOLIDWORKS icons.
 
-[Download the five-column icon comparison PDF](https://raw.githubusercontent.com/PlasticBuild/FreeWorks/main/docs/FreeWorks-Icon-Comparison.pdf)
+[Download the six-column icon comparison PDF](https://raw.githubusercontent.com/PlasticBuild/FreeWorks/main/docs/FreeWorks-Icon-Comparison.pdf)
 
 ## What you can try
 
@@ -37,7 +37,7 @@ Sketching is the best place to start. The walkthrough below takes you from a sna
 ## Requirements and quick install
 
 - Use stock FreeCAD **1.1.4**. Windows has been tested. Other operating systems are untested.
-- Download **FreeWorks-0.3.2-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.2-alpha), then follow the [manual installation guide](docs/INSTALL.md).
+- Download **FreeWorks-0.3.3-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.3-alpha), then follow the [manual installation guide](docs/INSTALL.md).
 
 Orca, Bambu, PrusaSlicer, and Diotopo are optional in-app downloads. Each is downloaded separately. The add-on package excludes all four.
 
