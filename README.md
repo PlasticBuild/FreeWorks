@@ -48,3 +48,4 @@ Orca, Bambu, PrusaSlicer, and Diotopo are optional in-app downloads. Each is dow
 
 - [Install, update, or remove FreeWorks](docs/INSTALL.md)
 - [Give feedback](docs/FEEDBACK.md)
+- [Alpha status, known problems, and planned work](STATUS.md)
