@@ -1,0 +1,2464 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Command reference: views, relations and the rest</title><link rel="stylesheet" href="guide.css"><style>body { font-family: Segoe UI, Arial, sans-serif; font-size: 10pt; color: #1e1e1e; background: #ffffff; margin: 12px 18px; }
+h1 { font-size: 18pt; color: #1b4f8a; margin: 4px 0 8px 0; }
+h2 { font-size: 13pt; color: #1b4f8a; margin: 16px 0 6px 0; }
+h3 { font-size: 11pt; color: #333333; margin: 12px 0 4px 0; }
+table { border-collapse: collapse; margin: 6px 0; }
+th { background: #e8eef5; text-align: left; padding: 3px 8px; border: 1px solid #c8d2de; }
+td { padding: 3px 8px; border: 1px solid #d8dee6; vertical-align: top; }
+code { font-family: Consolas, monospace; background: #f2f4f7; }
+blockquote { color: #555555; margin: 6px 0 6px 12px; }
+.nav { font-size: 9pt; color: #666666; border-bottom: 1px solid #d8dee6; padding-bottom: 4px; margin-bottom: 8px; }
+a { color: #1565c0; }
+</style></head>
+<body>
+<div class="nav"><a href="index.html">Contents</a> | <a href="18-reference-assembly-drawing.html">Previous: Command reference: assemblies and drawings</a></div>
+<h1 id="19-command-reference-views-relations-and-the-rest"><a name="19-command-reference-views-relations-and-the-rest"></a>19. Command reference: views, relations and the rest</h1>
+<p>Commands that have no button on a ribbon tab: the heads-up view tools, sketch relations and sketch aids, quick access, macros, simulation tools and the rest, and the PropertyManagers, with what each page of a panel asks for.</p>
+<p>Click <b>?</b> on a PropertyManager, or press F1 over a command, to come straight to its entry here.</p>
+<ul><li><a href="#file-quick-access-and-selection">File, quick access and selection</a></li><li><a href="#view-and-display">View and display</a></li><li><a href="#sketch-and-block-aids">Sketch and block aids</a></li><li><a href="#sketch-relations">Sketch relations</a></li><li><a href="#sketch-splines-and-ink">Sketch splines and ink</a></li><li><a href="#macros">Macros</a></li><li><a href="#drawing-other-commands">Drawing: other commands</a></li><li><a href="#assembly-and-feature-management">Assembly and feature management</a></li><li><a href="#sheet-metal-and-weldments">Sheet metal and weldments</a></li><li><a href="#simulation">Simulation</a></li><li><a href="#flow-simulation">Flow simulation</a></li><li><a href="#3d-scan-and-mesh-repair">3D scan and mesh repair</a></li><li><a href="#mesh-tools">Mesh tools</a></li><li><a href="#rendering">Rendering</a></li><li><a href="#routing-and-electrical">Routing and electrical</a></li><li><a href="#freecad-assembly">FreeCAD assembly</a></li><li><a href="#draft-tools">Draft tools</a></li><li><a href="#part-primitives-and-booleans">Part primitives and booleans</a></li><li><a href="#groups-links-and-tree">Groups, links and tree</a></li><li><a href="#spreadsheet">Spreadsheet</a></li><li><a href="#robot">Robot</a></li><li><a href="#openscad-tools">OpenSCAD tools</a></li><li><a href="#workbenches">Workbenches</a></li><li><a href="#diotopo">Diotopo</a></li><li><a href="#3d-printing">3D printing</a></li><li><a href="#self-test">Self-test</a></li><li><a href="#other-commands">Other commands</a></li><li><a href="#propertymanagers">PropertyManagers</a></li></ul>
+<h2 id="file-quick-access-and-selection"><a name="file-quick-access-and-selection"></a>File, quick access and selection</h2>
+<h3 id="welcome-to-freecad"><a name="welcome-to-freecad"></a>Welcome to FreeCAD</h3>
+<p>Opens the Welcome page: new and recent files, learning, alerts.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it (or press Ctrl+F2) to open the Welcome box.</li></ul>
+<p><b>Shortcut:</b> Ctrl+F2.</p>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="new"><a name="new"></a>New</h3>
+<p>Starts a new part, assembly or drawing.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it (Ctrl+N). The New FreeCAD Document box opens: pick <b>Part</b>, <b>Assembly</b> or <b>Drawing</b> and click <b>OK</b>. The Advanced view adds template tabs. See <a href="16-dialogs.html#new-document">New document</a>.</li></ul>
+<p><b>Shortcut:</b> Ctrl+N.</p>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="make-drawing-from-part-assembly"><a name="make-drawing-from-part-assembly"></a>Make Drawing from Part/Assembly</h3>
+<p>Makes a drawing of the active part or assembly with its standard three views.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open the part or assembly, then click it. A new drawing opens with the part's standard three views, Front, Top and Right. A part that has no file yet asks to be saved first.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="make-assembly-from-part-assembly"><a name="make-assembly-from-part-assembly"></a>Make Assembly from Part/Assembly</h3>
+<p>Makes a new assembly and starts Begin Assembly with the active part picked.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open the part, then click it. A new assembly opens with <b>Begin Assembly</b> already showing the part picked. A part that has no file yet asks to be saved first.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="open"><a name="open"></a>Open</h3>
+<p>Opens an existing document.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it (Ctrl+O). Pick the file in the Open box. The Quick Filter buttons limit the list to parts, assemblies or drawings; <b>Use Speedpak</b> and <b>Do not load hidden components</b> show only while an assembly is picked.</li></ul>
+<p><b>Shortcut:</b> Ctrl+O.</p>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="recent-documents"><a name="recent-documents"></a>Recent Documents</h3>
+<p>Lists the documents you worked on lately.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it (press R over the 3D view) for the documents you worked on lately; pick one to open it. Save As puts a FreeCAD file at the top at once; exports are not listed.</li></ul>
+<p><b>Shortcut:</b> R.</p>
+<p><b>More:</b> <a href="02-interface.html#opening-saving-and-exporting">Opening, saving and exporting</a>.</p>
+<h3 id="save"><a name="save"></a>Save</h3>
+<p>Saves the active document.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it (Ctrl+S). A document that has no file yet asks where to save it.</li></ul>
+<p><b>Shortcut:</b> Ctrl+S.</p>
+<p><b>More:</b> <a href="02-interface.html#opening-saving-and-exporting">Opening, saving and exporting</a>.</p>
+<h3 id="save-as"><a name="save-as"></a>Save As</h3>
+<p>Saves the active document under a new name or format.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. Type the name, pick the folder and the type. <b>Options...</b> shows only for a type that has options (see <a href="16-dialogs.html#export-options">Export options</a>). <b>Include all referenced components</b> saves the parts of an assembly too, with <b>Add prefix</b> or <b>Add suffix</b>.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#opening-saving-and-exporting">Opening, saving and exporting</a>.</p>
+<h3 id="save-all"><a name="save-all"></a>Save All</h3>
+<p>Saves every open document that has changes.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. Every open document that has changes is saved; a document with no file yet asks where.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#opening-saving-and-exporting">Opening, saving and exporting</a>.</p>
+<h3 id="save-a-copy"><a name="save-a-copy"></a>Save a Copy</h3>
+<p>Saves a copy of the document and keeps working on the original.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, give the copy a name and folder. You go on working in the original.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="export"><a name="export"></a>Export</h3>
+<p>Writes the picked items or the document to another file format.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, pick the file type and the name. For STEP, IGES, STL and 3MF an Export Options box follows: see <a href="16-dialogs.html#export-options">Export options</a>.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#opening-saving-and-exporting">Opening, saving and exporting</a>.</p>
+<h3 id="import"><a name="import"></a>Import</h3>
+<p>Brings a file of another format into the document.</p>
+<p><b>More:</b> <a href="02-interface.html#opening-saving-and-exporting">Opening, saving and exporting</a>.</p>
+<h3 id="print"><a name="print"></a>Print</h3>
+<p>Prints the active document.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it (Ctrl+P). Pick the printer and the range, then <b>OK</b>. See <a href="16-dialogs.html#print">Print</a>.</li></ul>
+<p><b>Shortcut:</b> Ctrl+P.</p>
+<p><b>More:</b> <a href="02-interface.html#opening-saving-and-exporting">Opening, saving and exporting</a>.</p>
+<h3 id="print-preview"><a name="print-preview"></a>Print Preview</h3>
+<p>Shows how the document will look on paper.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. <b>Zoom In</b> and <b>Zoom Out</b> change the size; <b>Print...</b> and <b>Page Setup...</b> go on from there. See <a href="16-dialogs.html#print-preview">Print Preview</a>.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="page-setup"><a name="page-setup"></a>Page Setup</h3>
+<p>Sets the paper, orientation, scale and margins for printing.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. Set the scale, paper, orientation, drawing colour and margins. See <a href="16-dialogs.html#page-setup">Page Setup</a>.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="export-pdf"><a name="export-pdf"></a>Export PDF</h3>
+<p>Prints the active document to a PDF file.</p>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="undo"><a name="undo"></a>Undo</h3>
+<p>Takes back the last change.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it (Ctrl+Z) to take back the last change; click again to go further back. Inside a property panel Ctrl+Z undoes the last pick or value instead.</li></ul>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="redo"><a name="redo"></a>Redo</h3>
+<p>Puts back the change you just undid.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it (Ctrl+Y) to put back what you undid. Inside a property panel it redoes the panel's own steps.</li></ul>
+<p><b>Shortcut:</b> Ctrl+Y.</p>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="select"><a name="select"></a>Select</h3>
+<p>Select (press Esc to clear the selection).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click items in the graphics area or the tree. Ctrl+click adds more. Esc clears the selection.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="box-selection"><a name="box-selection"></a>Box Selection</h3>
+<p>Drag in the graphics area to pick with a box: to the right picks what is wholly inside, to the left what it touches.</p>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="lasso-selection"><a name="lasso-selection"></a>Lasso Selection</h3>
+<p>Drag in the graphics area to pick with a free loop: clockwise picks what is wholly inside, anticlockwise what it touches.</p>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="box-element-selection"><a name="box-element-selection"></a>Box Element Selection</h3>
+<p>Drag a box to pick the entities inside it.</p>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="magnified-selection"><a name="magnified-selection"></a>Magnified Selection</h3>
+<p>Shows a magnifying glass at the pointer (G) to pick small items without zooming the view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Press G (or click it). A magnifying glass shows at the pointer; pick small items through it without zooming the view.</li></ul>
+<p><b>Shortcut:</b> G.</p>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="select-all"><a name="select-all"></a>Select All</h3>
+<p>Picks every item of the active document.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. Every item of the active document is picked.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="rebuild"><a name="rebuild"></a>Rebuild</h3>
+<p>Rebuilds the features that changed. Ctrl+Q rebuilds every feature; What's Wrong lists any that failed.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it (Ctrl+B) to rebuild what changed. Ctrl+Q rebuilds every feature. If a feature fails, <b>What's Wrong</b> lists it with the reason.</li></ul>
+<p><b>Shortcut:</b> Ctrl+B.</p>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="what-s-wrong"><a name="what-s-wrong"></a>What's Wrong</h3>
+<p>Lists the features that failed to rebuild, with the reason for each.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to see the features that failed to rebuild, each with its reason.</li></ul>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="file-properties"><a name="file-properties"></a>File Properties</h3>
+<p>Shows and edits the document's summary and custom properties.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. The <b>Summary</b>, <b>Custom</b> and <b>Configuration Properties</b> tabs hold the file's properties. See <a href="16-dialogs.html#file-properties-summary-information">File properties</a>.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#opening-saving-and-exporting">Opening, saving and exporting</a>.</p>
+<h3 id="options"><a name="options"></a>Options</h3>
+<p>Changes system options and document properties.</p>
+<p><b>More:</b> <a href="08-options.html#system-options">System Options</a>.</p>
+<h3 id="customize"><a name="customize"></a>Customize</h3>
+<p>Sets up toolbars, shortcut bars, menus, keys and mouse gestures.</p>
+<p><b>More:</b> <a href="08-options.html#customize">Customize</a>.</p>
+<h3 id="add-ins"><a name="add-ins"></a>Add-Ins</h3>
+<p>Finds and installs add-ins.</p>
+<p><b>More:</b> <a href="02-interface.html#ribbon">Ribbon</a>.</p>
+<h3 id="help"><a name="help"></a>Help</h3>
+<p>Opens the help for FreeCAD.</p>
+<p><b>More:</b> <a href="02-interface.html#opening-saving-and-exporting">Opening, saving and exporting</a>.</p>
+<h3 id="power-select"><a name="power-select"></a>Power Select</h3>
+<p>Selects entities by type (FreeCAD: all visible).</p>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h3 id="invert-selection"><a name="invert-selection"></a>Invert Selection</h3>
+<p>Selects every other face, edge or body of the same kind instead.</p>
+<p><b>More:</b> <a href="02-interface.html#quick-access-row">Quick access row</a>.</p>
+<h2 id="view-and-display"><a name="view-and-display"></a>View and display</h2>
+<h3 id="hide-block"><a name="hide-block"></a>Hide Block</h3>
+<p>Hides the selected block's entities; Show in the block's tree row brings them back.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="sketch-relations"><a name="sketch-relations"></a>Sketch Relations</h3>
+<p>Shows or hides the relation glyphs of the sketch being edited.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="sketch-dimensions"><a name="sketch-dimensions"></a>Sketch Dimensions</h3>
+<p>Shows or hides the dimensions of the sketch being edited.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-primary-planes"><a name="view-primary-planes"></a>View Primary Planes</h3>
+<p>Shows or hides the Front, Top and Right planes only.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="temporary-axes"><a name="temporary-axes"></a>Temporary Axes</h3>
+<p>Shows or hides the axes of cylindrical and conical faces.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-center-of-mass"><a name="view-center-of-mass"></a>View Center of Mass</h3>
+<p>Shows or hides the Center of Mass point.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-bounding-box"><a name="view-bounding-box"></a>View Bounding Box</h3>
+<p>Shows or hides the Bounding Box.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="normal-to-sketch"><a name="normal-to-sketch"></a>Normal To Sketch</h3>
+<p>Looks straight at the sketch plane.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it while you edit a sketch. The view turns to look straight at the sketch plane.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="zoom-to-fit"><a name="zoom-to-fit"></a>Zoom to Fit</h3>
+<p>Fits the whole model in the window.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, or press F, to fit the whole model in the window.</li></ul>
+<p><b>Shortcut:</b> F.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="zoom-to-area"><a name="zoom-to-area"></a>Zoom to Area</h3>
+<p>Zooms to a box you drag.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then drag a box in the graphics area; the view zooms to the box.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="zoom-to-selection"><a name="zoom-to-selection"></a>Zoom to Selection</h3>
+<p>Zooms to the picked items.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick items first, then click it; the view zooms to them.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="previous-view"><a name="previous-view"></a>Previous View</h3>
+<p>Goes back to the previous view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it (Ctrl+Shift+Z) to go back to the previous view.</li></ul>
+<p><b>Shortcut:</b> Ctrl+Shift+Z.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="front"><a name="front"></a>Front</h3>
+<p>Turns the view to look at the front.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, or press Space and pick it in the View Orientation box. The view turns to it at once.</li></ul>
+<p><b>Shortcut:</b> Ctrl+1.</p>
+<p><b>More:</b> <a href="01-getting-started.html#2-sketch-on-the-front-plane">2. Sketch on the Front Plane</a>.</p>
+<h3 id="back"><a name="back"></a>Back</h3>
+<p>Turns the view to look at the back.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, or press Space and pick it in the View Orientation box. The view turns to it at once.</li></ul>
+<p><b>Shortcut:</b> Ctrl+2.</p>
+<p><b>More:</b> <a href="08-options.html#going-back-to-the-defaults">Going back to the defaults</a>.</p>
+<h3 id="left"><a name="left"></a>Left</h3>
+<p>Turns the view to look at the left side.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, or press Space and pick it in the View Orientation box. The view turns to it at once.</li></ul>
+<p><b>Shortcut:</b> Ctrl+3.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="right"><a name="right"></a>Right</h3>
+<p>Turns the view to look at the right side.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, or press Space and pick it in the View Orientation box. The view turns to it at once.</li></ul>
+<p><b>Shortcut:</b> Ctrl+4.</p>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="top"><a name="top"></a>Top</h3>
+<p>Turns the view to look down from the top.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, or press Space and pick it in the View Orientation box. The view turns to it at once.</li></ul>
+<p><b>Shortcut:</b> Ctrl+5.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="bottom"><a name="bottom"></a>Bottom</h3>
+<p>Turns the view to look up from the bottom.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, or press Space and pick it in the View Orientation box. The view turns to it at once.</li></ul>
+<p><b>Shortcut:</b> Ctrl+6.</p>
+<p><b>More:</b> <a href="06-drawings.html#tables">Tables</a>.</p>
+<h3 id="isometric"><a name="isometric"></a>Isometric</h3>
+<p>Turns the view to the isometric angle.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, or press Space and pick it in the View Orientation box. The view turns to it at once.</li></ul>
+<p><b>Shortcut:</b> Ctrl+7.</p>
+<p><b>More:</b> <a href="06-drawings.html#starting-a-drawing">Starting a drawing</a>.</p>
+<h3 id="trimetric"><a name="trimetric"></a>Trimetric</h3>
+<p>Turns the view to the trimetric angle.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, or press Space and pick it in the View Orientation box. The view turns to it at once.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="dimetric"><a name="dimetric"></a>Dimetric</h3>
+<p>Turns the view to the dimetric angle.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, or press Space and pick it in the View Orientation box. The view turns to it at once.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="y-up"><a name="y-up"></a>Y-Up</h3>
+<p>Standard views with the Y axis up.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="z-up"><a name="z-up"></a>Z-Up</h3>
+<p>Standard views with the Z axis up: Front looks at the Top Plane.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="single-view"><a name="single-view"></a>Single View</h3>
+<p>One view of the model in the window.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it for one view of the model; <b>Two View</b>, <b>Four View</b> and <b>Link Views</b> make several.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="two-view-horizontal"><a name="two-view-horizontal"></a>Two View - Horizontal</h3>
+<p>Two views, one above the other.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part or assembly.</li><li>Click the View Orientation button on the heads-up toolbar, then Two View - Horizontal in its drop-down.</li><li>The graphics area splits into two views, one above the other. Pick Single View in the same drop-down to go back.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="two-view-vertical"><a name="two-view-vertical"></a>Two View - Vertical</h3>
+<p>Two views side by side.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part or assembly.</li><li>Click the View Orientation button on the heads-up toolbar, then Two View - Vertical in its drop-down.</li><li>The graphics area splits into two views side by side; each one turns and zooms on its own.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="four-view"><a name="four-view"></a>Four View</h3>
+<p>Four views: Front, Top, Right and Isometric.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it for four views: Front, Top, Right and Isometric.  <b>Single View</b> goes back to one.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="link-views"><a name="link-views"></a>Link Views</h3>
+<p>Turning, zooming or moving one view does the same in the others.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to tick it. Turning, zooming or moving one view then does the same in the others. Click again to untick.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="new-view"><a name="new-view"></a>New View</h3>
+<p>Saves the current view under a name.</p>
+<p><b>How to use it</b></p>
+<ul><li>Turn the model to the view you want, click it and give it a name. The current view is saved under that name.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="update-standard-views"><a name="update-standard-views"></a>Update Standard Views</h3>
+<p>Makes the current view the chosen standard view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Turn the model to the view you want, then click it. The current view becomes the chosen standard view.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="reset-standard-views"><a name="reset-standard-views"></a>Reset Standard Views</h3>
+<p>Puts back the default standard views.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to put back the default standard views.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-orientation"><a name="view-orientation"></a>View Orientation</h3>
+<p>The standard views; Space opens the Orientation box with the View Selector.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to open its list, then pick the command you want.</li></ul>
+<p><b>Shortcut:</b> Space.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-selector"><a name="view-selector"></a>View Selector</h3>
+<p>A box around the model in the 3D view: click a face, edge or corner to look from there (Space).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it (Ctrl+Space) to show a box around the model. Click one of its faces, edges or corners to look from there.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="shaded-with-edges"><a name="shaded-with-edges"></a>Shaded With Edges</h3>
+<p>Shaded faces with their edges drawn (FreeCAD's Flat lines).</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part or assembly.</li><li>Click View &gt; Display &gt; Shaded With Edges, or pick it from the Display Style button on the heads-up toolbar.</li><li>The faces are shaded and their edges drawn in black.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="shaded"><a name="shaded"></a>Shaded</h3>
+<p>Shaded faces without edges.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part or assembly.</li><li>Click View &gt; Display &gt; Shaded, or pick it from the Display Style button on the heads-up toolbar.</li><li>The faces are shaded with no edges drawn.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="hidden-lines-removed"><a name="hidden-lines-removed"></a>Hidden Lines Removed</h3>
+<p>White faces and black edges, with the hidden ones left out (hlv.py; FreeCAD's Hidden line style draws face triangles).</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part or assembly.</li><li>Click View &gt; Display &gt; Hidden Lines Removed, or pick it from the Display Style button on the heads-up toolbar.</li><li>Only the edges you can see are drawn, on white faces.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="hidden-lines-visible"><a name="hidden-lines-visible"></a>Hidden Lines Visible</h3>
+<p>Edges only: visible edges solid, hidden edges grey and dashed.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part or assembly.</li><li>Click View &gt; Display &gt; Hidden Lines Visible, or pick it from the Display Style button on the heads-up toolbar.</li><li>Visible edges are drawn solid and hidden edges grey and dashed.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="wireframe"><a name="wireframe"></a>Wireframe</h3>
+<p>Every edge, the hidden ones too.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part or assembly.</li><li>Click View &gt; Display &gt; Wireframe, or pick it from the Display Style button on the heads-up toolbar.</li><li>Every edge is drawn, the hidden ones too.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="cartoon"><a name="cartoon"></a>Cartoon</h3>
+<p>Draws the model in flat bands of colour with thick black outlines.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part or assembly.</li><li>Click View &gt; Display &gt; Cartoon, or the View Settings button on the heads-up toolbar and then Cartoon.</li><li>The model is drawn in flat bands of colour with thick black outlines. Click it again to go back.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="draft-quality-hlr-hlv"><a name="draft-quality-hlr-hlv"></a>Draft Quality HLR/HLV</h3>
+<p>Hidden Lines Visible draws its hidden edges from coarser curves: quicker, rougher.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="zoom-to-fit-1"><a name="zoom-to-fit-1"></a>Zoom to Fit</h3>
+<p>Fits the whole sheet in the window.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="zoom-to-area-1"><a name="zoom-to-area-1"></a>Zoom to Area</h3>
+<p>Zooms to a box you drag on the sheet.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="previous-view-1"><a name="previous-view-1"></a>Previous View</h3>
+<p>Goes back to the previous zoom of the sheet.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="3d-drawing-view"><a name="3d-drawing-view"></a>3D Drawing View</h3>
+<p>Turns a drawing view in 3D to pick hidden edges.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="display-style"><a name="display-style"></a>Display Style</h3>
+<p>How the picked views (or every view) are drawn: shaded with edges, shaded, hidden lines removed or visible, or wireframe.</p>
+<p><b>More:</b> <a href="06-drawings.html#views">Views</a>.</p>
+<h3 id="shaded-with-edges-1"><a name="shaded-with-edges-1"></a>Shaded With Edges</h3>
+<p>A shaded picture of the model under the view's edges.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="shaded-1"><a name="shaded-1"></a>Shaded</h3>
+<p>A shaded picture of the model, no edges.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="hidden-lines-removed-1"><a name="hidden-lines-removed-1"></a>Hidden Lines Removed</h3>
+<p>Visible edges only.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="hidden-lines-visible-1"><a name="hidden-lines-visible-1"></a>Hidden Lines Visible</h3>
+<p>Visible edges solid, hidden edges dashed.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="wireframe-1"><a name="wireframe-1"></a>Wireframe</h3>
+<p>Every edge, the hidden ones too.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="display-style-1"><a name="display-style-1"></a>Display Style</h3>
+<p>How the model is drawn: shaded with edges, shaded, hidden lines removed or visible, or wireframe.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the Display Style button on the heads-up toolbar above the graphics area.</li><li>Pick Shaded With Edges, Shaded, Hidden Lines Removed, Hidden Lines Visible or Wireframe.</li><li>The model is drawn that way until you pick another style.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html#views">Views</a>.</p>
+<h3 id="hide-show-items"><a name="hide-show-items"></a>Hide/Show Items</h3>
+<p>Switches items in the graphics area on and off.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to open its list, then pick the command you want.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="toggle-visibility"><a name="toggle-visibility"></a>Toggle Visibility</h3>
+<p>Hides the picked items that show and shows the picked hidden ones.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick items, then click it. Those that show are hidden and those that were hidden show.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="show"><a name="show"></a>Show</h3>
+<p>Shows the picked hidden items.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the hidden items, then click it. They show again.</li></ul>
+<p><b>More:</b> <a href="05-assemblies.html#mates">Mates</a>.</p>
+<h3 id="hide"><a name="hide"></a>Hide</h3>
+<p>Hides the picked items.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick items, then click it. They are hidden; <b>Show All</b> brings every hidden item back.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="show-all"><a name="show-all"></a>Show All</h3>
+<p>Shows every hidden item.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. Every hidden item shows again.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-planes"><a name="view-planes"></a>View Planes</h3>
+<p>Shows or hides all planes.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-axes"><a name="view-axes"></a>View Axes</h3>
+<p>Shows or hides all axes.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-origins"><a name="view-origins"></a>View Origins</h3>
+<p>Shows or hides the origins.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-coordinate-systems"><a name="view-coordinate-systems"></a>View Coordinate Systems</h3>
+<p>Shows or hides all coordinate systems.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-points"><a name="view-points"></a>View Points</h3>
+<p>Shows or hides all reference points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-sketches"><a name="view-sketches"></a>View Sketches</h3>
+<p>Shows or hides all sketches, also those used by features.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-curves"><a name="view-curves"></a>View Curves</h3>
+<p>Shows or hides curves.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="bodies"><a name="bodies"></a>Bodies</h3>
+<p>Shows or hides all solid and surface bodies.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="04-features.html#surfaces-direct-editing-and-more">Surfaces, direct editing and more</a>.</p>
+<h3 id="all-annotations"><a name="all-annotations"></a>All Annotations</h3>
+<p>Shows or hides all annotations in the graphics area.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="grid"><a name="grid"></a>Grid</h3>
+<p>Shows or hides the sketch grid.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="08-options.html#document-properties">Document Properties</a>.</p>
+<h3 id="dimension-names"><a name="dimension-names"></a>Dimension Names</h3>
+<p>Shows the names of named sketch dimensions.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="sketch-planes"><a name="sketch-planes"></a>Sketch Planes</h3>
+<p>Shows or hides the plane of every sketch.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="cameras"><a name="cameras"></a>Cameras</h3>
+<p>Shows or hides the cameras.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="lights"><a name="lights"></a>Lights</h3>
+<p>Turns the added lights on and off.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="parting-lines"><a name="parting-lines"></a>Parting Lines</h3>
+<p>Shows or hides the parting lines.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="markups"><a name="markups"></a>Markups</h3>
+<p>Shows or hides the markups.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="bend-lines"><a name="bend-lines"></a>Bend Lines</h3>
+<p>Shows or hides the sheet metal bend lines.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="weld-bead"><a name="weld-bead"></a>Weld Bead</h3>
+<p>Shows or hides the weld beads.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="tangent-edges-visible"><a name="tangent-edges-visible"></a>Tangent Edges Visible</h3>
+<p>Draws tangent edges like other edges.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part with fillets.</li><li>Click View &gt; Display &gt; Tangent Edges Visible.</li><li>The edges where a fillet meets its faces are drawn like other edges.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="tangent-edges-as-phantom"><a name="tangent-edges-as-phantom"></a>Tangent Edges as Phantom</h3>
+<p>Draws tangent edges as phantom lines.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part with fillets.</li><li>Click View &gt; Display &gt; Tangent Edges as Phantom.</li><li>Those edges are drawn as thin phantom lines.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="tangent-edges-removed"><a name="tangent-edges-removed"></a>Tangent Edges Removed</h3>
+<p>Leaves tangent edges out.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part with fillets.</li><li>Click View &gt; Display &gt; Tangent Edges Removed.</li><li>Those edges are left out.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="rotate-about-scene-floor"><a name="rotate-about-scene-floor"></a>Rotate About Scene Floor</h3>
+<p>An on/off setting that keeps the floor level while you turn the view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click View &gt; Modify &gt; Rotate About Scene Floor (it gets a tick).</li><li>Turn the view with the middle mouse button as usual: the model now turns about the vertical axis, so the floor stays level.</li><li>Click it again to turn it off and get the free rotation back.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="turn-camera"><a name="turn-camera"></a>Turn Camera</h3>
+<p>Turns the camera where it stands: drag to look round; Esc ends.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then drag in the graphics area to look round from where you stand. Esc ends it.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="isolate"><a name="isolate"></a>Isolate</h3>
+<p>Shows only the selected bodies until Exit Isolate.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the bodies to keep, then click it. Only they show, until you choose Exit Isolate.</li></ul>
+<p><b>More:</b> <a href="05-assemblies.html#checking-and-output">Checking and output</a>.</p>
+<h3 id="hide-all-types"><a name="hide-all-types"></a>Hide All Types</h3>
+<p>Hides planes, axes, origins, coordinate systems, points, sketches, curves and annotations; press again to show them.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click View &gt; Hide / Show &gt; Hide All Types.</li><li>Planes, axes, origins, coordinate systems, points, sketches, curves and annotations are hidden.</li><li>Click it again to show them again.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="change-transparency"><a name="change-transparency"></a>Change Transparency</h3>
+<p>Makes the picked item see-through, or solid again.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick an item, then click it. The item turns see-through; click again to make it solid.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="dynamic-annotation-views"><a name="dynamic-annotation-views"></a>Dynamic Annotation Views</h3>
+<p>Annotations show only in the view they were made in.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="view-settings"><a name="view-settings"></a>View Settings</h3>
+<p>Shadows In Shaded Mode, Perspective and Cartoon.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to open its list, then pick the command you want.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="realview-graphics"><a name="realview-graphics"></a>RealView Graphics</h3>
+<p>Shades the faces smooth and glossy, reflecting the scene; chrome and polished metals look mirror-like.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part or assembly in a shaded style.</li><li>Click View &gt; Display &gt; RealView Graphics, or the View Settings button on the heads-up toolbar and then RealView Graphics.</li><li>The faces are shaded smooth and glossy and reflect the scene; chrome and polished metals become mirror-like. Click it again to turn it off.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="ambient-occlusion"><a name="ambient-occlusion"></a>Ambient Occlusion</h3>
+<p>Darkens the corners and hollows of the model.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="shadows-in-shaded-mode"><a name="shadows-in-shaded-mode"></a>Shadows In Shaded Mode</h3>
+<p>Drops a shadow of the model on the floor while it is shaded.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a part or assembly in a shaded style.</li><li>Click View &gt; Display &gt; Shadows In Shaded Mode, or the View Settings button on the heads-up toolbar and then Shadows In Shaded Mode.</li><li>A soft shadow of the model falls on the floor below it. Click it again to turn it off.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="perspective"><a name="perspective"></a>Perspective</h3>
+<p>Shows the model with perspective.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to show the model with perspective; <b>Orthographic</b> takes it away.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="add-camera"><a name="add-camera"></a>Add Camera</h3>
+<p>Adds a camera standing where the view's eye is, looking where it looks.</p>
+<p><b>How to use it</b></p>
+<ul><li>Turn the model to where the camera should stand, then click it. A camera is added there, looking the way you look.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="camera-view"><a name="camera-view"></a>Camera View</h3>
+<p>Looks through the picked camera; again goes back to the view as it was.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a camera, then click it to look through it. Click again to go back to the view as it was.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="toggle-model-break-view"><a name="toggle-model-break-view"></a>Toggle Model Break View</h3>
+<p>Shows the part whole, or broken again.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to show the part whole; click again to break it again.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="add-display-state"><a name="add-display-state"></a>Add Display State</h3>
+<p>Keeps the look as it is now as a new display state and makes it active.</p>
+<p><b>How to use it</b></p>
+<ul><li>Set the look you want, then click it. It is kept as a new display state and made active.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="add-walk-through"><a name="add-walk-through"></a>Add Walk-through</h3>
+<p>Walks the camera through the model with the arrow keys, and records the walk.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then walk the camera through the model with the arrow keys. The walk is recorded; Play Walk-through replays it.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="play-walk-through"><a name="play-walk-through"></a>Play Walk-through</h3>
+<p>Plays the picked walk-through (or the only one).</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a walk-through (or have only one), then click it. The camera replays the recorded walk.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="orthographic"><a name="orthographic"></a>Orthographic</h3>
+<p>Shows the model without perspective.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to show the model without perspective.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="shortcut-bar"><a name="shortcut-bar"></a>Shortcut Bar</h3>
+<p>The shortcut bar at the pointer (the S key).</p>
+<p><b>How to use it</b></p>
+<ul><li>Press S with the pointer in the graphics area. The shortcut bar opens at the pointer; pick a command from it.</li></ul>
+<p><b>Shortcut:</b> S.</p>
+<p><b>More:</b> <a href="09-shortcuts.html#the-s-key-shortcut-bar">The S key: shortcut bar</a>.</p>
+<h3 id="pan"><a name="pan"></a>Pan</h3>
+<p>Drag to move the view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then drag in the graphics area to move the view.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h2 id="sketch-and-block-aids"><a name="sketch-and-block-aids"></a>Sketch and block aids</h2>
+<h3 id="segment-mesh"><a name="segment-mesh"></a>Segment Mesh</h3>
+<p>Splits a mesh into regions.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="sketch-picture"><a name="sketch-picture"></a>Sketch Picture</h3>
+<p>Places a picture on the sketch plane to trace.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a sketch and click Sketch Picture.</li><li>Pick an image file; it lies on the sketch plane with its lower left corner at the sketch origin.</li><li>In the panel set Origin X and Y, Angle, Width and Height (Lock aspect ratio keeps the proportions), or Flip horizontal or vertical.</li><li>To scale it to a known size, tick Enable scale tool, click two points on the picture and type the distance between them.</li><li>Under Transparency pick None, From file, Full image or User defined.</li><li>Click the check. With the picture picked, Sketch Picture opens the panel again.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="front-1"><a name="front-1"></a>Front</h3>
+<p>Makes the picked entities the front view: back into the first sketch.</p>
+<p><b>More:</b> <a href="01-getting-started.html#2-sketch-on-the-front-plane">2. Sketch on the Front Plane</a>.</p>
+<h3 id="top-1"><a name="top-1"></a>Top</h3>
+<p>Turns the picked entities into the top view, above the front view.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="right-1"><a name="right-1"></a>Right</h3>
+<p>Turns the picked entities into the right view.</p>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="bottom-1"><a name="bottom-1"></a>Bottom</h3>
+<p>Turns the picked entities into the bottom view.</p>
+<p><b>More:</b> <a href="06-drawings.html#tables">Tables</a>.</p>
+<h3 id="left-1"><a name="left-1"></a>Left</h3>
+<p>Turns the picked entities into the left view.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="back-1"><a name="back-1"></a>Back</h3>
+<p>Turns the picked entities into the back view.</p>
+<p><b>More:</b> <a href="08-options.html#going-back-to-the-defaults">Going back to the defaults</a>.</p>
+<h3 id="auxiliary"><a name="auxiliary"></a>Auxiliary</h3>
+<p>Turns the picked entities into an auxiliary view, folded about the line picked last.</p>
+<p><b>More:</b> <a href="06-drawings.html#views">Views</a>.</p>
+<h3 id="extrude"><a name="extrude"></a>Extrude...</h3>
+<p>Extrudes the picked closed entities as their own feature.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="cut"><a name="cut"></a>Cut...</h3>
+<p>Cuts with the picked closed entities as their own feature.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="auto-repair-sketch-relation-or-dimension"><a name="auto-repair-sketch-relation-or-dimension"></a>Auto Repair Sketch Relation or Dimension</h3>
+<p>Re-attaches the picked dangling relation to the model edge now in its place.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="detach-segment-on-drag"><a name="detach-segment-on-drag"></a>Detach Segment on Drag</h3>
+<p>Dragging a sketch segment pulls it loose from the entities its ends are joined to.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="override-dims-on-drag-move"><a name="override-dims-on-drag-move"></a>Override Dims on Drag/Move</h3>
+<p>Dragging a sketch entity changes the dimensions that hold it.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="no-solve-move"><a name="no-solve-move"></a>No Solve Move</h3>
+<p>Dragging a sketch entity moves it alone; its relations are solved when it is let go.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="belt-chain"><a name="belt-chain"></a>Belt/Chain</h3>
+<p>Wraps a belt round circles picked in order: tangent lines and arcs that follow the circles.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="jog-line"><a name="jog-line"></a>Jog Line</h3>
+<p>Puts a rectangular jog into a line.</p>
+<p><b>More:</b> <a href="05-assemblies.html#exploded-views">Exploded views</a>.</p>
+<h3 id="close-sketch-to-model"><a name="close-sketch-to-model"></a>Close Sketch to Model</h3>
+<p>Closes an open profile with the model's edges.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="sketch-ink"><a name="sketch-ink"></a>Sketch Ink</h3>
+<p>Strokes drawn freehand become lines, arcs, circles or splines.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="line-format"><a name="line-format"></a>Line Format</h3>
+<p>Shows or hides the Line Format toolbar: line colour, thickness and style.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="line-color"><a name="line-color"></a>Line Color</h3>
+<p>Changes the color of the selected sketch or sketch entities.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="line-thickness"><a name="line-thickness"></a>Line Thickness</h3>
+<p>Changes the line thickness of the selected sketch.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="line-style"><a name="line-style"></a>Line Style</h3>
+<p>Changes the line style of the selected sketch entities.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="rebuild-1"><a name="rebuild-1"></a>Rebuild</h3>
+<p>Rebuilds the blocks of the sketch.</p>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="3d-sketch-on-plane"><a name="3d-sketch-on-plane"></a>3D Sketch On Plane</h3>
+<p>Adds a 3D sketch that draws on the picked plane or flat face.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="exit-sketch"><a name="exit-sketch"></a>Exit Sketch</h3>
+<p>Leaves the 3D sketch, keeping every change.</p>
+<p><b>More:</b> <a href="03-sketching.html#starting-and-leaving-a-sketch">Starting and leaving a sketch</a>.</p>
+<h3 id="exit-sketch-1"><a name="exit-sketch-1"></a>Exit Sketch</h3>
+<p>Leaves the sketch, keeping every change.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Exit Sketch (it shows pressed while a sketch is open), or click the check in the confirmation corner.</li><li>The sketch closes and the part rebuilds.</li><li>One Ctrl+Z after closing takes back the last change made in the sketch, and the part follows.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#starting-and-leaving-a-sketch">Starting and leaving a sketch</a>.</p>
+<h3 id="auto-insert-dimension"><a name="auto-insert-dimension"></a>Auto Insert Dimension</h3>
+<p>Dimensions the sketch, or the picked entities, until nothing is free.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open a sketch and, if you want, pick the entities to dimension.</li><li>Click Auto Insert Dimension.</li><li>Dimensions are added at once, with the last settings of Fully Define Sketch, until nothing is free; one Ctrl+Z takes them all back.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="dynamic-mirror-entities"><a name="dynamic-mirror-entities"></a>Dynamic Mirror Entities</h3>
+<p>Pick a centerline, then sketch: each entity gets a mirrored copy. Click again to stop.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="sketchxpert"><a name="sketchxpert"></a>SketchXpert</h3>
+<p>Finds ways to fix an over-defined sketch, or deletes the clashing relations and dimensions.</p>
+<p><b>How to use it</b></p>
+<ul><li>In an over-defined sketch, click the red Over Defined (or No Solution Found) in the status bar, or Tools &gt; Sketch Tools &gt; SketchXpert.</li><li>Under Options click Diagnose.</li><li>Use the arrows under Results to step through the solutions; the relations or dimensions each one deletes are picked in the sketch.</li><li>Click Accept to delete them, then the check to close.</li><li>Or click Manual Repair: the clashing relations and dimensions are listed; pick one and click Delete, or Delete All.</li><li>Tick "Always open this dialog when sketch error occurs" to have it open by itself.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="edit-polygon"><a name="edit-polygon"></a>Edit Polygon</h3>
+<p>Changes a picked polygon's sides, size, centre and angle.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a side of a polygon in the open sketch.</li><li>Click Edit Polygon.</li><li>Under Parameters change Number of sides, Inscribed circle or Circumscribed circle, Center X, Center Y, Diameter or Angle; the polygon redraws at once.</li><li>Click the check to keep it, or the cross to put the old one back. New Polygon starts a new polygon.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="derived-sketch"><a name="derived-sketch"></a>Derived Sketch</h3>
+<p>Pick a sketch and a plane or face: a copy goes on the plane and follows the original's dimensions.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="sketch-dimension-driven"><a name="sketch-dimension-driven"></a>Sketch Dimension Driven</h3>
+<p>Switches a picked dimension between driving and driven.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a dimension in the open sketch.</li><li>Click Sketch Dimension Driven.</li><li>A driving dimension turns driven (grey, it only shows the value) and a driven one turns driving again.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="single-line"><a name="single-line"></a>Single Line</h3>
+<p>Sketches one line at a time (FreeCAD's Line tool).</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="construction-geometry"><a name="construction-geometry"></a>Construction Geometry</h3>
+<p>Toggles construction geometry mode.</p>
+<p><b>How to use it</b></p>
+<ul><li>In an open sketch click Construction Geometry with nothing picked.</li><li>What you sketch next is construction geometry.</li><li>Click it again to go back to normal geometry.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="rounded-rectangle"><a name="rounded-rectangle"></a>Rounded Rectangle</h3>
+<p>Sketches a rectangle with rounded corners.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="dissolve-sketch-text"><a name="dissolve-sketch-text"></a>Dissolve Sketch Text</h3>
+<p>Turns the selected sketch text into plain sketch entities.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="polygon-choose-sides"><a name="polygon-choose-sides"></a>Polygon (choose sides)</h3>
+<p>Sketches a polygon with equal sides.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="segment"><a name="segment"></a>Segment</h3>
+<p>Splits a sketch entity into equal segments or adds equally spaced points on it.</p>
+<p><b>More:</b> <a href="04-features.html#weldments">Weldments</a>.</p>
+<h3 id="face-curves"><a name="face-curves"></a>Face Curves</h3>
+<p>Makes a grid of curves across a face.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="make-path"><a name="make-path"></a>Make Path</h3>
+<p>Makes one path of the selected sketch entities, joined end to end.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="dissolve-path"><a name="dissolve-path"></a>Dissolve Path</h3>
+<p>Breaks the selected path into its sketch entities.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="replace-entity"><a name="replace-entity"></a>Replace Entity</h3>
+<p>Replaces a sketch entity with another, keeping its relations, dimensions and the features that use it.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="dissolve"><a name="dissolve"></a>Dissolve</h3>
+<p>Dissolves the selected sketch text or 3D sketch entities into plain sketch geometry.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="create-sketch-from-selections"><a name="create-sketch-from-selections"></a>Create Sketch from Selections</h3>
+<p>Makes a new sketch from the picked sketch entities, keeping the original sketch.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="select-malformed-relations"><a name="select-malformed-relations"></a>Select Malformed Relations</h3>
+<p>Selects the relations that point at missing geometry (FreeCAD).</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="select-partially-redundant-relations"><a name="select-partially-redundant-relations"></a>Select Partially Redundant Relations</h3>
+<p>Selects the relations that are partly said by others (FreeCAD).</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="show-arc-helpers"><a name="show-arc-helpers"></a>Show Arc Helpers</h3>
+<p>Shows or hides the full circle of every arc (FreeCAD).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="modify-sketch"><a name="modify-sketch"></a>Modify Sketch</h3>
+<p>Moves or turns the whole sketch on its plane.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="check-sketch-for-feature"><a name="check-sketch-for-feature"></a>Check Sketch for Feature</h3>
+<p>Says whether the sketch can make the chosen feature, and what stops it.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="grid-1"><a name="grid-1"></a>Grid</h3>
+<p>Shows or hides the sketch grid.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="08-options.html#document-properties">Document Properties</a>.</p>
+<h3 id="section-view"><a name="section-view"></a>Section View</h3>
+<p>Cuts the model at the sketch plane so the sketch is easy to see.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="merge-sketches"><a name="merge-sketches"></a>Merge Sketches</h3>
+<p>Makes one new sketch from the sketches picked in the tree (FreeCAD).</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="mirror-sketch"><a name="mirror-sketch"></a>Mirror Sketch</h3>
+<p>Makes a mirrored copy of the sketches picked in the tree (FreeCAD).</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="remove-axes-alignment"><a name="remove-axes-alignment"></a>Remove Axes Alignment</h3>
+<p>Swaps the picked entities' Horizontal and Vertical for relations that keep them as they are when turned (FreeCAD).</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="select-associated-geometry"><a name="select-associated-geometry"></a>Select Associated Geometry</h3>
+<p>Selects the entities the picked relations and dimensions are on (FreeCAD).</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="show-hide-internal-geometry"><a name="show-hide-internal-geometry"></a>Show/Hide Internal Geometry</h3>
+<p>Shows or hides the construction lines and points of the picked ellipse or spline (FreeCAD).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="edit-feature"><a name="edit-feature"></a>Edit Feature</h3>
+<p>Edits the feature that made the selected face, edge or vertex.</p>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="edit-sketch"><a name="edit-sketch"></a>Edit Sketch</h3>
+<p>Edits the sketch of the selected feature.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click one of the three planes shown in the view, a reference plane, or a flat face of the part; the sketch opens looking straight at it. Esc leaves without a sketch.</li></ul>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h2 id="sketch-relations-1"><a name="sketch-relations-1"></a>Sketch relations</h2>
+<h3 id="relax-spline"><a name="relax-spline"></a>Relax Spline</h3>
+<p>Lets the spline's handles go: the smoothest spline through the same points.</p>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="reload"><a name="reload"></a>Reload</h3>
+<p>Reloads the document and the documents it references from disk, or makes them read-only.</p>
+<p><b>More:</b> <a href="07-slicer.html#sending-a-part">Sending a part</a>.</p>
+<h3 id="make-horizontal"><a name="make-horizontal"></a>Make Horizontal</h3>
+<p>Adds a horizontal relation to the selection(s).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sketch, pick the entities the relation is for (Ctrl+click for more), then click it. The relation is added to them and shows as a glyph on the sketch.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="make-vertical"><a name="make-vertical"></a>Make Vertical</h3>
+<p>Adds a vertical relation to the selection(s).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sketch, pick the entities the relation is for (Ctrl+click for more), then click it. The relation is added to them and shows as a glyph on the sketch.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="merge-points"><a name="merge-points"></a>Merge Points</h3>
+<p>Adds a merge relation to the selection(s).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sketch, pick the entities the relation is for (Ctrl+click for more), then click it. The relation is added to them and shows as a glyph on the sketch.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="make-coincident"><a name="make-coincident"></a>Make Coincident</h3>
+<p>Adds a coincident relation to the selection(s).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sketch, pick the entities the relation is for (Ctrl+click for more), then click it. The relation is added to them and shows as a glyph on the sketch.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="make-midpoint"><a name="make-midpoint"></a>Make Midpoint</h3>
+<p>Adds a midpoint relation to the selection(s).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sketch, pick the entities the relation is for (Ctrl+click for more), then click it. The relation is added to them and shows as a glyph on the sketch.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="make-collinear"><a name="make-collinear"></a>Make Collinear</h3>
+<p>Adds a collinear relation to the selection(s).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sketch, pick the entities the relation is for (Ctrl+click for more), then click it. The relation is added to them and shows as a glyph on the sketch.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="make-parallel"><a name="make-parallel"></a>Make Parallel</h3>
+<p>Adds a parallel relation to the selection(s).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sketch, pick the entities the relation is for (Ctrl+click for more), then click it. The relation is added to them and shows as a glyph on the sketch.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="make-perpendicular"><a name="make-perpendicular"></a>Make Perpendicular</h3>
+<p>Adds a perpendicular relation to the selection(s).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sketch, pick the entities the relation is for (Ctrl+click for more), then click it. The relation is added to them and shows as a glyph on the sketch.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="make-tangent"><a name="make-tangent"></a>Make Tangent</h3>
+<p>Adds a tangent relation to the selection(s).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sketch, pick the entities the relation is for (Ctrl+click for more), then click it. The relation is added to them and shows as a glyph on the sketch.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="make-concentric"><a name="make-concentric"></a>Make Concentric</h3>
+<p>Adds a concentric relation to the selection(s).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sketch, pick the entities the relation is for (Ctrl+click for more), then click it. The relation is added to them and shows as a glyph on the sketch.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="make-equal"><a name="make-equal"></a>Make Equal</h3>
+<p>Adds an equal relation to the selection(s).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sketch, pick the entities the relation is for (Ctrl+click for more), then click it. The relation is added to them and shows as a glyph on the sketch.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="make-symmetric"><a name="make-symmetric"></a>Make Symmetric</h3>
+<p>Adds a symmetric relation to the selection(s).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sketch, pick the entities the relation is for (Ctrl+click for more), then click it. The relation is added to them and shows as a glyph on the sketch.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="fix"><a name="fix"></a>Fix</h3>
+<p>Holds the picked entity where it is.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick one or more sketch entities.</li><li>Click Fix (in Add Relations, or the relation bar that pops up).</li><li>The entities are held where they are and turn black.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="fix-1"><a name="fix-1"></a>Fix</h3>
+<p>Holds the picked point where it is.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a sketch point or end point.</li><li>Click Fix.</li><li>The point is held where it is.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h3 id="construction-geometry-1"><a name="construction-geometry-1"></a>Construction Geometry</h3>
+<p>Turns the picked entities into construction geometry, or back.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick sketch entities.</li><li>Click Construction Geometry.</li><li>They turn into dashed construction lines that features do not use; do it again to turn them back.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#automatic-relations">Automatic relations</a>.</p>
+<h2 id="sketch-splines-and-ink"><a name="sketch-splines-and-ink"></a>Sketch splines and ink</h2>
+<h3 id="show-spline-control-polygon"><a name="show-spline-control-polygon"></a>Show Spline Control Polygon</h3>
+<p>Shows the picked spline's control polygon.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="pen-sketch"><a name="pen-sketch"></a>Pen Sketch</h3>
+<p>Draws ink in the sketch with the pen or mouse and turns it into entities.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="convert-to-shape"><a name="convert-to-shape"></a>Convert to Shape</h3>
+<p>Turns the ink into lines, arcs and circles.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="convert-to-entities"><a name="convert-to-entities"></a>Convert to Entities</h3>
+<p>Turns the ink into splines.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="insert-spline-point"><a name="insert-spline-point"></a>Insert Spline Point</h3>
+<p>Adds a spline point where you click on a spline; the shape stays.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="show-spline-handles"><a name="show-spline-handles"></a>Show Spline Handles</h3>
+<p>Shows the spline's control polygon.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="simplify-spline"><a name="simplify-spline"></a>Simplify Spline</h3>
+<p>Takes spline points away while the spline stays within a tolerance of its shape.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="proportional"><a name="proportional"></a>Proportional</h3>
+<p>Dragging an end of the spline scales and turns all of it.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="show-inflection-points"><a name="show-inflection-points"></a>Show Inflection Points</h3>
+<p>Shows where the picked spline changes the way it bends.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="show-minimum-radius"><a name="show-minimum-radius"></a>Show Minimum Radius</h3>
+<p>Shows where the picked spline bends tightest, and that radius.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="flip-endpoint-tangent"><a name="flip-endpoint-tangent"></a>Flip Endpoint Tangent</h3>
+<p>The picked spline or tangent arc end leaves the other way.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="show-curvature-combs"><a name="show-curvature-combs"></a>Show Curvature Combs</h3>
+<p>Shows the picked spline's curvature comb.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="insert-control-vertex"><a name="insert-control-vertex"></a>Insert Control Vertex</h3>
+<p>Adds a control vertex to a spline where it is clicked (FreeCAD inserts a knot).</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="spline-through-points"><a name="spline-through-points"></a>Spline Through Points</h3>
+<p>Sketches a spline through the points you click.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="closed-spline"><a name="closed-spline"></a>Closed Spline</h3>
+<p>Sketches a closed spline with no seam.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="fit-spline"><a name="fit-spline"></a>Fit Spline</h3>
+<p>Replaces a chain of sketch entities with one spline that follows them.</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="show-degree"><a name="show-degree"></a>Show Degree</h3>
+<p>Shows or hides the degree of every spline (FreeCAD).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="show-knot-multiplicity"><a name="show-knot-multiplicity"></a>Show Knot Multiplicity</h3>
+<p>Shows or hides the knot multiplicity of every spline (FreeCAD).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="show-control-point-weight"><a name="show-control-point-weight"></a>Show Control Point Weight</h3>
+<p>Shows or hides the weight of every spline control point (FreeCAD).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="show-control-polygon"><a name="show-control-polygon"></a>Show Control Polygon</h3>
+<p>Shows or hides the control polygon of every spline (FreeCAD).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="show-curvature-comb"><a name="show-curvature-comb"></a>Show Curvature Comb</h3>
+<p>Shows or hides the curvature comb of every spline (FreeCAD).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="increase-degree"><a name="increase-degree"></a>Increase Degree</h3>
+<p>Raises the picked spline's degree by one, keeping its shape (FreeCAD).</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="decrease-degree"><a name="decrease-degree"></a>Decrease Degree</h3>
+<p>Lowers the picked spline's degree by one (FreeCAD).</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="increase-knot-multiplicity"><a name="increase-knot-multiplicity"></a>Increase Knot Multiplicity</h3>
+<p>Raises the multiplicity of the picked knot (FreeCAD).</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="decrease-knot-multiplicity"><a name="decrease-knot-multiplicity"></a>Decrease Knot Multiplicity</h3>
+<p>Lowers the multiplicity of the picked knot (FreeCAD).</p>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h2 id="macros"><a name="macros"></a>Macros</h2>
+<h3 id="macros-1"><a name="macros-1"></a>Macros</h3>
+<p>Records, edits and runs macros.</p>
+<p><b>More:</b> <a href="09-shortcuts.html#macros">Macros</a>.</p>
+<h3 id="run-macro"><a name="run-macro"></a>Run Macro</h3>
+<p>Runs a macro file.</p>
+<p><b>More:</b> <a href="09-shortcuts.html#macros">Macros</a>.</p>
+<h3 id="record-macro"><a name="record-macro"></a>Record Macro</h3>
+<p>Starts recording what you do into a macro file.</p>
+<p><b>More:</b> <a href="09-shortcuts.html#macros">Macros</a>.</p>
+<h3 id="stop-macro-recording"><a name="stop-macro-recording"></a>Stop Macro Recording</h3>
+<p>Stops recording the macro and saves it.</p>
+<p><b>More:</b> <a href="09-shortcuts.html#macros">Macros</a>.</p>
+<h3 id="new-macro"><a name="new-macro"></a>New Macro</h3>
+<p>Makes a new macro file and opens it to write.</p>
+<p><b>More:</b> <a href="09-shortcuts.html#macros">Macros</a>.</p>
+<h3 id="edit-macro"><a name="edit-macro"></a>Edit Macro</h3>
+<p>Opens a macro file to change it.</p>
+<p><b>More:</b> <a href="09-shortcuts.html#macros">Macros</a>.</p>
+<h3 id="new-macro-button"><a name="new-macro-button"></a>New Macro Button...</h3>
+<p>Makes a toolbar button that runs a macro file you pick, with its own name, tooltip, prompt and icon.</p>
+<p><b>More:</b> <a href="09-shortcuts.html#macros">Macros</a>.</p>
+<h2 id="drawing-other-commands"><a name="drawing-other-commands"></a>Drawing: other commands</h2>
+<h3 id="remove-crop"><a name="remove-crop"></a>Remove Crop</h3>
+<p>Shows the whole view again.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the cropped view, then click it. The view shows whole again. It is available only while a cropped view is picked.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="add-revision"><a name="add-revision"></a>Add Revision</h3>
+<p>Adds a row to the revision table.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="update-table"><a name="update-table"></a>Update Table</h3>
+<p>A table (bill of materials, hole table) updates by itself when the model changes, so there is nothing to click; this command is on no menu.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="multi-jog-leader"><a name="multi-jog-leader"></a>Multi-jog Leader</h3>
+<p>A leader with bends, for a note or symbol.</p>
+<p><b>More:</b> <a href="06-drawings.html#dimensions-and-annotations">Dimensions and annotations</a>.</p>
+<h3 id="dowel-pin-symbol"><a name="dowel-pin-symbol"></a>Dowel Pin Symbol</h3>
+<p>The dowel pin symbol on a hole.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="location-label"><a name="location-label"></a>Location Label</h3>
+<p>A label saying which sheet a section or detail view is on.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="view-palette"><a name="view-palette"></a>View Palette</h3>
+<p>The Task Pane's View Palette: drag a part's standard views onto the sheet.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="lock-view-position"><a name="lock-view-position"></a>Lock View Position</h3>
+<p>Keeps the view where it is on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Right-click a drawing view.</li><li>Choose Lock View Position; the view can no longer be dragged.</li><li>Right-click it again and choose Unlock View Position to move it again.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="break-alignment"><a name="break-alignment"></a>Break Alignment</h3>
+<p>Frees the view from its parent's alignment.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click a projected or aligned view.</li><li>Choose Tools, Align Drawing View, Break Alignment.</li><li>The view now moves on its own when you drag it.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="default-alignment"><a name="default-alignment"></a>Default Alignment</h3>
+<p>Lines the view up with its parent again.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click a view whose alignment you broke.</li><li>Choose Tools, Align Drawing View, Default Alignment.</li><li>The view lines up with its parent view again.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="align-horizontal-by-origin"><a name="align-horizontal-by-origin"></a>Align Horizontal by Origin</h3>
+<p>Lines the view up horizontally with the view you click, by origin.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the view to move (Ctrl+click for more), then click it. The status bar says "Select a view to align with." Click the view to line up with; the picked views move to it. Clicking empty sheet or one of the picked views ends it with nothing moved.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="align-vertical-by-origin"><a name="align-vertical-by-origin"></a>Align Vertical by Origin</h3>
+<p>Lines the view up vertically with the view you click, by origin.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the view to move (Ctrl+click for more), then click it. The status bar says "Select a view to align with." Click the view to line up with; the picked views move to it. Clicking empty sheet or one of the picked views ends it with nothing moved.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="align-horizontal-by-center"><a name="align-horizontal-by-center"></a>Align Horizontal by Center</h3>
+<p>Lines the view up horizontally with the view you click, by centre.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the view to move.</li><li>Choose Tools, Align Drawing View, Horizontal To Another View; the status bar says "Select a view to align with."</li><li>Click the other view; the first view moves so their centres are level.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="align-vertical-by-center"><a name="align-vertical-by-center"></a>Align Vertical by Center</h3>
+<p>Lines the view up vertically with the view you click, by centre.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the view to move.</li><li>Choose Tools, Align Drawing View, Vertical To Another View; the status bar says "Select a view to align with."</li><li>Click the other view; the first view moves so their centres are one above the other.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="auto-arrange-dimensions"><a name="auto-arrange-dimensions"></a>Auto Arrange Dimensions</h3>
+<p>Arranges the selected dimensions around the view.</p>
+<p><b>How to use it</b></p>
+<ul><li>Select the dimensions (box-select around a view picks them all).</li><li>Choose Tools, Align, Auto Arrange.</li><li>The dimensions are spaced out around the view.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="align-collinear-radial"><a name="align-collinear-radial"></a>Align Collinear/Radial</h3>
+<p>Lines the selected dimensions up collinear or radial.</p>
+<p><b>How to use it</b></p>
+<ul><li>Select two or more dimensions.</li><li>Choose Tools, Align, Align Collinear/Radial.</li><li>The dimensions line up on one line (radial ones on one circle).</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="align-parallel-concentric"><a name="align-parallel-concentric"></a>Align Parallel/Concentric</h3>
+<p>Lines the selected dimensions up parallel or concentric.</p>
+<p><b>How to use it</b></p>
+<ul><li>Select two or more dimensions.</li><li>Choose Tools, Align, Align Parallel/Concentric.</li><li>The dimensions stack, evenly spaced and parallel.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="space-evenly-linear-diametric"><a name="space-evenly-linear-diametric"></a>Space Evenly Linear/Diametric</h3>
+<p>Spaces the selected dimensions evenly.</p>
+<p><b>How to use it</b></p>
+<ul><li>Select three or more linear or diameter dimensions.</li><li>Choose Tools, Align, Space Evenly Linear/Diametric.</li><li>The gaps between them become equal.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="break-dimension-alignment"><a name="break-dimension-alignment"></a>Break Dimension Alignment</h3>
+<p>Frees the selected dimensions from their alignment group.</p>
+<p><b>How to use it</b></p>
+<ul><li>Select an aligned dimension.</li><li>Choose Tools, Align, Break Alignment.</li><li>It no longer moves with its group.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="tangent-edges-visible-1"><a name="tangent-edges-visible-1"></a>Tangent Edges Visible</h3>
+<p>Draws tangent edges as solid lines.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click a view (or several).</li><li>Choose View, Display, Tangent Edges Visible.</li><li>Tangent edges are drawn as solid lines.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="tangent-edges-with-font"><a name="tangent-edges-with-font"></a>Tangent Edges With Font</h3>
+<p>Draws tangent edges as phantom lines.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click a view.</li><li>Choose View, Display, Tangent Edges With Font.</li><li>Tangent edges are drawn in a thin phantom line.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="tangent-edges-removed-1"><a name="tangent-edges-removed-1"></a>Tangent Edges Removed</h3>
+<p>Leaves tangent edges out.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click a view.</li><li>Choose View, Display, Tangent Edges Removed.</li><li>Tangent edges are left out of the view.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="tangent-edges-with-hidden-ends"><a name="tangent-edges-with-hidden-ends"></a>Tangent Edges With Hidden Ends</h3>
+<p>Shows tangent edges with their ends left out.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click a view.</li><li>Choose View, Display, Tangent Edges With Hidden Ends.</li><li>Tangent edges show with a short gap at each end.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="hide-view"><a name="hide-view"></a>Hide View</h3>
+<p>Hides the view on the sheet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the view (Ctrl+click for more), then click it. The views are hidden on the sheet.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="show-hidden-views"><a name="show-hidden-views"></a>Show Hidden Views</h3>
+<p>Shows the sheet's hidden views again.</p>
+<p><b>How to use it</b></p>
+<ul><li>Choose View, Hide / Show, Hidden Views (it is only offered while the sheet has a hidden view).</li><li>Every hidden view on the sheet shows again.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="open-part"><a name="open-part"></a>Open Part</h3>
+<p>Opens the part or assembly the view shows.</p>
+<p><b>How to use it</b></p>
+<ul><li>Right-click a drawing view.</li><li>Choose Open Part (name), or Open Assembly (name) for an assembly.</li><li>The model opens in its own window.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="view-properties"><a name="view-properties"></a>View Properties</h3>
+<p>The view's name, scale, display style and configuration.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a view, then click it. The View Properties box opens for the first view picked: its name, scale, display style and configuration.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="sheet"><a name="sheet"></a>Sheet...</h3>
+<p>Adds a sheet to the drawing.</p>
+<p><b>How to use it</b></p>
+<ul><li>Right-click the sheet (or its tab at the bottom).</li><li>Choose Add Sheet...; a new sheet with the same sheet format, scale and projection is added (Document Properties, Drawing Sheets can give new sheets another format).</li></ul>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="make-section-line"><a name="make-section-line"></a>Make Section Line</h3>
+<p>Makes a section line from a sketched line on a view. Greyed until a view has a sketched line.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="text"><a name="text"></a>Text</h3>
+<p>Sketches text on the drawing sheet.</p>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="layer-properties"><a name="layer-properties"></a>Layer Properties</h3>
+<p>Layers box: each layer's colour, line style, thickness and on/off (drawings-land28).</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="sheet-properties"><a name="sheet-properties"></a>Sheet Properties</h3>
+<p>The sheet's name, scale, projection type and sheet format.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h3 id="save-sheet-format"><a name="save-sheet-format"></a>Save Sheet Format...</h3>
+<p>Saves the sheet's format as a file to use on other drawings.</p>
+<p><b>More:</b> <a href="06-drawings.html">6. Drawings</a>.</p>
+<h2 id="assembly-and-feature-management"><a name="assembly-and-feature-management"></a>Assembly and feature management</h2>
+<h3 id="save-bodies"><a name="save-bodies"></a>Save Bodies</h3>
+<p>Saves the part's bodies as separate files.</p>
+<p><b>How to use it</b></p>
+<ul><li>In a part with more than one solid body, click Insert &gt; Features &gt; Save Bodies, or right-click the Solid Bodies folder and click Save Bodies.</li><li>The panel lists each body under Resulting Parts with a file name; untick the bodies you do not want saved, and double-click a file name to change it.</li><li>Choose the file type in Save as.</li><li>Tick Create Assembly to also make an assembly of the saved parts, then click OK.</li></ul>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="create-assembly"><a name="create-assembly"></a>Create Assembly</h3>
+<p>Saves the part's bodies as parts and makes an assembly of them.</p>
+<p><b>How to use it</b></p>
+<ul><li>In a part with more than one solid body, click Insert &gt; Features &gt; Create Assembly; the panel opens.</li><li>Under Bodies to Save, tick the bodies to save (Select all ticks every one) and change their file names if you like.</li><li>Under Create Assembly, click Browse... to name the assembly file.</li><li>Click OK; each body is saved as a part, and the assembly opens with every part where it sat in the part, the first one fixed.</li></ul>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="suppress"><a name="suppress"></a>Suppress</h3>
+<p>Turns the picked features and those built on them off; they stay in the tree, greyed.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick one or more features in the FeatureManager design tree.</li><li>Right-click and click Suppress, or click Edit &gt; Suppress &gt; This Configuration (All Configurations or Specified Configurations to do it in more of them).</li><li>The features and the ones built on them are turned off; they stay in the tree, greyed.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="unsuppress"><a name="unsuppress"></a>Unsuppress</h3>
+<p>Turns suppressed features back on.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the suppressed features in the tree.</li><li>Right-click and click Unsuppress, or click Edit &gt; Unsuppress &gt; This Configuration.</li><li>The picked features come back; features built on them stay suppressed.</li></ul>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="unsuppress-with-dependents"><a name="unsuppress-with-dependents"></a>Unsuppress with Dependents</h3>
+<p>Turns the picked features and those built on them back on.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the suppressed features in the tree.</li><li>Click Edit &gt; Unsuppress with Dependents &gt; This Configuration (or All Configurations, or Specified Configurations).</li><li>The picked features and the features built on them come back.</li></ul>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="insert-body"><a name="insert-body"></a>Insert Body</h3>
+<p>Creates a new FreeCAD body to hold features.</p>
+<p><b>More:</b> <a href="05-assemblies.html">5. Assemblies</a>.</p>
+<h3 id="defeature"><a name="defeature"></a>Defeature</h3>
+<p>Makes a simplified part from the assembly: details removed, or each component's silhouette.</p>
+<p><b>More:</b> <a href="05-assemblies.html#motion-studies">Motion studies</a>.</p>
+<h3 id="reference-geometry"><a name="reference-geometry"></a>Reference Geometry</h3>
+<p>Reference Geometry</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to open its list, then pick the command you want.</li></ul>
+<p><b>More:</b> <a href="04-features.html#reference-geometry">Reference geometry</a>.</p>
+<h2 id="sheet-metal-and-weldments"><a name="sheet-metal-and-weldments"></a>Sheet metal and weldments</h2>
+<h3 id="corner-trim"><a name="corner-trim"></a>Corner Trim</h3>
+<p>Adds reliefs and broken corners to the flat pattern (the part must be flattened).</p>
+<p><b>How to use it</b></p>
+<ul><li>Flatten the sheet metal part first.</li><li>Click Insert &gt; Sheet Metal &gt; Corner Trim; the panel opens.</li><li>Tick Relief Options, pick the corner edges (or click Collect all corners) and choose the relief type: Circular, Square or Bend Waist, with its size.</li><li>Tick Break Corner Options to also chamfer or round the corners, with the distance or radius.</li><li>Click OK; Corner-Trim1 sits under Flat-Pattern1 and changes only the flat pattern.</li></ul>
+<p><b>More:</b> <a href="04-features.html#sheet-metal">Sheet metal</a>.</p>
+<h3 id="bend-table-new"><a name="bend-table-new"></a>Bend Table: New</h3>
+<p>Makes a new bend table (bend allowance, bend deduction or K-Factor by thickness, radius and angle).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Insert &gt; Sheet Metal &gt; Bend Table &gt; New.</li><li>Choose the units and the kind of table: bend allowance, bend deduction or K-Factor.</li><li>Fill in a value for each thickness, radius and angle, then save the table; the part's bends use it.</li></ul>
+<p><b>More:</b> <a href="04-features.html#sheet-metal">Sheet metal</a>.</p>
+<h3 id="bend-table-from-file"><a name="bend-table-from-file"></a>Bend Table: From File</h3>
+<p>Adds a bend table from a file to the part.</p>
+<p><b>More:</b> <a href="04-features.html#sheet-metal">Sheet metal</a>.</p>
+<h3 id="export-to-dxf-dwg"><a name="export-to-dxf-dwg"></a>Export to DXF/DWG</h3>
+<p>Saves the flat pattern as a DXF drawing (right-click Flat-Pattern).</p>
+<p><b>How to use it</b></p>
+<ul><li>In a sheet metal part, right-click Flat-Pattern in the tree and click Export to DXF/DWG.</li><li>Choose the file name and click Save; the flat pattern is saved as a DXF drawing with its outline and bend lines.</li></ul>
+<p><b>More:</b> <a href="04-features.html#sheet-metal">Sheet metal</a>.</p>
+<h3 id="edit-structure-system"><a name="edit-structure-system"></a>Edit Structure System</h3>
+<p>Enters an existing Structure System to add or change its members.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick a Structure System in the tree, then click it to go back in and add or change its members.</li></ul>
+<p><b>More:</b> <a href="04-features.html#sheet-metal">Sheet metal</a>.</p>
+<h3 id="weldment-cut-list"><a name="weldment-cut-list"></a>Weldment Cut List</h3>
+<p>Lists the members with their lengths.</p>
+<p><b>How to use it</b></p>
+<ul><li>In a weldment part, expand the Cut list folder in the tree; it lists the members grouped by size and length.</li><li>Right-click a cut list item and click Properties... to open Cut-List Properties with its length, size and other properties.</li><li>In a drawing, click Insert &gt; Tables &gt; Weldment Cut List to put the list on the sheet.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html#tables">Tables</a>.</p>
+<h2 id="simulation"><a name="simulation"></a>Simulation</h2>
+<h3 id="spring"><a name="spring"></a>Spring</h3>
+<p>A spring between the part and ground.</p>
+<p><b>More:</b> <a href="05-assemblies.html#motion-studies">Motion studies</a>.</p>
+<h3 id="simulation-advisor"><a name="simulation-advisor"></a>Simulation Advisor</h3>
+<p>Helps you pick the study for your question and walks you through its steps, in the Task Pane.</p>
+<p><b>How to use it</b></p>
+<ul><li>On the Simulation tab, click Simulation Advisor; it opens in the Task Pane.</li><li>Pick what worries you, for example "I am concerned about excessive deformation or stresses." (others: load/unload cycles, sudden collapse under compression, excessive shaking, temperatures).</li><li>Answer the follow-up questions, then click "Create a ... Study." to make the study it names.</li><li>Follow the five steps at the top (Study, Bodies and Material, Interactions, Mesh and Run, Results): each page lists what the study already has and links to the tool for the next item.</li><li>Use Next and Back to move between pages; on Mesh and Run, click the Run link to solve.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#add-in-tabs">Add-in tabs</a>.</p>
+<h3 id="torque"><a name="torque"></a>Torque</h3>
+<p>A torque on faces about an axis.</p>
+<p><b>How to use it</b></p>
+<ul><li>In the study tree, right-click External Loads &gt; Torque... (or Simulation tab &gt; External Loads arrow &gt; Torque); the Force/Torque panel opens with Torque picked.</li><li>Pick the faces the torque acts on, then click in the Direction box and pick the axis (a round face, an edge or an axis).</li><li>Pick the Unit system, type the Torque value, tick Reverse direction if needed, then click OK; "Torque-1" appears under External Loads.</li></ul>
+<p><b>More:</b> <a href="11-simulation.html#4-load-the-part-external-loads">4. Load the part (external loads)</a>.</p>
+<h3 id="remote-load-mass"><a name="remote-load-mass"></a>Remote Load/Mass</h3>
+<p>Forces and moments at a point, carried to faces rigidly.</p>
+<p><b>How to use it</b></p>
+<ul><li>Right-click External Loads &gt; Remote Load/Mass...; the Remote Loads/Mass panel opens.</li><li>Under Type pick Load/Mass (or Displacement), and under Connection pick Rigid or Distributed.</li><li>Pick the faces the load is carried to, type the Location (X, Y, Z) of the point the load acts at, then the Translational Components (force) and, if needed, the moment and mass.</li><li>Click OK; "Remote Load-1" appears under External Loads.</li></ul>
+<p><b>More:</b> <a href="11-simulation.html">11. Simulation walkthrough</a>.</p>
+<h3 id="distributed-mass"><a name="distributed-mass"></a>Distributed Mass</h3>
+<p>A mass spread over faces.</p>
+<p><b>How to use it</b></p>
+<ul><li>Right-click External Loads &gt; Distributed Mass...; the Distributed Mass panel opens.</li><li>Pick the faces the left-out part sits on.</li><li>Pick the Units, type the Mass, then click OK; the mass is spread over the faces by area and "Distributed Mass-1" appears under External Loads.</li></ul>
+<p><b>More:</b> <a href="11-simulation.html">11. Simulation walkthrough</a>.</p>
+<h3 id="mesh-quality-plot"><a name="mesh-quality-plot"></a>Mesh Quality Plot</h3>
+<p>The mesh coloured by element aspect ratio or Jacobian.</p>
+<p><b>How to use it</b></p>
+<ul><li>Mesh the study first (right-click Mesh &gt; Create Mesh..., OK).</li><li>Right-click Mesh &gt; Create Mesh Quality Plot...; the panel opens.</li><li>Pick Aspect Ratio or Jacobian points, then click OK: the mesh is shown coloured by that measure, with its own legend.</li></ul>
+<p><b>More:</b> <a href="11-simulation.html#mesh-quality-plot">Mesh Quality Plot</a>.</p>
+<h3 id="bearing"><a name="bearing"></a>Bearing</h3>
+<p>A bearing between a shaft and its housing.</p>
+<p><b>How to use it</b></p>
+<ul><li>In an assembly study, right-click Connections &gt; Bearing...</li><li>Pick the shaft's round face, then the housing's round face (both on one axis).</li><li>Pick the stiffness: Rigid, or Flexible with the lateral and axial stiffness; tick Allow self-alignment if the shaft may tilt; then click OK.</li></ul>
+<p><b>More:</b> <a href="11-simulation.html#connections">Connections</a>.</p>
+<h3 id="rigid"><a name="rigid"></a>Rigid</h3>
+<p>Two faces of two parts joined rigidly.</p>
+<p><b>How to use it</b></p>
+<ul><li>In an assembly study, right-click Connections &gt; Rigid...</li><li>Pick a face on the first part, then a face on the second part.</li><li>Click OK: the two faces keep their places to each other in all six ways.</li></ul>
+<p><b>More:</b> <a href="11-simulation.html#connections">Connections</a>.</p>
+<h2 id="flow-simulation"><a name="flow-simulation"></a>Flow simulation</h2>
+<h3 id="new-flow-analysis"><a name="new-flow-analysis"></a>New Flow Analysis</h3>
+<p>Starts a CFD analysis on the active body: solver, fluid and mesh.</p>
+<h3 id="physics-model"><a name="physics-model"></a>Physics Model</h3>
+<p>Steady or transient, laminar or turbulent, heat transfer.</p>
+<h3 id="fluid-properties"><a name="fluid-properties"></a>Fluid Properties</h3>
+<p>The fluid: density, viscosity, thermal data.</p>
+<h3 id="initial-conditions"><a name="initial-conditions"></a>Initial Conditions</h3>
+<p>The velocity, pressure and temperature the flow starts from.</p>
+<h3 id="boundary-conditions"><a name="boundary-conditions"></a>Boundary Conditions</h3>
+<p>Inlets, outlets, walls and openings on the faces.</p>
+<h3 id="porous-zone"><a name="porous-zone"></a>Porous Zone</h3>
+<p>A region the fluid passes through slowly.</p>
+<h3 id="initialisation-zone"><a name="initialisation-zone"></a>Initialisation Zone</h3>
+<p>A region that starts with values of its own.</p>
+<h3 id="goals"><a name="goals"></a>Goals</h3>
+<p>Forces, coefficients and probes the solver reports while it runs.</p>
+<p><b>More:</b> <a href="02-interface.html#add-in-tabs">Add-in tabs</a>.</p>
+<h3 id="mesh"><a name="mesh"></a>Mesh</h3>
+<p>Meshes the fluid region for OpenFOAM.</p>
+<p><b>More:</b> <a href="11-simulation.html#5-mesh-the-part">5. Mesh the part</a>.</p>
+<h3 id="mesh-refinement"><a name="mesh-refinement"></a>Mesh Refinement</h3>
+<p>Finer cells near a face, edge or region.</p>
+<h3 id="solver-settings"><a name="solver-settings"></a>Solver Settings</h3>
+<p>Writes the case, runs OpenFOAM and shows the progress.</p>
+<h3 id="view-results"><a name="view-results"></a>View Results</h3>
+<p>Opens the results to plot.</p>
+<h3 id="all-cfd-tools"><a name="all-cfd-tools"></a>All CFD Tools</h3>
+<p>Every CfdOF command, by toolbar.</p>
+<h2 id="3d-scan-and-mesh-repair"><a name="3d-scan-and-mesh-repair"></a>3D scan and mesh repair</h2>
+<h3 id="open-scan"><a name="open-scan"></a>Open Scan</h3>
+<p>Opens an STL, OBJ, PLY or other mesh.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Open Scan.</li><li>Pick the scan file (STL, OBJ, PLY and other mesh files) and click Open.</li><li>The mesh is added to the tree and shown in the view.</li></ul>
+<h3 id="open-point-cloud"><a name="open-point-cloud"></a>Open Point Cloud</h3>
+<p>Opens a point cloud (ASC, PCD, PLY, E57).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Open Point Cloud.</li><li>Pick the file (ASC, PCD, PLY, E57) and click Open.</li><li>The points are added to the tree as a point cloud.</li></ul>
+<h3 id="mesh-prep-wizard"><a name="mesh-prep-wizard"></a>Mesh Prep Wizard</h3>
+<p>Finds and fixes mesh errors.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the scan in the tree.</li><li>Click Mesh Prep Wizard; the repair panel opens with the scan chosen.</li><li>Tick the checks you want (flipped facets, duplicated facets or points, holes, self-intersections) and click Analyze.</li><li>Click Repair beside each problem it found.</li></ul>
+<h3 id="fix-normals"><a name="fix-normals"></a>Fix Normals</h3>
+<p>Points every facet the same way.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the scan in the tree.</li><li>Click Fix Normals.</li><li>Every facet now points the same way; nothing else changes.</li></ul>
+<h3 id="fill-holes"><a name="fill-holes"></a>Fill Holes</h3>
+<p>Closes holes in the mesh.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the scan in the tree.</li><li>Click Fill Holes; a small panel opens.</li><li>Set the largest hole to close, counted in edges, then click OK.</li><li>The holes up to that size are closed.</li></ul>
+<h3 id="remove-noise"><a name="remove-noise"></a>Remove Noise</h3>
+<p>Deletes small loose pieces.</p>
+<h3 id="smooth"><a name="smooth"></a>Smooth</h3>
+<p>Smooths the mesh.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the scan in the tree.</li><li>Click Smooth; the panel opens.</li><li>Pick the method and the number of passes, then click OK.</li><li>The mesh is smoothed in place.</li></ul>
+<p><b>More:</b> <a href="07-slicer.html#on-the-plate">On the plate</a>.</p>
+<h3 id="reduce"><a name="reduce"></a>Reduce</h3>
+<p>Takes facets out.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the scan in the tree.</li><li>Click Reduce; the panel opens.</li><li>Set how much to take out, then click OK.</li><li>The mesh has fewer facets.</li></ul>
+<h3 id="scale"><a name="scale"></a>Scale</h3>
+<p>Scales the mesh.</p>
+<p><b>How to use it</b></p>
+<ul><li>Scale Parameters: Scale about, Uniform scaling (one factor) or X, Y, Z factors.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html#views">Views</a>.</p>
+<h3 id="trim"><a name="trim"></a>Trim</h3>
+<p>Cuts mesh away with a drawn loop.</p>
+<p><b>More:</b> <a href="04-features.html#surfaces-direct-editing-and-more">Surfaces, direct editing and more</a>.</p>
+<h3 id="mesh-to-points"><a name="mesh-to-points"></a>Mesh to Points</h3>
+<p>Makes a point cloud.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the scan in the tree.</li><li>Click Mesh to Points.</li><li>A point cloud of the mesh vertices is added to the tree.</li></ul>
+<h3 id="structure-points"><a name="structure-points"></a>Structure Points</h3>
+<p>Orders the points in a grid.</p>
+<h3 id="merge-points-1"><a name="merge-points-1"></a>Merge Points</h3>
+<p>Joins point clouds.</p>
+<h3 id="trim-points"><a name="trim-points"></a>Trim Points</h3>
+<p>Deletes points inside a drawn loop.</p>
+<h3 id="segment-mesh-1"><a name="segment-mesh-1"></a>Segment Mesh</h3>
+<p>Splits the mesh into regions.</p>
+<h3 id="best-fit-segments"><a name="best-fit-segments"></a>Best-Fit Segments</h3>
+<p>Planes, cylinders and spheres in the mesh.</p>
+<h3 id="manual-segments"><a name="manual-segments"></a>Manual Segments</h3>
+<p>Picks regions by hand.</p>
+<h3 id="surface-wizard"><a name="surface-wizard"></a>Surface Wizard</h3>
+<p>Fits a B-spline surface to the scan.</p>
+<h3 id="fit-plane"><a name="fit-plane"></a>Fit Plane</h3>
+<p>Fits a plane.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the scan or the point cloud in the tree.</li><li>Click Fit Plane.</li><li>A plane fitted to it is added to the tree and shown in the view.</li></ul>
+<h3 id="fit-cylinder"><a name="fit-cylinder"></a>Fit Cylinder</h3>
+<p>Fits a cylinder.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the scan or the point cloud in the tree.</li><li>Click Fit Cylinder.</li><li>A cylinder fitted to it is added to the tree and shown in the view.</li></ul>
+<h3 id="fit-sphere"><a name="fit-sphere"></a>Fit Sphere</h3>
+<p>Fits a sphere.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click the scan or the point cloud in the tree.</li><li>Click Fit Sphere.</li><li>A sphere fitted to it is added to the tree and shown in the view.</li></ul>
+<h3 id="poisson-surface"><a name="poisson-surface"></a>Poisson Surface</h3>
+<p>Makes a closed mesh from points.</p>
+<h3 id="triangulate-points"><a name="triangulate-points"></a>Triangulate Points</h3>
+<p>A mesh from a structured point cloud.</p>
+<h3 id="mesh-to-body"><a name="mesh-to-body"></a>Mesh to Body</h3>
+<p>Turns the mesh into a body.</p>
+<h3 id="curve-wizard"><a name="curve-wizard"></a>Curve Wizard</h3>
+<p>Section curves through the scan.</p>
+<h3 id="section-curve"><a name="section-curve"></a>Section Curve</h3>
+<p>A curve where a plane cuts the mesh.</p>
+<h3 id="boundary-curves"><a name="boundary-curves"></a>Boundary Curves</h3>
+<p>Curves along the open edges.</p>
+<h3 id="deviation-analysis"><a name="deviation-analysis"></a>Deviation Analysis</h3>
+<p>Colours the gap between scan and model.</p>
+<h3 id="deviation-at-point"><a name="deviation-at-point"></a>Deviation at Point</h3>
+<p>The gap at one point.</p>
+<h3 id="curvature"><a name="curvature"></a>Curvature</h3>
+<p>Curvature on the mesh.</p>
+<p><b>More:</b> <a href="02-interface.html#add-in-tabs">Add-in tabs</a>.</p>
+<h3 id="all-scan-tools"><a name="all-scan-tools"></a>All Scan Tools</h3>
+<p>Every Mesh, Points, Reverse Engineering and Inspection command.</p>
+<h2 id="mesh-tools"><a name="mesh-tools"></a>Mesh tools</h2>
+<h3 id="mesh-union"><a name="mesh-union"></a>Mesh Union</h3>
+<p>Joins two meshes.</p>
+<h3 id="mesh-difference"><a name="mesh-difference"></a>Mesh Difference</h3>
+<p>Cuts one mesh out of another.</p>
+<h3 id="mesh-intersection"><a name="mesh-intersection"></a>Mesh Intersection</h3>
+<p>Keeps what two meshes share.</p>
+<h3 id="trim-mesh"><a name="trim-mesh"></a>Trim Mesh</h3>
+<p>Cuts facets inside a drawn loop.</p>
+<h3 id="add-triangle"><a name="add-triangle"></a>Add Triangle</h3>
+<p>Adds one facet at a hole's edge.</p>
+<h3 id="close-hole"><a name="close-hole"></a>Close Hole</h3>
+<p>Closes the hole you click.</p>
+<h3 id="flip-normals"><a name="flip-normals"></a>Flip Normals</h3>
+<p>Turns every facet the other way.</p>
+<h3 id="remesh"><a name="remesh"></a>Remesh</h3>
+<p>Makes the mesh again with even facets (Gmsh).</p>
+<h3 id="merge-meshes"><a name="merge-meshes"></a>Merge Meshes</h3>
+<p>Puts picked meshes into one.</p>
+<h3 id="split-by-components"><a name="split-by-components"></a>Split by Components</h3>
+<p>Makes each loose piece its own mesh.</p>
+<h3 id="check-solid"><a name="check-solid"></a>Check Solid</h3>
+<p>Tells whether the mesh is closed.</p>
+<h3 id="facet-info"><a name="facet-info"></a>Facet Info</h3>
+<p>Shows data of the facet you click.</p>
+<h3 id="bounding-box"><a name="bounding-box"></a>Bounding Box</h3>
+<p>Shows the mesh's size.</p>
+<p><b>How to use it</b></p>
+<ul><li>Options: Best fit or Custom plane (pick a face or plane); Include hidden bodies, surfaces. The box's size goes to Custom Properties.</li></ul>
+<p><b>More:</b> <a href="04-features.html#reference-geometry">Reference geometry</a>.</p>
+<h3 id="regular-solid"><a name="regular-solid"></a>Regular Solid</h3>
+<p>Makes a mesh cube, sphere, cylinder or other shape.</p>
+<h3 id="export-mesh"><a name="export-mesh"></a>Export Mesh</h3>
+<p>Saves the mesh as STL, OBJ, PLY or another format.</p>
+<h2 id="rendering"><a name="rendering"></a>Rendering</h2>
+<h3 id="integrated-preview"><a name="integrated-preview"></a>Integrated Preview</h3>
+<p>Integrated Preview</p>
+<h3 id="preview-window"><a name="preview-window"></a>Preview Window</h3>
+<p>Preview Window</p>
+<h3 id="final-render"><a name="final-render"></a>Final Render</h3>
+<p>Final Render</p>
+<h3 id="render-options"><a name="render-options"></a>Render Options</h3>
+<p>Render Options</p>
+<h3 id="schedule-render"><a name="schedule-render"></a>Schedule Render</h3>
+<p>Schedule Render</p>
+<h3 id="recall-last-render"><a name="recall-last-render"></a>Recall Last Render</h3>
+<p>Recall Last Render</p>
+<h2 id="routing-and-electrical"><a name="routing-and-electrical"></a>Routing and electrical</h2>
+<h3 id="route-line"><a name="route-line"></a>Route Line</h3>
+<p>Sketches a route of lines along X, Y and Z between two picked points.</p>
+<p><b>More:</b> <a href="05-assemblies.html#exploded-views">Exploded views</a>.</p>
+<h3 id="start-at-point"><a name="start-at-point"></a>Start at Point</h3>
+<p>Starts a pipe route at a connection point.</p>
+<h3 id="auto-route"><a name="auto-route"></a>Auto Route</h3>
+<p>Draws the pipe route between connection points.</p>
+<h3 id="start-at-point-1"><a name="start-at-point-1"></a>Start at Point</h3>
+<p>Starts a tube route at a connection point.</p>
+<h3 id="auto-route-1"><a name="auto-route-1"></a>Auto Route</h3>
+<p>Draws the tube route between connection points.</p>
+<h3 id="start-at-point-2"><a name="start-at-point-2"></a>Start at Point</h3>
+<p>Starts a cable route at a connector's connection point.</p>
+<h3 id="auto-route-2"><a name="auto-route-2"></a>Auto Route</h3>
+<p>Draws the cable route between connectors, through clips.</p>
+<h3 id="add-fitting"><a name="add-fitting"></a>Add Fitting</h3>
+<p>Adds an elbow, tee, reducer, flange... from the routing library.</p>
+<h3 id="add-fitting-1"><a name="add-fitting-1"></a>Add Fitting</h3>
+<p>Adds a tube union from the routing library.</p>
+<h3 id="edit-wires"><a name="edit-wires"></a>Edit Wires</h3>
+<p>The wires the picked (or last) cable carries.</p>
+<h3 id="import-from-to-list"><a name="import-from-to-list"></a>Import From-To List</h3>
+<p>Makes the cables of a From-To list (CSV).</p>
+<h3 id="flatten-route"><a name="flatten-route"></a>Flatten Route</h3>
+<p>Lays the picked (or last) cable out flat with its lengths.</p>
+<h3 id="wire-list"><a name="wire-list"></a>Wire List</h3>
+<p>Saves the harness's wire list with cut lengths.</p>
+<h3 id="edit-route"><a name="edit-route"></a>Edit Route</h3>
+<p>Edits the picked (or last) route.</p>
+<h3 id="create-connection-point"><a name="create-connection-point"></a>Create Connection Point</h3>
+<p>A connection point on a round edge.</p>
+<h2 id="freecad-assembly"><a name="freecad-assembly"></a>FreeCAD assembly</h2>
+<h3 id="freecad-insert-component"><a name="freecad-insert-component"></a>FreeCAD Insert Component</h3>
+<p>FreeCAD's own dialog for adding parts to an assembly.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open the assembly and the part files you want to add.</li><li>On the FreeCAD Utilities tab click FreeCAD Insert Component; FreeCAD's own Insert Component panel opens with the open documents listed.</li><li>Click a part in the list to add it, click in the 3D view to place it, then close the panel.</li></ul>
+<h3 id="solve-assembly"><a name="solve-assembly"></a>Solve Assembly</h3>
+<p>Solves the assembly's joints again.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open an assembly and make it the active assembly.</li><li>On the FreeCAD Utilities tab click Solve Assembly.</li><li>The joints are solved again and the parts move to where the joints put them.</li></ul>
+<h3 id="gear-belt-joint"><a name="gear-belt-joint"></a>Gear/Belt Joint</h3>
+<p>Ties two turning parts like gears or a belt.</p>
+<p><b>How to use it</b></p>
+<ul><li>In the active assembly pick a round edge on the first turning part, then a round edge on the second.</li><li>On the FreeCAD Utilities tab click Gear/Belt Joint.</li><li>Check the two radii in the panel, tick Reverse if the second part should turn the other way, then click OK.</li></ul>
+<h2 id="draft-tools"><a name="draft-tools"></a>Draft tools</h2>
+<h3 id="line"><a name="line"></a>Line</h3>
+<p>Draws a straight 2D line on the working plane.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="polyline"><a name="polyline"></a>Polyline</h3>
+<p>Draws a chain of straight segments.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<h3 id="b-spline"><a name="b-spline"></a>B-Spline</h3>
+<p>Draws a smooth curve through picked points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<h3 id="bezier-curve"><a name="bezier-curve"></a>Bezier Curve</h3>
+<p>Draws a Bezier curve from control points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<h3 id="cubic-bezier-curve"><a name="cubic-bezier-curve"></a>Cubic Bezier Curve</h3>
+<p>Draws a Bezier curve by dragging tangents.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<h3 id="circle"><a name="circle"></a>Circle</h3>
+<p>Draws a 2D circle from a center and a radius.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html#views">Views</a>.</p>
+<h3 id="arc"><a name="arc"></a>Arc</h3>
+<p>Draws an arc from a center, a radius and two angles.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<h3 id="3-point-arc"><a name="3-point-arc"></a>3-Point Arc</h3>
+<p>Draws an arc through three points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<h3 id="ellipse"><a name="ellipse"></a>Ellipse</h3>
+<p>Draws an ellipse inside two picked corners.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="rectangle"><a name="rectangle"></a>Rectangle</h3>
+<p>Draws a 2D rectangle from two corners.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#starting-and-leaving-a-sketch">Starting and leaving a sketch</a>.</p>
+<h3 id="polygon"><a name="polygon"></a>Polygon</h3>
+<p>Draws a regular polygon.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<h3 id="point"><a name="point"></a>Point</h3>
+<p>Places a single point.</p>
+<p><b>How to use it</b></p>
+<ul><li>Selections: Arc Center, Center of Face, Intersection, Projection, On point, Along curve distance or multiple reference point.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#drawing-tools">Drawing tools</a>.</p>
+<h3 id="2d-fillet"><a name="2d-fillet"></a>2D Fillet</h3>
+<p>Rounds the corner between two 2D lines.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="hatch"><a name="hatch"></a>Hatch</h3>
+<p>Fills a face with a hatch pattern.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html#views">Views</a>.</p>
+<h3 id="facebinder"><a name="facebinder"></a>Facebinder</h3>
+<p>Makes a surface from picked faces that follows them.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="text-1"><a name="text-1"></a>Text</h3>
+<p>Places a multi-line text.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<p><b>More:</b> <a href="03-sketching.html#sketch-tools">Sketch tools</a>.</p>
+<h3 id="dimension"><a name="dimension"></a>Dimension</h3>
+<p>Places a Draft length, radius or angle dimension.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<p><b>More:</b> <a href="01-getting-started.html#3-smart-dimension">3. Smart Dimension</a>.</p>
+<h3 id="label"><a name="label"></a>Label</h3>
+<p>Places a leader with a text that can show object data.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it, then click the points in the 3D view, or type them in the Draft panel's X, Y and Z boxes and press Enter. Esc cancels.</li></ul>
+<h3 id="annotation-styles"><a name="annotation-styles"></a>Annotation Styles</h3>
+<p>Edits the text and dimension styles.</p>
+<h3 id="move"><a name="move"></a>Move</h3>
+<p>Moves or copies objects between two points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<p><b>More:</b> <a href="05-assemblies.html#mates">Mates</a>.</p>
+<h3 id="mirror"><a name="mirror"></a>Mirror</h3>
+<p>Mirrors objects about a line.</p>
+<p><b>How to use it</b></p>
+<ul><li>Mirror Face/Plane: the plane or flat face. Features to Mirror / Faces to Mirror / Bodies to Mirror: what is mirrored. Merge solids joins a mirrored body to the original.</li></ul>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="offset"><a name="offset"></a>Offset</h3>
+<p>Offsets a 2D object by a distance.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="trim-extend"><a name="trim-extend"></a>Trim/Extend</h3>
+<p>Trims or extends a 2D object.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<p><b>More:</b> <a href="04-features.html#sheet-metal">Sheet metal</a>.</p>
+<h3 id="stretch"><a name="stretch"></a>Stretch</h3>
+<p>Stretches the points inside a picked box.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="split"><a name="split"></a>Split</h3>
+<p>Splits a line or wire at a point.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<p><b>More:</b> <a href="11-simulation.html#3-hold-the-part-fixtures">3. Hold the part (fixtures)</a>.</p>
+<h3 id="join"><a name="join"></a>Join</h3>
+<p>Joins lines and wires that touch into one wire.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#opening-saving-and-exporting">Opening, saving and exporting</a>.</p>
+<h3 id="upgrade"><a name="upgrade"></a>Upgrade</h3>
+<p>Joins picked objects into the next more complex kind.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="downgrade"><a name="downgrade"></a>Downgrade</h3>
+<p>Breaks picked objects into simpler pieces.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="linear-array"><a name="linear-array"></a>Linear Array</h3>
+<p>Copies objects in rows and columns.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="polar-array"><a name="polar-array"></a>Polar Array</h3>
+<p>Copies objects around a center.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="circular-array"><a name="circular-array"></a>Circular Array</h3>
+<p>Copies objects in rings.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="path-array"><a name="path-array"></a>Path Array</h3>
+<p>Copies objects along a path.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="path-link-array"><a name="path-link-array"></a>Path Link Array</h3>
+<p>A path array made of links.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="point-array"><a name="point-array"></a>Point Array</h3>
+<p>Copies objects onto points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="point-link-array"><a name="point-link-array"></a>Point Link Array</h3>
+<p>A point array made of links.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="clone"><a name="clone"></a>Clone</h3>
+<p>Makes copies that follow the original.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#add-in-tabs">Add-in tabs</a>.</p>
+<h3 id="shape-2d-view"><a name="shape-2d-view"></a>Shape 2D View</h3>
+<p>Projects a solid flat onto a plane.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="draft-to-sketch"><a name="draft-to-sketch"></a>Draft to Sketch</h3>
+<p>Turns Draft objects into a sketch, or back.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="edit-points"><a name="edit-points"></a>Edit Points</h3>
+<p>Drags the points of a Draft object.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="wire-to-b-spline"><a name="wire-to-b-spline"></a>Wire to B-Spline</h3>
+<p>Turns a polyline into a B-spline, or back.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="set-slope"><a name="set-slope"></a>Set Slope</h3>
+<p>Gives a line a slope.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="flip-dimension"><a name="flip-dimension"></a>Flip Dimension</h3>
+<p>Turns a Draft dimension's text the other way.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it. Follow the prompts in the Draft panel and the status bar.</li></ul>
+<h3 id="highlight-subelements"><a name="highlight-subelements"></a>Highlight Subelements</h3>
+<p>Shows the points and edges to edit.</p>
+<h3 id="layers"><a name="layers"></a>Layers</h3>
+<p>Adds, renames and styles layers.</p>
+<h3 id="add-to-layer"><a name="add-to-layer"></a>Add to Layer</h3>
+<p>Moves picked objects to a layer.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it.</li></ul>
+<h3 id="add-to-group"><a name="add-to-group"></a>Add to Group</h3>
+<p>Moves picked objects to a group.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it.</li></ul>
+<h3 id="new-named-group"><a name="new-named-group"></a>New Named Group</h3>
+<p>Puts picked objects in a new named group.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it.</li></ul>
+<h3 id="select-group"><a name="select-group"></a>Select Group</h3>
+<p>Selects everything in the picked group.</p>
+<h3 id="add-to-construction"><a name="add-to-construction"></a>Add to Construction</h3>
+<p>Moves picked objects to the construction group.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the objects first, then click it.</li></ul>
+<h3 id="working-plane-proxy"><a name="working-plane-proxy"></a>Working Plane Proxy</h3>
+<p>Saves the working plane as an object.</p>
+<h3 id="toggle-grid"><a name="toggle-grid"></a>Toggle Grid</h3>
+<p>Shows or hides the Draft grid.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<h3 id="toggle-wireframe"><a name="toggle-wireframe"></a>Toggle Wireframe</h3>
+<p>Switches picked objects between wireframe and shaded.</p>
+<h3 id="snap-lock"><a name="snap-lock"></a>Snap Lock</h3>
+<p>Turns Draft snapping on or off.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-endpoint"><a name="snap-endpoint"></a>Snap Endpoint</h3>
+<p>Draft snap to end points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-midpoint"><a name="snap-midpoint"></a>Snap Midpoint</h3>
+<p>Draft snap to midpoints.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-center"><a name="snap-center"></a>Snap Center</h3>
+<p>Draft snap to centers.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-angle"><a name="snap-angle"></a>Snap Angle</h3>
+<p>Draft snap to quarter points of circles.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-intersection"><a name="snap-intersection"></a>Snap Intersection</h3>
+<p>Draft snap to intersections.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-perpendicular"><a name="snap-perpendicular"></a>Snap Perpendicular</h3>
+<p>Draft snap square to an edge.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-extension"><a name="snap-extension"></a>Snap Extension</h3>
+<p>Draft snap along an edge's extension.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-parallel"><a name="snap-parallel"></a>Snap Parallel</h3>
+<p>Draft snap parallel to an edge.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-special"><a name="snap-special"></a>Snap Special</h3>
+<p>Draft snap to special points of objects.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-near"><a name="snap-near"></a>Snap Near</h3>
+<p>Draft snap to the nearest point on an edge.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-ortho"><a name="snap-ortho"></a>Snap Ortho</h3>
+<p>Draft snap at right angles.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-grid"><a name="snap-grid"></a>Snap Grid</h3>
+<p>Draft snap to grid points.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-working-plane"><a name="snap-working-plane"></a>Snap Working Plane</h3>
+<p>Keeps Draft snaps on the working plane.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h3 id="snap-dimensions"><a name="snap-dimensions"></a>Snap Dimensions</h3>
+<p>Shows distances while snapping.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn this snap on or off. It works while a Draft tool asks for a point.</li></ul>
+<h2 id="part-primitives-and-booleans"><a name="part-primitives-and-booleans"></a>Part primitives and booleans</h2>
+<h3 id="primitives"><a name="primitives"></a>Primitives</h3>
+<p>Makes a plane, box, wedge, helix, spiral and other shapes from sizes.</p>
+<h3 id="cube"><a name="cube"></a>Cube</h3>
+<p>Makes a box solid.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. The shape is made at the origin with default sizes; change its sizes in its properties.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="cylinder"><a name="cylinder"></a>Cylinder</h3>
+<p>Makes a cylinder solid.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. The shape is made at the origin with default sizes; change its sizes in its properties.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="cone"><a name="cone"></a>Cone</h3>
+<p>Makes a cone solid.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. The shape is made at the origin with default sizes; change its sizes in its properties.</li></ul>
+<h3 id="sphere"><a name="sphere"></a>Sphere</h3>
+<p>Makes a sphere solid.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. The shape is made at the origin with default sizes; change its sizes in its properties.</li></ul>
+<p><b>More:</b> <a href="04-features.html#surfaces-direct-editing-and-more">Surfaces, direct editing and more</a>.</p>
+<h3 id="torus"><a name="torus"></a>Torus</h3>
+<p>Makes a torus solid.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. The shape is made at the origin with default sizes; change its sizes in its properties.</li></ul>
+<h3 id="tube"><a name="tube"></a>Tube</h3>
+<p>Makes a hollow tube solid.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it. The shape is made at the origin with default sizes; change its sizes in its properties.</li></ul>
+<h3 id="additive-box"><a name="additive-box"></a>Additive Box</h3>
+<p>Adds a box to the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="additive-cylinder"><a name="additive-cylinder"></a>Additive Cylinder</h3>
+<p>Adds a cylinder to the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="additive-sphere"><a name="additive-sphere"></a>Additive Sphere</h3>
+<p>Adds a sphere to the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="additive-cone"><a name="additive-cone"></a>Additive Cone</h3>
+<p>Adds a cone to the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="additive-ellipsoid"><a name="additive-ellipsoid"></a>Additive Ellipsoid</h3>
+<p>Adds an ellipsoid to the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="additive-torus"><a name="additive-torus"></a>Additive Torus</h3>
+<p>Adds a torus to the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="additive-prism"><a name="additive-prism"></a>Additive Prism</h3>
+<p>Adds a prism to the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="additive-wedge"><a name="additive-wedge"></a>Additive Wedge</h3>
+<p>Adds a wedge to the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="subtractive-box"><a name="subtractive-box"></a>Subtractive Box</h3>
+<p>Cuts a box out of the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="subtractive-cylinder"><a name="subtractive-cylinder"></a>Subtractive Cylinder</h3>
+<p>Cuts a cylinder out of the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="subtractive-sphere"><a name="subtractive-sphere"></a>Subtractive Sphere</h3>
+<p>Cuts a sphere out of the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="subtractive-cone"><a name="subtractive-cone"></a>Subtractive Cone</h3>
+<p>Cuts a cone out of the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="subtractive-ellipsoid"><a name="subtractive-ellipsoid"></a>Subtractive Ellipsoid</h3>
+<p>Cuts an ellipsoid out of the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="subtractive-torus"><a name="subtractive-torus"></a>Subtractive Torus</h3>
+<p>Cuts a torus out of the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="subtractive-prism"><a name="subtractive-prism"></a>Subtractive Prism</h3>
+<p>Cuts a prism out of the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="subtractive-wedge"><a name="subtractive-wedge"></a>Subtractive Wedge</h3>
+<p>Cuts a wedge out of the body.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make a body active, then click it. A panel asks for the sizes and where it attaches; click OK to put it in the body.</li></ul>
+<h3 id="boolean"><a name="boolean"></a>Boolean</h3>
+<p>Unites, cuts or intersects two shapes in a dialog.</p>
+<h3 id="make-compound"><a name="make-compound"></a>Make Compound</h3>
+<p>Groups shapes into one compound.</p>
+<h3 id="explode-compound"><a name="explode-compound"></a>Explode Compound</h3>
+<p>Splits a compound into its shapes.</p>
+<h3 id="compound-filter"><a name="compound-filter"></a>Compound Filter</h3>
+<p>Keeps chosen shapes of a compound.</p>
+<h3 id="boolean-fragments"><a name="boolean-fragments"></a>Boolean Fragments</h3>
+<p>Splits shapes into all their pieces.</p>
+<h3 id="slice-apart"><a name="slice-apart"></a>Slice Apart</h3>
+<p>Cuts shapes with others into loose pieces.</p>
+<h3 id="slice-to-compound"><a name="slice-to-compound"></a>Slice to Compound</h3>
+<p>Cuts shapes with others into a compound.</p>
+<h3 id="xor"><a name="xor"></a>XOR</h3>
+<p>Keeps what an odd number of shapes covers.</p>
+<h3 id="connect-shapes"><a name="connect-shapes"></a>Connect Shapes</h3>
+<p>Joins walls of shapes, inside left open.</p>
+<h3 id="embed-shapes"><a name="embed-shapes"></a>Embed Shapes</h3>
+<p>Sinks one walled shape into another.</p>
+<h3 id="cutout-for-shape"><a name="cutout-for-shape"></a>Cutout for Shape</h3>
+<p>Cuts a walled shape's room out of another.</p>
+<h3 id="mirror-shape"><a name="mirror-shape"></a>Mirror Shape</h3>
+<p>Mirrors a shape about a plane as a new object.</p>
+<h3 id="3d-offset"><a name="3d-offset"></a>3D Offset</h3>
+<p>Offsets a whole shape outward or inward.</p>
+<h3 id="2d-offset"><a name="2d-offset"></a>2D Offset</h3>
+<p>Offsets a flat face or wire.</p>
+<h3 id="appearance-per-face"><a name="appearance-per-face"></a>Appearance per Face</h3>
+<p>Gives single faces their own color.</p>
+<h3 id="coordinate-system"><a name="coordinate-system"></a>Coordinate System</h3>
+<p>Adds a Part coordinate system.</p>
+<p><b>How to use it</b></p>
+<ul><li>Selections: the origin, then the X, Y or Z axis direction; flip each axis.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="part-datum-plane"><a name="part-datum-plane"></a>Part Datum Plane</h3>
+<p>Adds a Part datum plane.</p>
+<h3 id="part-datum-line"><a name="part-datum-line"></a>Part Datum Line</h3>
+<p>Adds a Part datum line.</p>
+<h3 id="part-datum-point"><a name="part-datum-point"></a>Part Datum Point</h3>
+<p>Adds a Part datum point.</p>
+<h2 id="groups-links-and-tree"><a name="groups-links-and-tree"></a>Groups, links and tree</h2>
+<h3 id="new-part-container"><a name="new-part-container"></a>New Part Container</h3>
+<p>Adds a Part container with its own placement.</p>
+<h3 id="new-group"><a name="new-group"></a>New Group</h3>
+<p>Adds a group folder to the tree.</p>
+<h3 id="variable-set"><a name="variable-set"></a>Variable Set</h3>
+<p>Adds a set of variables for expressions.</p>
+<h3 id="sync-view"><a name="sync-view"></a>Sync View</h3>
+<p>The 3D view follows the tree's picked document.</p>
+<h3 id="sync-selection"><a name="sync-selection"></a>Sync Selection</h3>
+<p>The tree scrolls to what is picked in 3D.</p>
+<h3 id="sync-placement"><a name="sync-placement"></a>Sync Placement</h3>
+<p>Dragging in the tree keeps where objects are.</p>
+<h3 id="tree-preselection"><a name="tree-preselection"></a>Tree Preselection</h3>
+<p>Hovering a tree row highlights it in 3D.</p>
+<h3 id="record-selection"><a name="record-selection"></a>Record Selection</h3>
+<p>Remembers picks for Back and Forward.</p>
+<h3 id="single-document"><a name="single-document"></a>Single Document</h3>
+<p>The tree shows only the active document.</p>
+<h3 id="multi-document"><a name="multi-document"></a>Multi Document</h3>
+<p>The tree shows every open document.</p>
+<h3 id="collapse-expand-document"><a name="collapse-expand-document"></a>Collapse/Expand Document</h3>
+<p>Folds documents as they switch.</p>
+<h3 id="start-dragging"><a name="start-dragging"></a>Start Dragging</h3>
+<p>Drags the picked tree rows.</p>
+<h3 id="go-to-selection"><a name="go-to-selection"></a>Go to Selection</h3>
+<p>Scrolls the tree to what is picked.</p>
+<h3 id="selection-back"><a name="selection-back"></a>Selection Back</h3>
+<p>Goes back to the pick before.</p>
+<h3 id="selection-forward"><a name="selection-forward"></a>Selection Forward</h3>
+<p>Goes forward to the next pick.</p>
+<h2 id="spreadsheet"><a name="spreadsheet"></a>Spreadsheet</h2>
+<h3 id="new-spreadsheet"><a name="new-spreadsheet"></a>New Spreadsheet</h3>
+<p>Adds a spreadsheet to the document.</p>
+<h3 id="import-spreadsheet"><a name="import-spreadsheet"></a>Import Spreadsheet</h3>
+<p>Reads a CSV file into a new spreadsheet.</p>
+<h3 id="export-spreadsheet"><a name="export-spreadsheet"></a>Export Spreadsheet</h3>
+<p>Saves the open spreadsheet as CSV.</p>
+<h3 id="set-alias"><a name="set-alias"></a>Set Alias</h3>
+<p>Names a cell so expressions can use it.</p>
+<h3 id="merge-cells"><a name="merge-cells"></a>Merge Cells</h3>
+<p>Joins the picked cells into one.</p>
+<h3 id="split-cell"><a name="split-cell"></a>Split Cell</h3>
+<p>Splits a merged cell again.</p>
+<h3 id="bold"><a name="bold"></a>Bold</h3>
+<p>Bold text in the picked cells.</p>
+<h3 id="italic"><a name="italic"></a>Italic</h3>
+<p>Italic text in the picked cells.</p>
+<h3 id="underline"><a name="underline"></a>Underline</h3>
+<p>Underlined text in the picked cells.</p>
+<h3 id="align-left"><a name="align-left"></a>Align Left</h3>
+<p>Puts cell text at the left.</p>
+<h3 id="align-center"><a name="align-center"></a>Align Center</h3>
+<p>Centers cell text across.</p>
+<h3 id="align-right"><a name="align-right"></a>Align Right</h3>
+<p>Puts cell text at the right.</p>
+<h3 id="align-top"><a name="align-top"></a>Align Top</h3>
+<p>Puts cell text at the top.</p>
+<h3 id="align-middle"><a name="align-middle"></a>Align Middle</h3>
+<p>Centers cell text up and down.</p>
+<h3 id="align-bottom"><a name="align-bottom"></a>Align Bottom</h3>
+<p>Puts cell text at the bottom.</p>
+<h2 id="robot"><a name="robot"></a>Robot</h2>
+<h3 id="place-robot"><a name="place-robot"></a>Place Robot</h3>
+<p>Adds a robot from FreeCAD's library.</p>
+<h3 id="trajectory"><a name="trajectory"></a>Trajectory</h3>
+<p>Adds an empty robot trajectory.</p>
+<h3 id="insert-in-trajectory"><a name="insert-in-trajectory"></a>Insert in Trajectory</h3>
+<p>Adds the robot's pose as a waypoint.</p>
+<h3 id="insert-at-preselection"><a name="insert-at-preselection"></a>Insert at Preselection</h3>
+<p>Adds the hovered point as a waypoint.</p>
+<h3 id="edge-to-trajectory"><a name="edge-to-trajectory"></a>Edge to Trajectory</h3>
+<p>Makes a trajectory from picked edges.</p>
+<h3 id="dress-up-trajectory"><a name="dress-up-trajectory"></a>Dress-Up Trajectory</h3>
+<p>Changes speed and tool of a trajectory.</p>
+<h3 id="trajectory-compound"><a name="trajectory-compound"></a>Trajectory Compound</h3>
+<p>Joins trajectories into one.</p>
+<h3 id="simulate-trajectory"><a name="simulate-trajectory"></a>Simulate Trajectory</h3>
+<p>Plays the trajectory on the robot.</p>
+<h3 id="set-home-position"><a name="set-home-position"></a>Set Home Position</h3>
+<p>Saves the robot's pose as home.</p>
+<h3 id="move-to-home"><a name="move-to-home"></a>Move to Home</h3>
+<p>Puts the robot back home.</p>
+<h2 id="openscad-tools"><a name="openscad-tools"></a>OpenSCAD tools</h2>
+<h3 id="refine-shape"><a name="refine-shape"></a>Refine Shape</h3>
+<p>Merges faces that lie in one surface.</p>
+<h3 id="increase-tolerance"><a name="increase-tolerance"></a>Increase Tolerance</h3>
+<p>Raises a shape's tolerance.</p>
+<h3 id="explode-group"><a name="explode-group"></a>Explode Group</h3>
+<p>Breaks up a fused group.</p>
+<h3 id="replace-object"><a name="replace-object"></a>Replace Object</h3>
+<p>Swaps one object in a feature's inputs for another.</p>
+<h3 id="remove-with-children"><a name="remove-with-children"></a>Remove with Children</h3>
+<p>Deletes objects and what they are made from.</p>
+<h2 id="workbenches"><a name="workbenches"></a>Workbenches</h2>
+<h3 id="sheet-metal"><a name="sheet-metal"></a>Sheet Metal</h3>
+<p>Switches to the sheet metal tools.</p>
+<p><b>More:</b> <a href="04-features.html#sheet-metal">Sheet metal</a>.</p>
+<h2 id="diotopo"><a name="diotopo"></a>Diotopo</h2>
+<h3 id="diotopo-topology-optimization"><a name="diotopo-topology-optimization"></a>Diotopo (Topology Optimization)</h3>
+<p>Free topology optimisation for 3D printing, by Diotopo. Optional: not part of this download; get it from Options  Add-In Apps. Kept up to date once downloaded.</p>
+<p><b>How to use it</b></p>
+<ul><li>Open Tools &gt; Add-Ins and tick Diotopo (or click Diotopo on the Diotopo tab if it is already there).</li><li>If Diotopo is not downloaded yet, a question appears: click Yes to download it from the author's GitHub; a box shows the progress and has a Cancel button.</li><li>When the download ends the Diotopo tab and its page open: the page runs in your web browser and the tab stays in FreeCAD with its results.</li></ul>
+<h3 id="diotopo-portable-program"><a name="diotopo-portable-program"></a>Diotopo Portable Program</h3>
+<p>Starts Diotopo's portable program from the download, if it has one.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Diotopo Portable Program on the Diotopo tab (it shows only when the download has one).</li><li>The program starts from the downloaded folder; nothing is installed.</li></ul>
+<h3 id="diotopo-update-now"><a name="diotopo-update-now"></a>Diotopo Update Now</h3>
+<p>Downloads Diotopo's newest version from the author's GitHub.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Diotopo Update Now on the Diotopo tab.</li><li>The newest version is read from the author's GitHub and downloaded into the add-on's own folder.</li><li>The status bar says Diotopo was updated, or that it is already the newest. The version before stays as a fallback.</li></ul>
+<h3 id="diotopo-open-folder"><a name="diotopo-open-folder"></a>Diotopo Open Folder</h3>
+<p>Shows the downloaded copy of Diotopo.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Diotopo Open Folder on the Diotopo tab.</li><li>The folder holding the downloaded copy opens in your file manager.</li></ul>
+<h3 id="diotopo-project-page"><a name="diotopo-project-page"></a>Diotopo Project Page</h3>
+<p>Opens Diotopo's GitHub page.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Diotopo Project Page on the Diotopo tab.</li><li>The author's GitHub page opens in your web browser.</li></ul>
+<h2 id="3d-printing"><a name="3d-printing"></a>3D printing</h2>
+<h3 id="print3d"><a name="print3d"></a>Print3D</h3>
+<p>Sends the part to a 3D printer through the slicer.</p>
+<p><b>More:</b> <a href="07-slicer.html#print3d-file-print3d">Print3D (File, Print3D)</a>.</p>
+<h2 id="self-test"><a name="self-test"></a>Self-test</h2>
+<h3 id="self-test-1"><a name="self-test-1"></a>Self-Test</h3>
+<p>Runs FreeCAD's own test dialog.</p>
+<h3 id="test-all"><a name="test-all"></a>Test All</h3>
+<p>Runs all of FreeCAD's tests.</p>
+<h3 id="test-base"><a name="test-base"></a>Test Base</h3>
+<p>Runs FreeCAD's base tests.</p>
+<h3 id="test-document"><a name="test-document"></a>Test Document</h3>
+<p>Runs FreeCAD's document tests.</p>
+<h2 id="other-commands"><a name="other-commands"></a>Other commands</h2>
+<h3 id="multi-transform-pattern"><a name="multi-transform-pattern"></a>Multi-Transform Pattern</h3>
+<p>Combines mirror, linear and circular patterns (FreeCAD MultiTransform).</p>
+<h3 id="scale-1"><a name="scale-1"></a>Scale</h3>
+<p>Scales the part about its centroid, origin or a coordinate system.</p>
+<p><b>How to use it</b></p>
+<ul><li>Scale Parameters: Scale about, Uniform scaling (one factor) or X, Y, Z factors.</li></ul>
+<p><b>More:</b> <a href="06-drawings.html#views">Views</a>.</p>
+<h3 id="combine"><a name="combine"></a>Combine</h3>
+<p>Adds, subtracts or keeps the common volume of solid bodies.</p>
+<p><b>How to use it</b></p>
+<ul><li>Operation Type: Add, Subtract, Common. Bodies to Combine: the other bodies; the active body is the main one.</li></ul>
+<h3 id="move-copy-bodies"><a name="move-copy-bodies"></a>Move/Copy Bodies</h3>
+<p>Moves, rotates or copies solid bodies.</p>
+<h3 id="delete-keep-body"><a name="delete-keep-body"></a>Delete/Keep Body</h3>
+<p>Removes bodies, or keeps only the ones you pick.</p>
+<h3 id="insert-part"><a name="insert-part"></a>Insert Part</h3>
+<p>Brings the bodies of another part file in.</p>
+<h3 id="heal-edges"><a name="heal-edges"></a>Heal Edges</h3>
+<p>Merges short edges on faces of an imported body into longer edges.</p>
+<h3 id="live-section-plane"><a name="live-section-plane"></a>Live Section Plane</h3>
+<p>A section plane you can move: drag its arrow or ring, the cut follows live.</p>
+<h3 id="chamfer"><a name="chamfer"></a>Chamfer</h3>
+<p>Bevels edges where surfaces meet.</p>
+<p><b>How to use it</b></p>
+<ul><li>Chamfer Type: Angle Distance, Distance Distance, Vertex, Offset Face, Face Face.</li><li>Items To Chamfer: the edges, faces or vertex; Chamfer Parameters: the distance and angle (Flip direction swaps the sides).</li></ul>
+<p><b>More:</b> <a href="04-features.html#edges-and-faces">Edges and faces</a>.</p>
+<h3 id="surface-from-mesh"><a name="surface-from-mesh"></a>Surface From Mesh</h3>
+<p>Makes surfaces (or a solid) from a mesh.</p>
+<h3 id="dome"><a name="dome"></a>Dome</h3>
+<p>Raises a dome on a face.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Insert &gt; Features &gt; Dome; the panel opens.</li><li>Under Parameters, pick the flat faces to dome and set the Distance (the dome's height).</li><li>Tick Reverse Direction for a dome cut into the face, or Elliptical dome for an elliptical one; pick a point under Constraint Point or Sketch to make the dome rise to it, or an edge or face under Direction to tilt it.</li><li>Click OK.</li></ul>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="deform"><a name="deform"></a>Deform</h3>
+<p>Bends the part smoothly: round a point, from curves to curves, or pushed by a tool body.</p>
+<h3 id="flex"><a name="flex"></a>Flex</h3>
+<p>Bends, twists, tapers or stretches the part between two trim planes.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Insert &gt; Features &gt; Flex; the panel opens.</li><li>Under Flex Input, choose Bending, Twisting, Tapering or Stretching and set its angle, radius, taper factor or distance.</li><li>Under Trim Planes, set where the flex starts and ends: pick a point or face, or type the trim distance from each end of the part.</li><li>Under Triad, choose the Flex axis and turn or move the triad to set the direction of the bend.</li><li>Click OK; the part between the trim planes is bent, twisted, tapered or stretched, and the rest moves with it.</li></ul>
+<p><b>More:</b> <a href="04-features.html#surfaces-direct-editing-and-more">Surfaces, direct editing and more</a>.</p>
+<h3 id="indent"><a name="indent"></a>Indent</h3>
+<p>Presses the shape of a tool body into a target body, with a clearance.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Insert &gt; Features &gt; Indent; the panel opens with this part's body as the target.</li><li>Under Selections, choose Keep Selections or Remove Selections, pick the Tool body that presses into the part, and pick faces of the tool body's regions to keep or remove.</li><li>Under Parameters, set the Thickness of the wall left round the indent and the Clearance; tick Cut to remove only the tool's region.</li><li>Click OK.</li></ul>
+<h3 id="mounting-boss"><a name="mounting-boss"></a>Mounting Boss</h3>
+<p>A boss for a screw or a pin, with fins, on a flat face.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Insert &gt; Fastening Feature &gt; Mounting Boss; the panel opens.</li><li>Under Position, pick the flat face the boss stands on; pick a circular edge or a point for its centre, or leave it empty for the face's centre.</li><li>Under Boss Type, choose Hole (a screw hole down the boss) or Pin (a pin on top).</li><li>Set the boss height, diameter, draft angle and the hole or pin size under Boss.</li><li>Under Fins, set the number of fins (0 for none) and their height, length and thickness, then click OK.</li></ul>
+<h3 id="snap-hook"><a name="snap-hook"></a>Snap Hook</h3>
+<p>A flexible hook with a catch lip, on a flat face.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Insert &gt; Fastening Feature &gt; Snap Hook; the panel opens.</li><li>Under Selections, pick the flat face the hook stands on; pick a point or edge for its position (the face's centre when empty) and an edge or face the lip points along.</li><li>Tick Flip lip to turn the lip the other way.</li><li>Set Total height, Hook thickness and Hook width under Hook Data, and the lip overhang and height under Hook Lip Data, then click OK.</li></ul>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="snap-hook-groove"><a name="snap-hook-groove"></a>Snap Hook Groove</h3>
+<p>Cuts the groove a snap hook catches in, with a gap.</p>
+<p><b>How to use it</b></p>
+<ul><li>Make the snap hook first, in another body.</li><li>Click Insert &gt; Fastening Feature &gt; Snap Hook Groove; the panel opens.</li><li>Under Feature and Body Selection, pick the Snap Hook that catches here.</li><li>Set the Gap under Groove Data; tick Clear the whole hook to cut room for the whole hook, not only its lip.</li><li>Click OK; the groove is cut where the hook meets this body.</li></ul>
+<h3 id="lip-groove"><a name="lip-groove"></a>Lip/Groove</h3>
+<p>A lip or a matching groove along the top of a wall, for parts that close together.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Insert &gt; Fastening Feature &gt; Lip / Groove; the panel opens.</li><li>Under Groove Selection, pick the flat faces on top of the wall that gets the groove; under Lip Selection, pick the matching faces on the other part's wall.</li><li>Under Parameters, choose Lip or Groove and Inside or Outside of the wall.</li><li>Set Width and Height, and the Gap for a groove, then click OK.</li></ul>
+<h3 id="stud-wizard"><a name="stud-wizard"></a>Stud Wizard</h3>
+<p>A threaded stud standing on a flat face.</p>
+<h3 id="cavity"><a name="cavity"></a>Cavity</h3>
+<p>Cuts the shape of another body out of the part, scaled for shrinkage.</p>
+<h3 id="insert-mold-folders"><a name="insert-mold-folders"></a>Insert Mold Folders</h3>
+<p>Adds the Surface Bodies, Cavity, Core and Parting Surface Bodies folders a mould design keeps.</p>
+<h3 id="parting-line"><a name="parting-line"></a>Parting Line</h3>
+<p>Finds the edges where a mould opens, from the draft against the direction of pull.</p>
+<h3 id="shut-off-surfaces"><a name="shut-off-surfaces"></a>Shut-Off Surfaces</h3>
+<p>Patches the holes through the part so the core and cavity meet there.</p>
+<h3 id="parting-surface"><a name="parting-surface"></a>Parting Surface</h3>
+<p>A flange of surface out from the parting line, where the core and cavity meet.</p>
+<p><b>More:</b> <a href="04-features.html#surfaces-direct-editing-and-more">Surfaces, direct editing and more</a>.</p>
+<h3 id="tooling-split"><a name="tooling-split"></a>Tooling Split</h3>
+<p>A block round the part, cut into the core and the cavity.</p>
+<h3 id="core"><a name="core"></a>Core</h3>
+<p>Pulls a side core out of the core or cavity block along a sketch.</p>
+<h3 id="join-1"><a name="join-1"></a>Join</h3>
+<p>Joins other bodies or parts into this part.</p>
+<p><b>More:</b> <a href="02-interface.html#opening-saving-and-exporting">Opening, saving and exporting</a>.</p>
+<h3 id="blend-curve"><a name="blend-curve"></a>Blend Curve</h3>
+<p>A smooth curve joining two edges.</p>
+<h3 id="align-sketch"><a name="align-sketch"></a>Align Sketch</h3>
+<p>Turns the sketch's axes to line up with an edge or the grid.</p>
+<h3 id="align-grid-origin"><a name="align-grid-origin"></a>Align Grid/Origin</h3>
+<p>Moves the sketch's origin to a point and turns its grid along a line; the sketch stays where it is.</p>
+<h3 id="add-tangency-control"><a name="add-tangency-control"></a>Add Tangency Control</h3>
+<p>Adds a tangent handle where you click on the spline.</p>
+<h3 id="add-curvature-control"><a name="add-curvature-control"></a>Add Curvature Control</h3>
+<p>Adds a curvature handle where you click on the spline.</p>
+<h3 id="convert-to-style-spline"><a name="convert-to-style-spline"></a>Convert to Style Spline</h3>
+<p>Changes the picked spline into a Style Spline (its control vertices).</p>
+<h3 id="convert-to-spline"><a name="convert-to-spline"></a>Convert to Spline</h3>
+<p>Changes the picked Style Spline into a spline through points.</p>
+<h3 id="convert-to-generic-spline"><a name="convert-to-generic-spline"></a>Convert to Generic Spline</h3>
+<p>Changes the picked spline into a generic spline: its shape kept, no handles.</p>
+<h3 id="repair-dangling-relations"><a name="repair-dangling-relations"></a>Repair Dangling Relations</h3>
+<p>Re-attaches the sketch's dangling relations to the model edges now in their place.</p>
+<h3 id="equations"><a name="equations"></a>Equations</h3>
+<p>Global variables, equations and dimensions of the part.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Tools &gt; Equations; the Equations, Global Variables, and Dimensions dialog opens.</li><li>Type a name in the Global Variables section and its value or formula.</li><li>Under Equations, click a dimension (or type its name) and type = with a value, a global variable or a formula.</li><li>Click OK; the part rebuilds with the new values, and the equations are listed in the Equations folder of the tree.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#feature-tree">Feature tree</a>.</p>
+<h3 id="design-table"><a name="design-table"></a>Design Table</h3>
+<p>A table of values that drive dimensions (FreeCAD spreadsheet).</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Insert &gt; Tables &gt; Excel Design Table; the panel opens.</li><li>Choose Auto-create and click OK; pick the dimensions the table should drive.</li><li>The table opens with a row per configuration and a column per dimension; type the values, adding a row for each new configuration.</li><li>Close the table; the configurations are made. Double-click Design Table in the ConfigurationManager to change it again.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#feature-tree">Feature tree</a>.</p>
+<h3 id="redraw"><a name="redraw"></a>Redraw</h3>
+<p>Redraws the graphics area.</p>
+<p><b>Shortcut:</b> Ctrl+R.</p>
+<h3 id="edit-material"><a name="edit-material"></a>Edit Material</h3>
+<p>Sets the part's material.</p>
+<h3 id="cosmetic-thread"><a name="cosmetic-thread"></a>Cosmetic Thread</h3>
+<p>Shows a thread on a shaft or hole without modelling it.</p>
+<h3 id="move-face"><a name="move-face"></a>Move Face</h3>
+<p>Offsets, moves or rotates faces of the solid directly.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click Insert &gt; Face &gt; Move; the panel opens.</li><li>Choose Offset (each face moves along its own normal), Translate (all faces move by one distance in one direction) or Rotate (the faces turn about an axis).</li><li>Pick the faces, then set the Distance, or the Axis and Angle for Rotate; tick Reverse direction to go the other way.</li><li>Click OK; the neighbouring faces stretch to follow, and Move Face is added to the tree.</li></ul>
+<h3 id="radiate-surface"><a name="radiate-surface"></a>Radiate Surface</h3>
+<p>Makes a surface running out from planar edges, in their plane.</p>
+<p><b>How to use it</b></p>
+<ul><li>Radiate Parameters: the reference plane (direction), the edges, the distance; Propagate to tangent faces; Flip.</li></ul>
+<h3 id="add-comment"><a name="add-comment"></a>Add Comment</h3>
+<p>Adds a comment to the selected feature.</p>
+<h3 id="feature-paint"><a name="feature-paint"></a>Feature Paint</h3>
+<p>Copies one feature's settings onto other features of the same kind.</p>
+<h3 id="go-to-markup-view"><a name="go-to-markup-view"></a>Go to Markup View</h3>
+<p>Turns the view back to the one the picked markup was drawn in.</p>
+<h3 id="find-modify"><a name="find-modify"></a>Find/Modify</h3>
+<p>Finds the part's sizes by feature type and value, and changes them all at once.</p>
+<p><b>Shortcut:</b> Ctrl+F.</p>
+<h3 id="edit-appearance"><a name="edit-appearance"></a>Edit Appearance</h3>
+<p>Changes the colour and finish of the picked item.</p>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="copy-appearance"><a name="copy-appearance"></a>Copy Appearance</h3>
+<p>Copies the appearance of the picked face, feature or body.</p>
+<p><b>Shortcut:</b> Ctrl+Shift+C.</p>
+<h3 id="paste-appearance"><a name="paste-appearance"></a>Paste Appearance</h3>
+<p>Pastes the copied appearance onto the picked faces, features or bodies.</p>
+<p><b>Shortcut:</b> Ctrl+Shift+V.</p>
+<h3 id="apply-scene"><a name="apply-scene"></a>Apply Scene</h3>
+<p>Chooses the background scene.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to open its list, then pick the command you want.</li></ul>
+<p><b>More:</b> <a href="02-interface.html#in-the-3d-view">In the 3D view</a>.</p>
+<h3 id="change-display-states"><a name="change-display-states"></a>Change Display States</h3>
+<p>Lists the part's display states: activate, add, rename or delete one.</p>
+<h3 id="rollback"><a name="rollback"></a>Rollback</h3>
+<p>Rolls the part back to just before the selected feature; with nothing selected, one feature back.</p>
+<p><b>How to use it</b></p>
+<ul><li>Drag the rollback bar in the FeatureManager design tree up above a feature, or pick a feature and click Edit &gt; Rollback.</li><li>The features below the bar are turned off while you work above them.</li><li>Click Edit &gt; Roll to End (or drag the bar back to the bottom) to bring them all back.</li></ul>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="ok"><a name="ok"></a>OK</h3>
+<p>Accepts the open PropertyManager (its green check).</p>
+<h3 id="cancel"><a name="cancel"></a>Cancel</h3>
+<p>Closes the open PropertyManager without applying it.</p>
+<p><b>More:</b> <a href="04-features.html#editing-and-fixing">Editing and fixing</a>.</p>
+<h3 id="imported-geometry"><a name="imported-geometry"></a>Imported Geometry</h3>
+<p>Brings a body in from a file</p>
+<h3 id="recognize-features"><a name="recognize-features"></a>Recognize Features</h3>
+<p>Finds features on an imported body</p>
+<h3 id="decimate-mesh-body"><a name="decimate-mesh-body"></a>Decimate Mesh Body</h3>
+<p>Takes facets out of a mesh body</p>
+<h3 id="edit-decal"><a name="edit-decal"></a>Edit Decal</h3>
+<p>Puts a picture on a face</p>
+<h3 id="markup-file"><a name="markup-file"></a>Markup File</h3>
+<p>Brings marks in from a markup file</p>
+<h3 id="new-project"><a name="new-project"></a>New Project</h3>
+<p>Starts a flow project on the active body (the fluid region): Elmer solver, flow equation, fluid and mesh.</p>
+<p><b>How to use it</b></p>
+<ul><li>Pick the body that is the fluid region, then click it: a flow project is made with the Elmer solver. Add the fluid, the inlet and outlet conditions and the mesh from this tab.</li></ul>
+<h3 id="display-graphics-components"><a name="display-graphics-components"></a>Display Graphics Components</h3>
+<p>Shows or hides graphics components: SpeedPak and mesh components.</p>
+<p><b>How to use it</b></p>
+<ul><li>Click it to turn it on; click it again to turn it off. The button shows pressed while it is on.</li></ul>
+<h3 id="matexpert"><a name="matexpert"></a>MateXpert</h3>
+<p>Finds the mates that do not hold.</p>
+<h3 id="start-at-point-3"><a name="start-at-point-3"></a>Start at Point</h3>
+<p>Starts a user defined route at a connection point.</p>
+<h3 id="auto-route-3"><a name="auto-route-3"></a>Auto Route</h3>
+<p>Draws the user defined route between connection points.</p>
+<h3 id="insert-connector"><a name="insert-connector"></a>Insert Connector</h3>
+<p>Adds a connector or a clip from the routing library.</p>
+<h3 id="cable-wire-library-wizard"><a name="cable-wire-library-wizard"></a>Cable/Wire Library Wizard</h3>
+<p>The wire specs routes use.</p>
+<h3 id="body-clone"><a name="body-clone"></a>Body Clone</h3>
+<p>Makes a body that copies another body's shape.</p>
+<h3 id="export-points"><a name="export-points"></a>Export Points</h3>
+<p>Saves a point cloud.</p>
+<h3 id="surface-from-sections"><a name="surface-from-sections"></a>Surface from Sections</h3>
+<p>A surface through picked section edges.</p>
+<h3 id="curve-on-mesh"><a name="curve-on-mesh"></a>Curve on Mesh</h3>
+<p>Draws a spline that lies on a mesh.</p>
+<h3 id="material-editor"><a name="material-editor"></a>Material Editor</h3>
+<p>Opens FreeCAD's material library editor.</p>
+<h2 id="propertymanagers"><a name="propertymanagers"></a>PropertyManagers</h2>
+<h3 id="3d-texture"><a name="3d-texture"></a>3D Texture</h3>
+<p>Turns a texture image on a face into displaced geometry (a mesh body).</p>
+<ul><li>Body: the body to texture. Texture Settings: the appearance with the texture, offset distance, maximum element size, refinement; Dynamic Help shows the mesh density.</li></ul>
+<h3 id="add-relations"><a name="add-relations"></a>Add Relations</h3>
+<p>Adds relations between the picked sketch entities.</p>
+<ul><li>Selected Entities: what the relation will relate. Add Relations: only the relations that fit the pick are offered; a click adds one.</li></ul>
+<h3 id="advanced-hole"><a name="advanced-hole"></a>Advanced Hole</h3>
+<p>A hole built from near-side and far-side elements (counterbore, countersink, straight, tap).</p>
+<ul><li>Near Side / Far Side Faces: the faces the hole starts from each side. Elements: add one per step with its type, standard, size and depth; the flyout shows the stack.</li></ul>
+<h3 id="axis"><a name="axis"></a>Axis</h3>
+<p>A reference axis from edges, faces, planes or points.</p>
+<ul><li>Selections: One Line/Edge/Axis, Two Planes, Two Points/Vertices, Cylindrical/Conical Face, Point and Face/Plane.</li></ul>
+<h3 id="boss-extrude"><a name="boss-extrude"></a>Boss-Extrude</h3>
+<p>Extrudes a sketch or selected sketch contours in one or two directions to add material.</p>
+<ul><li>Pick a sketch, a plane, or a flat face. With a plane or face the sketch opens first; close it and the page follows.</li><li>Direction 1: the End Condition (Blind, Through All, Up To Next, Up To Vertex, Up To Surface, Offset From Surface, Up To Body, Mid Plane) and the depth D1. The arrow in the view flips the direction; drag the arrow to change the depth.</li><li>Draft: the angle the walls lean while extruding; Draft outward turns it the other way.</li><li>Direction 2: a second depth the other way, with its own End Condition.</li><li>Thin Feature: a wall of the given thickness along the sketch instead of a filled profile.</li><li>Selected Contours: with more than one closed loop in the sketch, the loops to use.</li><li>Merge result (second feature on): join the new material to the part.</li></ul>
+<h3 id="boundary-boss-base"><a name="boundary-boss-base"></a>Boundary Boss/Base</h3>
+<p>Adds material between profiles in two directions.</p>
+<ul><li>Direction 1 and Direction 2: the curves or sketches in each direction.</li></ul>
+<h3 id="boundary-cut"><a name="boundary-cut"></a>Boundary Cut</h3>
+<p>Removes material between profiles in two directions.</p>
+<ul><li>As Boundary Boss/Base.</li></ul>
+<h3 id="boundary-surface"><a name="boundary-surface"></a>Boundary-Surface</h3>
+<p>A surface between curves in two directions.</p>
+<ul><li>Direction 1 and Direction 2: the curves; the tangency type at each; Options and Preview.</li></ul>
+<h3 id="bounding-box-1"><a name="bounding-box-1"></a>Bounding Box</h3>
+<p>The smallest box round the part, as a reference feature.</p>
+<ul><li>Options: Best fit or Custom plane (pick a face or plane); Include hidden bodies, surfaces. The box's size goes to Custom Properties.</li></ul>
+<h3 id="chamfer-1"><a name="chamfer-1"></a>Chamfer</h3>
+<p>Bevels edges or a vertex with a distance, a distance and angle, or two distances.</p>
+<ul><li>Chamfer Type: Angle Distance, Distance Distance, Vertex, Offset Face, Face Face.</li><li>Items To Chamfer: the edges, faces or vertex; Chamfer Parameters: the distance and angle (Flip direction swaps the sides).</li></ul>
+<h3 id="circular-pattern"><a name="circular-pattern"></a>Circular Pattern</h3>
+<p>Repeats features, faces or bodies round an axis.</p>
+<ul><li>Direction 1: the axis (an edge, a cylindrical face, an axis), Equal spacing over the total angle or a spacing per instance, and the number of instances.</li><li>Symmetric: the same instances the other way; Direction 2 for a second set.</li><li>Instances to Skip: click the instances to leave out.</li></ul>
+<h3 id="combine-1"><a name="combine-1"></a>Combine</h3>
+<p>Combines bodies: Add, Subtract or Common (FreeCAD's Boolean).</p>
+<ul><li>Operation Type: Add, Subtract, Common. Bodies to Combine: the other bodies; the active body is the main one.</li></ul>
+<h3 id="composite-curve"><a name="composite-curve"></a>Composite Curve</h3>
+<p>Joins curves, sketch segments and edges into one curve.</p>
+<ul><li>Entities to Join: the curves, sketches and model edges, end to end.</li></ul>
+<h3 id="coordinate-system-1"><a name="coordinate-system-1"></a>Coordinate System</h3>
+<p>A reference coordinate system.</p>
+<ul><li>Selections: the origin, then the X, Y or Z axis direction; flip each axis.</li></ul>
+<h3 id="curve-driven-pattern"><a name="curve-driven-pattern"></a>Curve Driven Pattern</h3>
+<p>Repeats features along a curve.</p>
+<ul><li>Direction 1: the curve (a sketch, an edge), the number of instances and spacing (or Equal spacing), Curve method (Transform curve / Offset curve), Alignment method (Tangent to curve / Align to seed). Direction 2 for a second curve. Features and Faces / Bodies: what is repeated; Instances to Skip.</li></ul>
+<h3 id="curve-through-reference-points"><a name="curve-through-reference-points"></a>Curve Through Reference Points</h3>
+<p>A curve through sketch points, vertices or reference points.</p>
+<ul><li>Through Points: the points in order; Closed curve joins the ends.</li></ul>
+<h3 id="cut-with-surface"><a name="cut-with-surface"></a>Cut with Surface</h3>
+<p>Cuts the part with a surface or plane.</p>
+<ul><li>Surface Cut Parameters: the surface or plane; the arrow (Flip cut) shows the side removed; Feature Scope for several bodies.</li></ul>
+<h3 id="cut-extrude"><a name="cut-extrude"></a>Cut-Extrude</h3>
+<p>Extrudes a sketch or selected sketch contours to remove material.</p>
+<ul><li>As Boss-Extrude, taking material away. Flip side to cut removes everything outside the profile instead of inside it.</li><li>Feature Scope (several bodies): the bodies the cut applies to, or Auto-select.</li></ul>
+<h3 id="cut-loft"><a name="cut-loft"></a>Cut-Loft</h3>
+<p>Lofts between profiles to remove material.</p>
+<ul><li>As Loft, taking material away.</li></ul>
+<h3 id="cut-revolve"><a name="cut-revolve"></a>Cut-Revolve</h3>
+<p>Revolves a sketch about an axis to remove material.</p>
+<ul><li>As Revolve, taking material away.</li></ul>
+<h3 id="cut-sweep"><a name="cut-sweep"></a>Cut-Sweep</h3>
+<p>Sweeps a profile along a path to remove material.</p>
+<ul><li>As Sweep, taking material away.</li></ul>
+<h3 id="delete-face"><a name="delete-face"></a>Delete Face</h3>
+<p>Deletes faces of the part: leave it open, patch the gap, or fill it.</p>
+<ul><li>Selections: the faces. Options: Delete, Delete and Patch, Delete and Fill (Tangent fill).</li></ul>
+<h3 id="delete-hole"><a name="delete-hole"></a>Delete Hole</h3>
+<p>Removes a hole from a surface body by deleting its inner loop.</p>
+<ul><li>Pick the edge of the hole on a surface; the surface is untrimmed across it.</li></ul>
+<h3 id="display-delete-relations"><a name="display-delete-relations"></a>Display/Delete Relations</h3>
+<p>Lists the relations of the sketch so you can check, suppress or delete them.</p>
+<ul><li>Relations: the filter picks which relations are listed (all in this sketch, dangling, over-defining, external, selected entities...). A click on a relation shows its entities in pink; Suppressed keeps it without solving it.</li><li>Undo last relation change takes back the newest relation step; Delete removes the picked relation, Delete All every listed one.</li><li>Entities: what the picked relation relates and where it is defined. Pick an entity in the graphics area and Replace puts it in the place of the one picked in the table.</li></ul>
+<h3 id="draft"><a name="draft"></a>Draft</h3>
+<p>Tapers faces by an angle for mould release.</p>
+<ul><li>Type of Draft: Neutral Plane, Parting Line, Step Draft. Draft Angle, the Neutral Plane (the face or plane that stays) and the Faces to Draft; Reverse Direction flips the taper.</li></ul>
+<h3 id="edit-sketch-1"><a name="edit-sketch-1"></a>Edit Sketch</h3>
+<p>Starts a sketch on a plane or a flat face.</p>
+<ul><li>Click one of the three planes shown in the view, a reference plane, or a flat face of the part; the sketch opens looking straight at it. Esc leaves without a sketch.</li></ul>
+<h3 id="extend-surface"><a name="extend-surface"></a>Extend Surface</h3>
+<p>Extends a surface at its edges.</p>
+<ul><li>Edges/Faces to Extend; End Condition: Distance, Up to point, Up to surface; Extension Type: Same surface or Linear.</li></ul>
+<h3 id="face-fillet"><a name="face-fillet"></a>Face Fillet</h3>
+<p>A fillet between two sets of faces that need not share an edge.</p>
+<ul><li>Face Set 1 and Face Set 2; Fillet Parameters: the radius or Hold line (a width defined by an edge), Curvature continuous, Constant width; Help point when the fillet is ambiguous.</li></ul>
+<h3 id="fill-pattern"><a name="fill-pattern"></a>Fill Pattern</h3>
+<p>Fills a face or sketch region with instances.</p>
+<ul><li>Fill Boundary: the face or sketch region. Pattern Layout: Perforation, Circular, Square or Polygon with its spacing, margins and angle. Features and Faces / Seed Cut: the seed, or a generated circle, square, diamond or polygon with its size.</li></ul>
+<h3 id="filled-surface"><a name="filled-surface"></a>Filled Surface</h3>
+<p>A surface patch that fills a boundary of edges or curves.</p>
+<ul><li>Patch Boundary: the edges, sketch segments or curves; Edge settings: Contact, Tangent or Curvature to the faces round them; Constraint Curves; Options: Fix up boundary, Merge result, Try to form solid, Reverse surface.</li></ul>
+<h3 id="fillet"><a name="fillet"></a>Fillet</h3>
+<p>Rounds edges or faces with a constant, variable, face or full round fillet.</p>
+<ul><li>Fillet Type: Constant Size, Variable Size, Face Fillet, Full Round Fillet.</li><li>Items To Fillet: edges, faces, features or loops; Tangent propagation follows the edge round tangent neighbours.</li><li>Fillet Parameters: the radius (symmetric or asymmetric); Multiple radius fillet gives each edge its own value.</li><li>Setback Parameters and Fillet Options: how fillets meet at a vertex, Keep features, overflow.</li></ul>
+<h3 id="full-round-fillet"><a name="full-round-fillet"></a>Full Round Fillet</h3>
+<p>A fillet that replaces a middle face with a tangent round.</p>
+<ul><li>Face Set 1 (a side), Center Face Set (the face removed), Face Set 2 (the other side).</li></ul>
+<h3 id="grid-system"><a name="grid-system"></a>Grid System</h3>
+<p>A grid of reference planes and sketches for a structure.</p>
+<ul><li>Draw the grid sketch; Levels: the height of each level, how many; Grid Components: the balloon labels. Finishes with a folder of levels and grid planes.</li></ul>
+<h3 id="gusset"><a name="gusset"></a>Gusset</h3>
+<p>A triangular or polygonal web between two faces.</p>
+<ul><li>Selections: the two faces (or a corner). Profile: the distances along each face or a polygonal profile; Thickness: one or both sides; Location: where along the corner; Fillet the corners.</li></ul>
+<h3 id="helix-boss"><a name="helix-boss"></a>Helix Boss</h3>
+<p>Sweeps a profile sketch along a helix to add material (FreeCAD's Additive Helix).</p>
+<ul><li>Pick the profile sketch, or a plane / flat face to sketch it on. Helix Parameters: the axis, pitch (or height and turns), angle, left or right hand; Reverse flips the direction.</li></ul>
+<h3 id="helix-cut"><a name="helix-cut"></a>Helix Cut</h3>
+<p>Sweeps a profile along a helix to remove material.</p>
+<ul><li>As Helix Boss, taking material away.</li></ul>
+<h3 id="helix-spiral"><a name="helix-spiral"></a>Helix/Spiral</h3>
+<p>A helix or spiral curve from a circle sketch.</p>
+<ul><li>Pick a circle sketch. Defined By: Pitch and Revolution, Height and Revolution, Height and Pitch, or Spiral. Parameters: Constant or Variable pitch, the values, Reverse direction, Start angle, Clockwise / Counterclockwise, Taper Helix.</li></ul>
+<h3 id="hole-specification"><a name="hole-specification"></a>Hole Specification</h3>
+<p>The Hole Wizard: a standard hole, counterbore, countersink, tap, pipe tap or slot.</p>
+<ul><li>Type tab: the hole type, Standard, Type and Size, the End Condition and the Options (near and far side countersinks, cosmetic thread). Favorites keep a set of choices.</li><li>Positions tab: the face the holes go on, then one click per hole; the sketch closes with the feature. With a sketch of points picked first, OK makes the holes on them.</li><li>Edit Feature on a hole opens the same page with its values.</li></ul>
+<h3 id="insert-component"><a name="insert-component"></a>Insert Component</h3>
+<p>Inserts a part or assembly into the assembly.</p>
+<ul><li>Part/Assembly to Insert: Browse or pick an open document; click in the view to place it (the first component is fixed at the origin). Options: Start command when creating new assembly, Graphics preview, Make virtual, Envelope.</li></ul>
+<h3 id="intersect"><a name="intersect"></a>Intersect</h3>
+<p>Intersects solids, surfaces and planes to make new bodies.</p>
+<ul><li>Selections: the bodies, surfaces and planes; Create intersecting regions / internal regions / both; Regions to Exclude; Merge result; Consume surfaces.</li></ul>
+<h3 id="line-properties"><a name="line-properties"></a>Line Properties</h3>
+<p>The properties of the picked line.</p>
+<ul><li>Existing Relations: the line's relations and its state (under, fully or over defined).</li><li>Add Relations: Horizontal, Vertical or Fix for one line.</li><li>Options: For construction, Infinite length (the line runs on past both ends).</li><li>Parameters: the length and angle; Additional Parameters: the coordinates of both ends and Delta X / Delta Y.</li></ul>
+<h3 id="linear-pattern"><a name="linear-pattern"></a>Linear Pattern</h3>
+<p>Repeats features, faces or bodies along one or two directions.</p>
+<ul><li>Direction 1: an edge, axis or dimension, the spacing (or the total length with Up to reference) and the number of instances.</li><li>Direction 2: a second direction; Pattern seed only repeats the seed, not Direction 1.</li><li>Features and Faces / Bodies: what is repeated.</li><li>Instances to Skip: click the instances in the view to leave out. Instances to Vary: increments per instance.</li></ul>
+<h3 id="loft"><a name="loft"></a>Loft</h3>
+<p>Lofts between two or more profiles to add material.</p>
+<ul><li>Profiles: the sketches or faces to loft through, in order. Click them near the same corner so the loft does not twist.</li><li>Start/End Constraints: how the loft leaves the first profile and meets the last.</li><li>Guide Curves and Centerline Parameters: curves that shape the loft between profiles.</li><li>Options: Close loft, Ruled surface, Merge result.</li><li>Thin Feature: a wall of the given thickness.</li></ul>
+<h3 id="markup"><a name="markup"></a>Markup</h3>
+<p>Draws ink and notes over the model view.</p>
+<ul><li>Draw with the pen, pick a colour and width, erase; the markup is kept with the view.</li></ul>
+<h3 id="mid-surface"><a name="mid-surface"></a>Mid-Surface</h3>
+<p>A surface midway between pairs of faces.</p>
+<ul><li>Face Pairs: Find Face Pairs at a recognition threshold, or pick each pair; Position (0 to 100 per cent between the faces); Knit surfaces.</li></ul>
+<h3 id="mirror-1"><a name="mirror-1"></a>Mirror</h3>
+<p>Mirrors features, faces or bodies about a plane or a flat face.</p>
+<ul><li>Mirror Face/Plane: the plane or flat face. Features to Mirror / Faces to Mirror / Bodies to Mirror: what is mirrored. Merge solids joins a mirrored body to the original.</li></ul>
+<h3 id="pattern"><a name="pattern"></a>Pattern</h3>
+<p>A combined pattern of several transformations (FreeCAD's MultiTransform).</p>
+<ul><li>Transformations: add a Mirrored, Linear, Polar or Scaled step; each has its own values. Features: what is patterned.</li></ul>
+<h3 id="planar-surface"><a name="planar-surface"></a>Planar Surface</h3>
+<p>A flat surface from a closed sketch or a set of coplanar edges.</p>
+<ul><li>Bounding Entities: a closed sketch, a planar set of edges or a planar curve.</li></ul>
+<h3 id="plane"><a name="plane"></a>Plane</h3>
+<p>A reference plane from up to three references.</p>
+<ul><li>First, Second, Third Reference: a face, plane, edge, axis, vertex or sketch point; each shows its constraints (Parallel, Perpendicular, Coincident, Distance, Angle, Mid Plane). Flip offset puts the plane on the other side.</li></ul>
+<h3 id="point-1"><a name="point-1"></a>Point</h3>
+<p>A reference point.</p>
+<ul><li>Selections: Arc Center, Center of Face, Intersection, Projection, On point, Along curve distance or multiple reference point.</li></ul>
+<h3 id="projected-curve"><a name="projected-curve"></a>Projected Curve</h3>
+<p>Projects a sketch onto a face, or intersects two sketches' projections.</p>
+<ul><li>Projection Type: Sketch on faces (the sketch and the faces) or Sketch on sketch (two sketches on different planes). Reverse projection flips the direction; Bi-directional.</li></ul>
+<h3 id="properties"><a name="properties"></a>Properties</h3>
+<p>The properties of the picked sketch geometry.</p>
+<ul><li>Existing Relations lists the relations of what is picked and whether it is under, fully or over defined; right-click one to delete it.</li><li>Add Relations offers only the relations that fit the pick; a click adds one.</li><li>Options: For construction turns the geometry into construction geometry.</li><li>Parameters: type exact values for the picked geometry.</li></ul>
+<h3 id="radiate-surface-1"><a name="radiate-surface-1"></a>Radiate Surface</h3>
+<p>A surface that radiates from edges parallel to a plane.</p>
+<ul><li>Radiate Parameters: the reference plane (direction), the edges, the distance; Propagate to tangent faces; Flip.</li></ul>
+<h3 id="replace-face"><a name="replace-face"></a>Replace Face</h3>
+<p>Replaces faces of the part with a surface.</p>
+<ul><li>Replace Parameters: Target faces for replacement, then the Replacement surface(s).</li></ul>
+<h3 id="revolve"><a name="revolve"></a>Revolve</h3>
+<p>Revolves a sketch about an axis to add material.</p>
+<ul><li>Axis of Revolution: a sketch line, a centerline, an edge or an axis.</li><li>Direction 1: Blind with the angle, Up To Vertex / Surface, Mid Plane, or Two Directions.</li><li>Thin Feature: a wall instead of a filled profile.</li></ul>
+<h3 id="rib"><a name="rib"></a>Rib</h3>
+<p>Adds a thin wall from an open sketch line to the part.</p>
+<ul><li>Parameters: thickness on one or both sides of the sketch line, the extrusion direction (parallel or normal to the sketch), Flip material side, Draft.</li></ul>
+<h3 id="ruled-surface"><a name="ruled-surface"></a>Ruled Surface</h3>
+<p>A ruled surface from edges, in a chosen direction.</p>
+<ul><li>Type: Tangent to Surface, Normal to Surface, Tapered to Vector, Perpendicular to Vector, Sweep. Distance/Direction: the distance, the vector, the angle; Edge Selection: the edges; Alternate Side, Trim and knit, Connecting surface.</li></ul>
+<h3 id="scale-2"><a name="scale-2"></a>Scale</h3>
+<p>Scales the part about its centroid, the origin or a coordinate system.</p>
+<ul><li>Scale Parameters: Scale about, Uniform scaling (one factor) or X, Y, Z factors.</li></ul>
+<h3 id="shell"><a name="shell"></a>Shell</h3>
+<p>Hollows the part, leaving walls of the given thickness; removed faces open it.</p>
+<ul><li>Parameters: the thickness; Faces to Remove: the faces that are opened; Shell outward adds the walls outside. Multi-thickness Settings: faces with their own thickness.</li></ul>
+<h3 id="sketch"><a name="sketch"></a>Sketch</h3>
+<p>The sketch being edited.</p>
+<ul><li>Draw with the Sketch tab tools; add relations and Smart Dimensions until the sketch turns black (fully defined). Exit Sketch (the corner check) keeps it; the cross discards changes.</li></ul>
+<h3 id="sketch-driven-pattern"><a name="sketch-driven-pattern"></a>Sketch Driven Pattern</h3>
+<p>Repeats features at the points of a sketch.</p>
+<ul><li>Selections: the point sketch; Reference point: Centroid or Selected point of the seed. Features and Faces / Bodies: what is repeated.</li></ul>
+<h3 id="slicing"><a name="slicing"></a>Slicing</h3>
+<p>Section sketches of the model at evenly spaced planes.</p>
+<ul><li>Slicing Plane: a plane or flat face to start from; Reverse direction. Slicing Parameters: the number of slices and the spacing. Options: one 3D sketch, or a 2D sketch per slice.</li></ul>
+<h3 id="split-line"><a name="split-line"></a>Split Line</h3>
+<p>Splits faces with a projected sketch, a silhouette or an intersection.</p>
+<ul><li>Type of Split: Silhouette (a direction and the faces), Projection (a sketch and the faces to split; Single direction, Reverse direction), Intersection (a plane or surface and the faces).</li></ul>
+<h3 id="surface-extrude"><a name="surface-extrude"></a>Surface-Extrude</h3>
+<p>Extrudes a sketch as a surface.</p>
+<ul><li>Direction 1: End Condition and depth; Direction 2; Cap ends when the profile is closed.</li></ul>
+<h3 id="surface-knit"><a name="surface-knit"></a>Surface-Knit</h3>
+<p>Joins surfaces into one surface body, or a solid when closed.</p>
+<ul><li>Selections: the surfaces and faces; Create solid when the result is closed; Merge entities; Gap Control: the gaps to close.</li></ul>
+<h3 id="surface-loft"><a name="surface-loft"></a>Surface-Loft</h3>
+<p>Lofts between profiles as a surface.</p>
+<ul><li>Profiles in order; Start/End Constraints; Guide Curves; Centerline Parameters; Options.</li></ul>
+<h3 id="surface-offset"><a name="surface-offset"></a>Surface-Offset</h3>
+<p>A surface offset from faces by a distance.</p>
+<ul><li>Offset Parameters: the faces or surfaces and the distance; Flip Offset Direction; a distance of 0 copies the faces.</li></ul>
+<h3 id="surface-revolve"><a name="surface-revolve"></a>Surface-Revolve</h3>
+<p>Revolves a sketch as a surface.</p>
+<ul><li>Axis of Revolution; Direction 1: the angle.</li></ul>
+<h3 id="surface-sweep"><a name="surface-sweep"></a>Surface-Sweep</h3>
+<p>Sweeps a profile along a path as a surface.</p>
+<ul><li>Profile and Path; Guide Curves; Options (orientation, twist); Start and End Tangency.</li></ul>
+<h3 id="sweep"><a name="sweep"></a>Sweep</h3>
+<p>Sweeps a profile along a path to add material.</p>
+<ul><li>Profile and Path: the profile sketch (or a circle made on the path), then the path.</li><li>Guide Curves: curves the profile follows as it sweeps.</li><li>Options: profile orientation and twist; Merge result.</li><li>Start and End Tangency: how the sweep leaves and arrives.</li><li>Thin Feature: a wall of the given thickness.</li></ul>
+<h3 id="table-driven-pattern"><a name="table-driven-pattern"></a>Table Driven Pattern</h3>
+<p>Repeats features at X-Y positions from a table.</p>
+<ul><li>Coordinate system: the origin of the table; Points: the X, Y of each instance (Browse to load, Save to keep). Geometry pattern; Features / Bodies to Copy.</li></ul>
+<h3 id="thicken"><a name="thicken"></a>Thicken</h3>
+<p>Turns a surface into a solid of the given thickness.</p>
+<ul><li>Thicken Parameters: the surface, the side (Side 1, Both sides, Side 2), the thickness; Merge result; Create solid from enclosed volume when the surface is closed.</li></ul>
+<h3 id="thickened-cut"><a name="thickened-cut"></a>Thickened Cut</h3>
+<p>Removes a thickened surface from the part.</p>
+<ul><li>As Thicken, cutting material; Feature Scope.</li></ul>
+<h3 id="thread"><a name="thread"></a>Thread</h3>
+<p>A cosmetic or cut thread on a cylindrical edge.</p>
+<ul><li>Thread Location: the circular edge, the start offset. Specification: type, size, pitch; Thread method: Cut thread or Extrude thread; right or left hand.</li></ul>
+<h3 id="trim-surface"><a name="trim-surface"></a>Trim Surface</h3>
+<p>Trims a surface with a sketch, plane or another surface.</p>
+<ul><li>Trim Type: Standard (a trim tool, then Keep or Remove selections) or Mutual (the surfaces trim each other). Surface Split Options: Split all, Natural, Linear.</li></ul>
+<h3 id="untrim-surface"><a name="untrim-surface"></a>Untrim Surface</h3>
+<p>Puts back the trimmed-away part of a face.</p>
+<ul><li>Selections: the faces or edges; Untrim the whole face or Extend edges; Merge with original.</li></ul>
+<h3 id="variable-pattern"><a name="variable-pattern"></a>Variable Pattern</h3>
+<p>Repeats a feature with dimensions that change per instance.</p>
+<ul><li>Features to Pattern: the feature. Create Pattern Table: a row per instance, a column per dimension; type the values, Update Preview to see them. Instances to Skip.</li></ul>
+<h3 id="variable-size-fillet"><a name="variable-size-fillet"></a>Variable Size Fillet</h3>
+<p>A fillet whose radius changes along the edge.</p>
+<ul><li>Items To Fillet: the edges; Variable Radius Parameters: a radius at each control point (click the callouts in the view), Set All / Set Unassigned, the transition (Smooth or Straight); add control points along the edge with the instances count.</li></ul>
+<h3 id="wrap"><a name="wrap"></a>Wrap</h3>
+<p>Wraps a sketch onto a face as embossed, debossed or scribed material.</p>
+<ul><li>Wrap Type: Emboss, Deboss, Scribe. Wrap Method: Analytical or Spline Surface. Wrap Parameters: the sketch, the face, the thickness; Reverse direction.</li></ul>
+</body></html>

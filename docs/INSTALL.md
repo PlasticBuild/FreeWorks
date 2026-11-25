@@ -4,11 +4,21 @@ Use stock FreeCAD **1.1.4**. This alpha was tested on Windows. macOS and Linux a
 
 ## Addon Manager
 
-Use the manual installation steps below for this alpha.
+FreeWorks is not in the official Addon Manager list yet, so add this repository as a custom repository first.
+
+1. In FreeCAD, open **Edit > Preferences > Addon Manager**.
+2. Under **Custom repositories**, add the URL `https://github.com/PlasticBuild/FreeWorks` with the branch `main`, then press OK.
+3. Open **Tools > Addon Manager**, find **FreeWorks**, and choose **Install**.
+4. Restart FreeCAD.
+
+## Install from source
+
+Clone the repository into your user `Mod` folder as `FreeWorks`, for example
+`git clone https://github.com/PlasticBuild/FreeWorks.git "%APPDATA%\FreeCAD\Mod\FreeWorks"` on Windows. Run `git pull` in that folder to update, with FreeCAD closed. See [Install from source](../README.md#install-from-source) for more detail.
 
 ## Manual install
 
-1. Download **FreeWorks-0.3.3-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.3-alpha).
+1. Download **FreeWorks-0.3.3-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.3-alpha). The zip is built from the tagged source in this repository.
 2. Close FreeCAD. Extract the add-on into your user `Mod` folder as `FreeWorks`. Check that `InitGui.py` sits directly inside `Mod/FreeWorks`.
 3. Restart FreeCAD.
 

@@ -1,0 +1,5 @@
+# Left out of the release zip (git archive). The Addon Manager and a git clone still get them.
+.github/            export-ignore
+.gitattributes      export-ignore
+docs/images/        export-ignore
+docs/*.pdf          export-ignore
