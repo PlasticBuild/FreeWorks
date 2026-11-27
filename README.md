@@ -45,6 +45,8 @@ Orca, Bambu, PrusaSlicer, and Diotopo are optional in-app downloads. Each is dow
 
 The add-on ships its alpha icon set in `swstyle/resources/icons`: a light set (`png/`, `fc/`) and a dark set (`dark/`). It picks the set that matches FreeCAD's theme. These icons were made with AI tools for this alpha and are styled after the commercial-CAD look this add-on follows. A command that has no icon in the set uses the add-on's drawn icon (`swstyle/resources/icons-drawn`), then FreeCAD's own icon, then a tile with its initials.
 
+The package also includes the ANSI and ISO drawing sheet formats (`swstyle/sheetformats`), the 3D Slicer tab pictures, which were drawn for this add-on (`swstyle/resources/slicer`), and the environment pictures (`swstyle/resources/environments`). The environment pictures are made from Poly Haven CC0 HDRIs; see the LICENSE.txt in that folder. The tip pictures are not included yet.
+
 To use icons of your own instead, set the `IconRoot` preference (Tools > Edit parameters > Preferences/Mod/FreeWorks) or the `SWSTYLE_ICONS` environment variable to a folder with the same layout, and restart FreeCAD.
 
 ## Repository layout
