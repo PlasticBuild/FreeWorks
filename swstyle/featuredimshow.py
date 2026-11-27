@@ -25,6 +25,7 @@ def _fw_log(site, err):
         return
 
 import math
+import time  # pkg443
 
 import re
 
@@ -266,9 +267,9 @@ class _Shown:
         self.root = None
         self.view = None
 
-    def show(self, feature):
+    def show(self, feature, own=False):
         self.hide()
-        dims = dims_of(feature)
+        dims = own_dims(feature) if own else dims_of(feature)     # pkg443: own = the feature's own (depth) only
         if not dims:
             return []
         try:
@@ -300,6 +301,7 @@ class _Shown:
             root.addChild(sep)
         graph.addChild(root)
         self.feature, self.dims, self.root, self.view = feature.Name, dims, root, view
+        self.own = own
         return dims
 
     def hide(self):
@@ -315,7 +317,7 @@ class _Shown:
         doc = App.ActiveDocument
         name = self.feature
         if name and doc is not None and doc.getObject(name) is not None:
-            self.show(doc.getObject(name))
+            self.show(doc.getObject(name), getattr(self, "own", False))
 
 
 SHOWN = _Shown()
@@ -542,6 +544,9 @@ def _handle(obj, event):
     except Exception as _fw_err:
         _fw_log("featuredimshow.py:513", _fw_err)
     d = dim_at(view, x, y, ratio, dims)
+    if d is not None and _PICKED["ours"] and time.monotonic() - _PICKED["at"] < \
+            QtWidgets.QApplication.doubleClickInterval() / 1000.0 + 0.15:
+        return True    # pkg443: the first click of this double-click put the dimensions up; a face double-click
     if d is not None:
         QtCore.QTimer.singleShot(0, lambda: modify(d))
         return True
@@ -692,6 +697,71 @@ class _Watch:
         hide()
 
 
+
+
+# picked in the FeatureManager tree shows its own dimension (the depth, shot 14; its sketch's
+# dimensions are Instant3D's handles). Another pick, or nothing picked, takes them away again; the
+# dimensions a double-click showed stay until a click in empty space or Esc, as before.
+_PICKED = {"key": None, "ours": False, "at": 0.0}
+
+
+def _instant3d_on():
+    try:
+        from . import instant3d
+        return instant3d.enabled()
+    except Exception:
+        return False
+
+
+def _pick_changed():
+    try:
+        if not enabled() or not _instant3d_on() or App.ActiveDocument is None or _busy():
+            key = None
+            target = None
+        else:
+            sel = Gui.Selection.getSelectionEx()
+            target = None
+            if len(sel) == 1:
+                obj = sel[0].Object
+                subs = [s for s in sel[0].SubElementNames if s]
+                leaf = subs[0].split(".")[-1] if len(subs) == 1 else ""
+                if len(subs) == 1 and leaf.startswith("Face"):
+                    feature = feature_of(obj, leaf)
+                    if feature is not None and feature.TypeId != SKETCH:
+                        target = (feature, False)
+                elif not subs and obj.isDerivedFrom("PartDesign::Feature") and obj.TypeId not in (SKETCH, "PartDesign::Body"):
+                    target = (obj, True)
+            key = (target[0].Document.Name, target[0].Name, target[1]) if target else None
+        if key == _PICKED["key"]:
+            return
+        _PICKED["key"] = key
+        if target is None:
+            if _PICKED["ours"]:
+                _PICKED["ours"] = False
+                hide()
+            return
+        if SHOWN.root is not None and not _PICKED["ours"]:
+            hide()
+        _PICKED["ours"] = bool(SHOWN.show(target[0], own=target[1]))
+        _PICKED["at"] = time.monotonic()
+    except Exception as _fw_err:
+        _fw_log("featuredimshow.py:pick", _fw_err)
+
+
+class _PickWatch:
+    def addSelection(self, *a):
+        QtCore.QTimer.singleShot(0, _pick_changed)
+
+    def removeSelection(self, *a):
+        QtCore.QTimer.singleShot(0, _pick_changed)
+
+    def setSelection(self, *a):
+        QtCore.QTimer.singleShot(0, _pick_changed)
+
+    def clearSelection(self, *a):
+        QtCore.QTimer.singleShot(0, _pick_changed)
+
+
 _watch = []
 
 
@@ -699,6 +769,11 @@ def install():
     if _watch:
         return
     _watch.append(_Watch())
+    try:
+        _watch.append(_PickWatch())
+        Gui.Selection.addObserver(_watch[-1])        # pkg443: a pick shows the feature's dimensions (Instant3D)
+    except Exception as _fw_err:
+        _fw_log("featuredimshow.py:pickwatch", _fw_err)
     App.addDocumentObserver(_watch[0])
     events.register("featuredimshow", (QtCore.QEvent.MouseButtonDblClick, QtCore.QEvent.MouseButtonPress,
                                        QtCore.QEvent.KeyPress), _handle)

@@ -436,6 +436,28 @@ def miter_plane(e1, e2, tol=1e-3):
     raise RuntimeError("End Miter: the members' paths do not meet at a common end.")
 
 
+def _path_ends(body):
+    """The two ends of a member's path, or None (a body that is not a member)."""
+    try:
+        from . import wetrim
+        base = wetrim.base_of(body)
+        return wetrim.line_of(base) if base is not None else None
+    except Exception:
+        return None
+
+
+def _keep_point(cog, ends, p, n):
+    """A point on the side of the cutting plane (p, n) that the trim keeps. The member's centre of mass moves
+    when Trim/Extend lengthens a short member past the plane (it can end up beyond it, and the trim kept the
+    wrong piece); the end of the path farther from the plane stays on the kept side."""
+    if ends is not None:
+        a, b = ends
+        da, db = abs((a - p).dot(n)), abs((b - p).dot(n))
+        if abs(da - db) > 1e-6:
+            return a if da > db else b
+    return cog
+
+
 class TrimmedProfile:
     def __init__(self, obj):
         add = obj.addProperty
@@ -465,6 +487,7 @@ class TrimmedProfile:
         cog = shape.Solids[0].CenterOfMass if shape.Solids else shape.BoundBox.Center
         size = 4 * shape.BoundBox.DiagonalLength + 100.0
         result = shape
+        ends = _path_ends(body)
         if obj.TrimmedProfileType == "End Miter":
             mine = _edge(body)
             for other, _subs in obj.TrimmingBoundary or []:
@@ -475,7 +498,7 @@ class TrimmedProfile:
                 if plane is None:
                     continue
                 p, n = plane
-                if (cog - p).dot(n) > 0:
+                if (_keep_point(cog, ends, p, n) - p).dot(n) > 0:
                     n = -n
                 result = result.cut(_half_space(p, n, size))
         elif obj.CutType == "Simple fit":
@@ -490,7 +513,7 @@ class TrimmedProfile:
                         continue
                     face = faces[0]
                     p, n = face.CenterOfMass, face.normalAt(0, 0)
-                    if (cog - p).dot(n) > 0:
+                    if (_keep_point(cog, ends, p, n) - p).dot(n) > 0:
                         n = -n
                     result = result.cut(_half_space(p, n, size))
         else:                       # Perfect fit: cut to the other bodies' shape, keep this body's side

@@ -102,6 +102,14 @@ def _symbol(p, type_, u):
     elif type_ == "SW_Collinear":
         line(1.5, 14.5, 6.5, 9.5)
         line(9.5, 6.5, 14.5, 1.5)
+    elif type_ == "SW_EqualCurvature":
+
+        p.drawArc(QtCore.QRectF(2 * u, 2.5 * u, 9 * u, 9 * u), 90 * 16, 90 * 16)
+        path = QtGui.QPainterPath(QtCore.QPointF(6.5 * u, 2.5 * u))
+        path.cubicTo(QtCore.QPointF(10 * u, 2.5 * u), QtCore.QPointF(12.5 * u, 4 * u), QtCore.QPointF(14.5 * u, 7.5 * u))
+        p.drawPath(path)
+        line(5, 10.5, 12, 10.5)
+        line(5, 13.5, 12, 13.5)
     elif type_ == "SW_Patterned":
         for x, y in ((2.5, 9.5), (6, 6), (9.5, 2.5)):
             p.drawRect(QtCore.QRectF(x * u, y * u, 4 * u, 4 * u))
@@ -786,6 +794,11 @@ def paint(view, sketch, yellow, red):
         paint_symmetric(view, sketch)
     except Exception as _fw_err:
         _fw_log("fwsketch/glyphs.py:symmetric", _fw_err)
+    try:            # dimdisp-1127: Display As Linear / Foreshorten reshape FreeCAD's radius and diameter labels
+        from .. import dimdisplay
+        dimdisplay.paint(view, sketch)
+    except Exception as _fw_err:
+        _fw_log("fwsketch/glyphs.py:dimdisplay", _fw_err)
     if not yellow and not red:
         return painted
     trace.note("glyphs paint %s %s" % (list(yellow), list(red)))

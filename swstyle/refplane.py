@@ -89,6 +89,10 @@ OFFERED = {
 }
 
 
+
+START_MESSAGE = "Select references and constraints"
+
+
 class PlaneError(Exception):
     pass
 
@@ -236,6 +240,7 @@ class Ref:
         self.count = 1
         self.flip_normal = False
         self.on_curve = False       # Normal to curve through a point: Set origin on curve
+        self.along_normal = False   # Tangent to a curved face at a sketch point: Project along sketch normal
         self.screen = None          # Parallel to Screen: the view's rotation (a quaternion) when picked
 
     def support(self):
@@ -253,6 +258,18 @@ def _point_on_line(refs):
         line = next(r for r in refs if r.kind == "line")
         point = next(r for r in refs if r.kind == "point")
         return shape_of(*line.support()).distToShape(Part.Vertex(_point_of(*point.support())))[0] < 1e-6
+    except Exception:
+        return False
+
+
+def _line_in_plane(refs):
+    """True when the edge or axis lies in the plane or face (an edge and the face it bounds)."""
+    try:
+        line = next(r for r in refs if r.kind == "line")
+        flat = next(r for r in refs if r.kind == "plane")
+        p, d = _line_of(*line.support())
+        o, n = _plane_of(*flat.support())
+        return abs(d.dot(n)) < 1e-7 and abs((p - o).dot(n)) < 1e-6
     except Exception:
         return False
 
@@ -276,6 +293,8 @@ def defaults(refs, distance=10.0, angle=45.0):
         guess = {"point": "Coincident"}
     if tuple(kinds) == ("line", "point") and _point_on_line(refs):
         guess = {"line": "Perpendicular", "point": "Coincident"}     # a line and its own point: normal to it
+    if tuple(kinds) == ("line", "plane") and _line_in_plane(refs):
+        guess = {"line": "Coincident", "plane": "Perpendicular"}     # an edge and its own face: square to the face
     for r in refs:
         if r.kind in guess:
             r.constraint = guess[r.kind]
@@ -331,7 +350,7 @@ def _recipe(refs):
     """The attachment for these references and constraints, else PlaneError with what is missing."""
     picked = [r for r in refs if r.kind]
     if not picked:
-        raise PlaneError("Select references and constraints.")
+        raise PlaneError(START_MESSAGE)
     # a point's Project falls on the other references the way Coincident does here
     combo = sorted((r.kind, "Coincident" if r.constraint == "Project" else r.constraint) for r in picked)
     if combo == [("point", "ParallelScreen")]:
@@ -467,12 +486,18 @@ def _recipe(refs):
     if combo == [("cylinder", "Tangent"), ("point", "Coincident")]:
         face = next(r for r in picked if r.kind == "cylinder")
         point = next(r for r in picked if r.kind == "point")
+        if face.along_normal and _sketch_point(point):
+
+            # normal (FreeCAD's tangent plane takes the nearest location: the other option)
+            return Recipe([face.support(), point.support()], "TangentPlane",
+                          make_offset=lambda base: [_along_normal(face, point, base)])
         return Recipe([face.support(), point.support()], "TangentPlane")
     if combo == [("cylinder", "Tangent")]:
 
         face = picked[0]
-        shape = shape_of(face.obj, face.sub).Faces[0]
-        names = ["Vertex%d" % (i + 1) for i, v in enumerate(face.obj.Shape.Vertexes)
+        whole = face.obj.Shape          # one shape read: a component (App::Link) makes a new one each time (asmax-fix01)
+        shape = whole.getElement(face.sub).Faces[0] if face.sub else shape_of(face.obj, face.sub).Faces[0]
+        names = ["Vertex%d" % (i + 1) for i, v in enumerate(whole.Vertexes)
                  if any(v.isSame(w) for w in shape.Vertexes)]
         if not names:
             raise PlaneError("Select another reference to define the plane.")
@@ -489,6 +514,8 @@ def _recipe(refs):
         return lines
     if len(picked) == 1 and picked[0].kind == "point":
         raise PlaneError("Select two more points, or an edge or a plane, to define the plane.")
+    if len(picked) == 1 and picked[0].kind == "line":
+        raise PlaneError(START_MESSAGE)
     if len(picked) == 1:
         raise PlaneError("Select another reference to define the plane.")
     raise PlaneError("These references and constraints do not define a plane. Change a constraint or a reference.")
@@ -555,6 +582,34 @@ def _two_lines(picked, combo):
             want = want.multiply(App.Placement(App.Vector(), App.Rotation(App.Vector(1, 0, 0), 180)))
             break
     return Recipe([holder.support()], "NormalToEdge", make_offset=lambda base: [base.inverse().multiply(want)])
+
+
+def _sketch_point(ref):
+    ""
+    return ref is not None and ref.kind == "point" and getattr(ref.obj, "TypeId", "") == "Sketcher::SketchObject"
+
+
+def _along_normal(face, point, base):
+    """The tangent plane where the line through the sketch point along the sketch's normal meets the
+    face, as an offset from FreeCAD's tangent-plane frame (at the nearest location)."""
+    import Part
+    shape = shape_of(face.obj, face.sub).Faces[0]
+    p = _point_of(*point.support())
+    n = point.obj.Placement.Rotation.multVec(App.Vector(0, 0, 1))
+    reach = shape.BoundBox.DiagonalLength + (p - shape.BoundBox.Center).Length + 1.0
+    line = Part.makeLine(p - n * reach, p + n * reach)
+    dist, pairs, _info = shape.distToShape(line)
+    if dist > 1e-6 or not pairs:
+        raise PlaneError("The sketch normal through the point does not meet the face: "
+                         "pick Project onto nearest location on surface.")
+    q = min((App.Vector(a) for a, _b in pairs), key=lambda v: (v - p).Length)
+    u, v = shape.Surface.parameter(q)
+    normal = shape.normalAt(u, v)
+    z = base.Rotation.multVec(App.Vector(0, 0, 1))
+    if normal.dot(z) < 0:
+        normal = normal * -1
+    rot = App.Rotation(z, normal).multiply(base.Rotation)
+    return base.inverse().multiply(App.Placement(q, rot))
 
 
 def _tangent_place(face, flat, base):
@@ -702,6 +757,16 @@ class _RefBox(QtWidgets.QWidget):
         self.on_curve.setObjectName("SWPlaneOriginOnCurve%d" % (index + 1))
         lay.addWidget(self.on_curve)
         self.on_curve.toggled.connect(lambda on: panel.set_on_curve(self.index, on))
+
+        self.nearest = QtWidgets.QRadioButton("Project onto nearest location on surface", self)
+        self.nearest.setObjectName("SWPlaneProjectNearest%d" % (index + 1))
+        self.along = QtWidgets.QRadioButton("Project along sketch normal", self)
+        self.along.setObjectName("SWPlaneProjectNormal%d" % (index + 1))
+        self.nearest.setChecked(True)
+        for w in (self.nearest, self.along):
+            lay.addWidget(w)
+            w.setVisible(False)
+        self.along.toggled.connect(lambda on: panel.set_along_normal(self.index, on))
         self.flip_normal.toggled.connect(lambda on: panel.set_flip_normal(self.index, on))
         self._k = 1.0
         self.value.valueChanged.connect(lambda v: panel.set_value(self.index, v * self._k))
@@ -747,6 +812,14 @@ class _RefBox(QtWidgets.QWidget):
         self.flip_normal.setChecked(ref.flip_normal if ref is not None else self.panel.flip_pending)
         self.flip_normal.blockSignals(False)
         point_too = any(r is not None and r.kind == "point" for r in self.panel.refs)
+        projecting = bool(tangent and any(_sketch_point(r) for r in self.panel.refs))
+        for w in (self.nearest, self.along):
+            w.setVisible(projecting)
+        if ref is not None:
+            for w, on in ((self.nearest, not ref.along_normal), (self.along, ref.along_normal)):
+                w.blockSignals(True)
+                w.setChecked(on)
+                w.blockSignals(False)
         curve = ref is not None and ref.kind in ("curve", "line") and ref.constraint == "Perpendicular"
         self.on_curve.setVisible(bool(curve and point_too))
         if ref is not None:
@@ -985,6 +1058,12 @@ class PlanePanel:
         elif index == 0:
             self.flip_pending = on
 
+    def set_along_normal(self, index, on):
+        r = self.refs[index]
+        if r is not None:
+            r.along_normal = on
+            self.update(keep=True)
+
     def set_on_curve(self, index, on):
         r = self.refs[index]
         if r is not None:
@@ -1044,7 +1123,7 @@ class PlanePanel:
             self._planes(0)
             self.doc.recompute()
             self.message.setText(str(error))
-            self.message.setStyleSheet("" if not refs else _error_css())
+            self.message.setStyleSheet("" if not refs or str(error) == START_MESSAGE else _error_css())
             self.ok = False
         self._show()
         try:
@@ -1137,7 +1216,67 @@ def remember(plane, refs, index=0):
         plane.setEditorMode("Constraints", 1)
     plane.Constraints = json.dumps({"index": index, "refs": [
         {"constraint": r.constraint, "value": r.value, "flip": r.flip, "count": r.count,
-         "flip_normal": r.flip_normal, "on_curve": r.on_curve, "screen": r.screen} for r in refs]})
+         "flip_normal": r.flip_normal, "on_curve": r.on_curve, "screen": r.screen,
+         "along_normal": r.along_normal} for r in refs]})
+    _keep_dims(plane, refs)
+
+
+
+# configurations and design tables drive. Each reference with a value keeps it in a property of its
+# own, SWPlaneD1, SWPlaneD2 (refdims-fix01); the kept references read it back, so a value an equation
+# or a configuration writes moves the plane at the next rebuild. (The plane's Length and Width are only
+
+DIM_TYPES = {"Distance": "App::PropertyLength", "Angle": "App::PropertyAngle"}
+
+
+def _valued(data):
+    return [item for item in data.get("refs", []) if item.get("constraint") in DIM_TYPES]
+
+
+def _keep_dims(plane, refs):
+    valued = [r for r in refs if r.constraint in DIM_TYPES]
+    for n, r in enumerate(valued, 1):
+        prop = "SWPlaneD%d" % n
+        if prop in plane.PropertiesList and plane.getTypeIdOfProperty(prop) != DIM_TYPES[r.constraint]:
+            try:
+                plane.setExpression(prop, None)
+            except Exception as _fw_err:
+                _fw_log("refplane.py:dims", _fw_err)
+            plane.removeProperty(prop)
+        if prop not in plane.PropertiesList:
+            plane.addProperty(DIM_TYPES[r.constraint], prop, KEEP, "Dimension D%d of the plane" % n)
+        driven = any(path.lstrip(".") == prop for path, _e in plane.ExpressionEngine)
+        if not driven and abs(getattr(plane, prop).Value - r.value) > 1e-9:
+            setattr(plane, prop, r.value)
+    n = len(valued) + 1
+    while "SWPlaneD%d" % n in plane.PropertiesList:
+        try:
+            plane.setExpression("SWPlaneD%d" % n, None)
+        except Exception as _fw_err:
+            _fw_log("refplane.py:dims", _fw_err)
+        plane.removeProperty("SWPlaneD%d" % n)
+        n += 1
+
+
+def plane_dims(plane, make=True):
+    """["SWPlaneD1", ...]: the plane's dimensions (made for a plane kept before refdims-fix01 when make)."""
+    import json
+    if plane.TypeId != "PartDesign::Plane" or "Constraints" not in plane.PropertiesList or not plane.Constraints:
+        return []
+    try:
+        valued = _valued(json.loads(plane.Constraints))
+    except Exception:
+        return []
+    out = []
+    for n, item in enumerate(valued, 1):
+        prop = "SWPlaneD%d" % n
+        if prop not in plane.PropertiesList:
+            if not make:
+                break
+            plane.addProperty(DIM_TYPES[item["constraint"]], prop, KEEP, "Dimension D%d of the plane" % n)
+            setattr(plane, prop, float(item.get("value", 0.0)))
+        out.append(prop)
+    return out
 
 
 def kept_refs(plane):
@@ -1157,8 +1296,16 @@ def kept_refs(plane):
         r.flip, r.count = bool(item.get("flip")), int(item.get("count", 1))
         r.flip_normal = bool(item.get("flip_normal"))
         r.on_curve = bool(item.get("on_curve", True))   # planes kept before 149 sat on the curve
+        r.along_normal = bool(item.get("along_normal", False))
         r.screen = tuple(item["screen"]) if item.get("screen") else None
         refs.append(r)
+    valued = [r for r in refs if r.constraint in DIM_TYPES]
+    for n, r in enumerate(valued, 1):       # D1, D2 as an equation or a configuration set them
+        prop = "SWPlaneD%d" % n
+        if prop in plane.PropertiesList and plane.getTypeIdOfProperty(prop) == DIM_TYPES[r.constraint]:
+            v = getattr(plane, prop).Value
+            if v > 0:
+                r.value = float(v)
     return refs, int(data.get("index", 0))
 
 
@@ -1184,9 +1331,13 @@ def follow(doc):
                     changed = True
                 continue
             if rec.make_offset is None:
-                continue
-            base = plane.Placement.multiply(plane.AttachmentOffset.inverse())
-            offsets = rec.make_offset(base)
+                # a plain offset (Offset distance): kept as typed, unless D1 drives it (refdims-fix01)
+                if not rec.offsets or "SWPlaneD1" not in plane.PropertiesList:
+                    continue
+                offsets = rec.offsets
+            else:
+                base = plane.Placement.multiply(plane.AttachmentOffset.inverse())
+                offsets = rec.make_offset(base)
             if index >= len(offsets):
                 continue
             new = offsets[index]
@@ -1250,6 +1401,10 @@ def register():
     if _observer is None:
         _observer = _Follow()
         App.addDocumentObserver(_observer)
+    try:
+        from . import refnest       # notes the feature pages' selection observers from start-up (nesting)
+    except Exception as _fw_err:
+        _fw_log("refplane.py:refnest", _fw_err)
     try:
         if COMMAND not in Gui.listCommands():
             Gui.addCommand(COMMAND, PlaneCommand())

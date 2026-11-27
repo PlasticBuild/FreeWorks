@@ -72,7 +72,7 @@ class Opener:
             return self.built[key]
         tree = self.trees.get(key) or next((t for k, t in self.trees.items() if k == key.lower()), None)
         if tree is None:
-            raise RuntimeError("SolidWorks gave no tree for %s" % os.path.basename(path))
+            raise RuntimeError("No feature tree came back for %s" % os.path.basename(path))
         base = os.path.splitext(os.path.basename(path))[0]
         if top:
             if doc is None:
@@ -331,7 +331,7 @@ class Opener:
             return "%s mates are not made in FreeCAD yet" % row["type"].title()
         ents = row["entities"][:2]
         if len(ents) != 2:
-            return "SolidWorks gave %d sides for it" % len(ents)
+            return "The other CAD program gave %d sides for it" % len(ents)
         refs, why = self._refs(links, dict(row, entities=ents), kind)
         if refs is None:
             return why
@@ -375,7 +375,7 @@ class Opener:
             return None if joint is not None else why
         if kind == "SYMMETRIC":
             if len(refs) < 3:
-                return "SolidWorks gave %d sides for it" % len(refs)
+                return "The other CAD program gave %d sides for it" % len(refs)
             k = _symmetry_plane(ents)
             plane = refs[k]
             others = [r for i, r in enumerate(refs[:3]) if i != k]
@@ -383,7 +383,7 @@ class Opener:
             return None
         if kind == "WIDTH":
             if len(refs) < 4:
-                return "SolidWorks gave %d sides for it" % len(refs)
+                return "The other CAD program gave %d sides for it" % len(refs)
             width, tab = _width_pairs(ents, refs)
             ac.make_width(asm, width, tab, mode="centered")
             return None
@@ -464,7 +464,7 @@ class Opener:
             if best is None:
                 best = got
             asmfeature_delete(asm, feat)
-        return "its cut does not take away what SolidWorks' does (FreeCAD %.1f mm3, SolidWorks %.1f mm3)" % (best or 0, want)
+        return "its cut does not take away what the original does (FreeCAD %.1f mm3, original %.1f mm3)" % (best or 0, want)
 
 
 def asmfeature_delete(asm, feat):
@@ -631,7 +631,7 @@ def _circular(seed, pool, n, step, named):
 
 
 def open_assembly(path, doc=None, read_tree_api=None):
-    res = swapp.run("asm-tree", [os.path.abspath(path)], "Reading the assembly from SolidWorks...", timeout=1800)
+    res = swapp.run("asm-tree", [os.path.abspath(path)], "Reading the assembly...", timeout=1800)
     op = Opener(res, read_tree_api)
     asm = op.build(path, doc)
     c = op.counts
@@ -866,7 +866,7 @@ class Spec:
             elif kind == "mirror":
                 row.update(point=list(d.get("point", [0, 0, 0])), normal=list(d.get("normal", [1, 0, 0])))
             if d.get("skip"):
-                self.notes.append("%s: skipped instances are not saved yet (SolidWorks makes them all)" % feat.Label)
+                self.notes.append("%s: skipped instances are not saved yet (the saved file has them all)" % feat.Label)
             out.append(row)
         return out
 
@@ -924,7 +924,7 @@ def export_assembly(asm, path):
             shutil.copyfile(spec, os.path.abspath(path) + ".spec.json")
         save._backup(path)
         res = swapp.run("save-asm2", [spec, os.path.abspath(path)],
-                        "SolidWorks is saving %s..." % os.path.basename(path), timeout=3600)
+                        "Saving %s..." % os.path.basename(path), timeout=3600)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     notes = list(sp.notes) + list(res.get("notes", []))
@@ -936,7 +936,7 @@ def export_assembly(asm, path):
         notes += ["%s %s: %s" % (where, f["name"], f.get("why") or "; ".join(f.get("tried", [])) or "not made")
                   for f in rep.get("features", []) if not f.get("ok")]
     made = sum(1 for m in res.get("mates", []) if m.get("ok"))
-    msg("SolidWorks wrote %s (%d components, %d subassemblies, %d of %d mates, %d patterns, %d folders, %d features)" % (
+    msg("Saved %s (%d components, %d subassemblies, %d of %d mates, %d patterns, %d folders, %d features)" % (
         path, len(res.get("components", [])), len(res.get("subassemblies", [])), made, len(res.get("mates", [])),
         sum(1 for p in res.get("patterns", []) if p.get("ok")), sum(1 for f in res.get("folders", []) if f.get("ok")),
         sum(1 for f in res.get("features", []) if f.get("ok"))))

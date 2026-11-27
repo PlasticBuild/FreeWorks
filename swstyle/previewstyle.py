@@ -10,6 +10,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -151,13 +152,13 @@ class _SketchOnTop:
         sketch = doc.getObject(sketch_name) if doc is not None else None
         try:
             edit = gdoc.getInEdit()
-            if sketch is None or edit is None or edit.Object.Name != key[1]:
+            if sketch is None or edit is None or getattr(editobj.of(edit), "Name", None) != key[1]:
                 return
-            node = _overlay(sketch, edit.Object)
+            node = _overlay(sketch, editobj.of(edit))
             if node is None:
                 return
             # Inside the feature's own node, after its preview, so it is drawn last
-            graph = edit.Object.ViewObject.RootNode
+            graph = editobj.of(edit).ViewObject.RootNode
             graph.addChild(node)
             self.shown[key] = (graph, node)
         except Exception as error:

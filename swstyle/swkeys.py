@@ -19,6 +19,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -712,8 +713,15 @@ class RedrawCommand(_Command):
     MENU, TIP = "Redraw", "Draws the graphics area again (Ctrl+R)"
 
     def Activated(self):
+        view = getattr(Gui.ActiveDocument, "ActiveView", None)
+        if view is not None and not hasattr(view, "redraw") and hasattr(view, "getPage"):
+            try:
+                Gui.runCommand("TechDraw_RedrawPage", 0)
+                return
+            except Exception as _fw_err:
+                _fw_log("swkeys.py:redrawsheet", _fw_err)
         try:
-            Gui.ActiveDocument.ActiveView.redraw()
+            view.redraw()
         except Exception:
             Gui.updateGui()
 
@@ -954,7 +962,7 @@ def _radial_picks():
     out = []
     try:
         edit = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument else None
-        sk = edit.Object if edit is not None and getattr(edit.Object, "TypeId", "") == "Sketcher::SketchObject" else None
+        sk = editobj.of(edit) if edit is not None and getattr(editobj.of(edit), "TypeId", "") == "Sketcher::SketchObject" else None
     except Exception:
         sk = None
     for e in Gui.Selection.getSelectionEx():
@@ -1017,7 +1025,7 @@ def _dimension_picks():
     out = []
     try:
         edit = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument else None
-        sk = edit.Object if edit is not None and getattr(edit.Object, "TypeId", "") == "Sketcher::SketchObject" else None
+        sk = editobj.of(edit) if edit is not None and getattr(editobj.of(edit), "TypeId", "") == "Sketcher::SketchObject" else None
     except Exception:
         sk = None
     if sk is None:
@@ -1099,6 +1107,11 @@ COMMANDS = (
 def register():
     for name, cls in COMMANDS:
         Gui.addCommand(name, cls())
+    try:
+        from . import filterkeys        # filterkeys-1126: Tab, Shift+Tab, Ctrl+Shift+Tab, D, A as commands
+        filterkeys.register()
+    except Exception as _fw_err:
+        _fw_log("swkeys.py:filterkeys register", _fw_err)
 
 
 # keyed commands of other files that may sit in no FreeCAD menu or toolbar
@@ -1137,7 +1150,13 @@ def drop_copies(widget=None):
     if widget is None:
         return []
     owners = {}
-    for name, key in keys.KEYS:
+    try:
+        from . import customizedlg      # Customize > Keyboard's keys win over the defaults (rcmenus 11-26)
+        moved = customizedlg.key_overrides()
+    except Exception as _fw_err:
+        _fw_log("swkeys.py:drop-overrides", _fw_err)
+        moved = {}
+    for name, key in list((n, k) for n, k in keys.KEYS if n not in moved) + list(moved.items()):
         if not key:
             continue
         try:
@@ -1171,9 +1190,38 @@ def drop_sequences(widget=None):
             continue
         first = QtGui.QKeySequence(seq[0]).toString()
         if first in singles:
+            if action.objectName():
+                DROPPED.setdefault(action.objectName(), seq.toString())      # kbpage-1126: put back at style off
             action.setShortcut(QtGui.QKeySequence())
             cleared.append(action.objectName() or action.text())
     return cleared
+
+
+# kbpage-1126: {command name: FreeCAD's two-key sequence} that drop_sequences took off (Std_ViewFitAll's V, F...)
+DROPPED = {}
+
+
+def restore_sequences():
+    """kbpage-1126: the style is turned off: FreeCAD's own two-key sequences come back on their commands
+    (they were taken off the actions only, so nothing else would give them back before a restart)."""
+    back = []
+    for name, seq in list(DROPPED.items()):
+        try:
+            command = Gui.Command.get(name)
+            actions = [a for a in command.getAction() if isinstance(a, QtGui.QAction)] if command is not None else []
+        except Exception:
+            actions = []
+        for a in actions[:1]:
+            if a.shortcut().isEmpty():
+                a.setShortcut(QtGui.QKeySequence(seq))
+                back.append(name)
+    DROPPED.clear()
+    try:
+        from . import swmenus
+        swmenus._actions_seen = -1      # turned on again: the menu bar takes them off again
+    except Exception as _fw_err:
+        _fw_log("swkeys.py:restore-sequences", _fw_err)
+    return back
 
 
 # --------------------------------------------------------------------------- Tab in the 3D view
@@ -1318,9 +1366,14 @@ class HoverKeys(QtCore.QObject):
         if t not in (QtCore.QEvent.KeyPress, QtCore.QEvent.ShortcutOverride):
             return False
         key = event.key()
+        mods = event.modifiers() & (Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier)
+        try:        # filterkeys-1126: the keys Customize > Keyboard gave Hide/Show the Hovered-over...
+            from . import filterkeys
+            key, mods = filterkeys.logical(key, mods)
+        except Exception as _fw_err:
+            _fw_log("swkeys.py:filterkeys", _fw_err)
         if key not in (Qt.Key_Tab, Qt.Key_Backtab):
             return False
-        mods = event.modifiers() & (Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier)
         if mods & Qt.AltModifier:
             return False
         if mods & Qt.ControlModifier and not mods & Qt.ShiftModifier and key == Qt.Key_Tab:

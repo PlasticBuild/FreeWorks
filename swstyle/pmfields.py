@@ -15,6 +15,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -187,6 +188,35 @@ CUT_ITEMS = ["Blind", "Through All", "Through All - Both", "Up To Next", "Up To 
 BOSS_ITEMS = CUT_ITEMS
 FIRST_ITEMS = ["Blind", "Up To Vertex", "Up To Surface", "Offset From Surface", "Up To Body", MID_PLANE]
 # FreeCAD's own mode for each (its list as the look words it)
+ENGLISH_MODES = ("Blind", "Through All", "Up To Next", "Up To Surface", "Up To Body")
+
+
+def native_name(combo, index=None, last="Up To Body"):
+    """FreeCAD's Type list entry as its English name in any UI language: the list keeps one order
+    (Blind, Through All, Up To Next, Up To Surface, then Up To Body, or Two Directions for a revolve)."""
+    i = combo.currentIndex() if index is None else index
+    if i < 0 or i >= combo.count():
+        return ""
+    text = combo.itemText(i)
+    names = ENGLISH_MODES[:4] + (last,)
+    if i >= len(names) or any(combo.itemText(k) in names for k in range(combo.count())):
+        return text      # an English list (or an entry past the known ones): as it stands
+    return names[i]
+
+
+def native_index(combo, name, last="Up To Body"):
+    """The entry of FreeCAD's Type list that has this English name, in any UI language."""
+    names = ENGLISH_MODES[:4] + (last,)
+    for i in range(combo.count()):
+        if combo.itemText(i) == name:
+            return i
+    if any(combo.itemText(k) in names for k in range(combo.count())):
+        return -1
+    if name in names and names.index(name) < combo.count():
+        return names.index(name)
+    return -1
+
+
 FREECAD_MODE = {"Blind": "Blind", "Through All": "Through All", "Through All - Both": "Through All",
                 "Up To Next": "Up To Next", "Up To Vertex": "Up To Surface", "Up To Surface": "Up To Surface",
                 "Offset From Surface": "Up To Surface", "Up To Body": "Up To Body", MID_PLANE: "Blind"}
@@ -197,7 +227,7 @@ def _edited():
     try:
         import FreeCADGui as Gui
         vp = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument is not None else None
-        return vp.Object if vp is not None else None
+        return editobj.of(vp) if vp is not None else None
     except Exception:
         return None
 
@@ -600,11 +630,11 @@ class ExtrudeFields(QtCore.QObject):
             wanted = FIRST_ITEMS
         else:
             wanted = BOSS_ITEMS
-        have = [self.mode.itemText(i) for i in range(self.mode.count())]
+        have = [native_name(self.mode, i) for i in range(self.mode.count())]
         return [item for item in wanted if FREECAD_MODE[item] in have]
 
     def current(self):
-        text = self.mode.currentText()
+        text = native_name(self.mode)
         symmetric = self.sides.currentIndex() == SYMMETRIC
         if symmetric and text == "Blind":
             return MID_PLANE
@@ -648,7 +678,7 @@ class ExtrudeFields(QtCore.QObject):
             for widget in (self.offset, self.offset_label):
                 if widget is not None and _alive(widget):
                     widget.setVisible(show_offset)
-        if self.mode.currentText() == "Blind" and not symmetric:
+        if native_name(self.mode) == "Blind" and not symmetric:
             view = self.mode.window()
             for kind, name in ((QtWidgets.QAbstractSpinBox, "lengthEdit"), (QtWidgets.QLabel, "labelLength")):
                 widget = view.findChild(kind, name)
@@ -663,7 +693,7 @@ class ExtrudeFields(QtCore.QObject):
             side2.sync()
 
     def _set_mode(self, text):
-        index = self.mode.findText(text)
+        index = native_index(self.mode, text)
         if index >= 0 and index != self.mode.currentIndex():
             self.mode.setCurrentIndex(index)
 
@@ -705,7 +735,7 @@ class ExtrudeFields(QtCore.QObject):
         at the next face, set through the PM's own fields so OK keeps it."""
         try:
             obj = self.obj
-            if obj is None or not _alive(self.mode) or self.mode.currentText() != "Up To Next":
+            if obj is None or not _alive(self.mode) or native_name(self.mode) != "Up To Next":
                 return
             if "Invalid" not in obj.State or "No faces found" not in obj.getStatusString():
                 return
@@ -764,7 +794,7 @@ class ExtrudeFields(QtCore.QObject):
         # FreeCAD's "Select Face" pick puts up a gate that lets only faces through: take it down
         # (after FreeCAD has put it up). A Python gate is no use: FreeCAD 1.1 calls it without
         # the GIL during preselection and crashes.
-        QtCore.QTimer.singleShot(300, self._vertex_gate)
+        from . import safe_later as _sl; _sl.later(300, self._vertex_gate, self, "end")
 
     def _vertex_gate(self):
         if not self.watching or not _alive(self.end):
@@ -974,7 +1004,8 @@ class ExtrudeFields(QtCore.QObject):
             holder = obj.BaseFeature or holder
         obj.UpToFace = (holder, ["" if plane else element])
         if self.face_line is not None and _alive(self.face_line):
-            self.face_line.setText(holder.Label + ("" if plane else ":" + element))
+            from . import pmboxes
+            self.face_line.setText(pmboxes.sw_name(holder.Label + ("" if plane else ":" + element)))
             self.face_line.setProperty("FeatureName", holder.Name)
             self.face_line.setProperty("FaceName", "" if plane else element)
         self.face_active = False
@@ -1007,11 +1038,7 @@ class ExtrudeFields(QtCore.QObject):
         if not shown:
             self.face_active = False
             return
-        ref = getattr(self.obj, "UpToFace", None) if self.obj is not None else None
-        text = ""
-        if ref and ref[0] is not None:
-            subs = ref[1] if isinstance(ref[1], (list, tuple)) else [ref[1]]
-            text = ref[0].Label + (":" + subs[0] if subs and subs[0] else "")
+        text = _ref_text(getattr(self.obj, "UpToFace", None) if self.obj is not None else None)
         if [box.item(i).text() for i in range(box.count())] != ([text] if text else []):
             box.clear()
             if text:
@@ -1071,9 +1098,18 @@ def _face_ref(obj, name, sub):
 
 
 def _ref_text(ref):
+    ""
+
+
     if ref and ref[0] is not None:
         subs = ref[1] if isinstance(ref[1], (list, tuple)) else [ref[1]]
-        return ref[0].Label + (":" + subs[0] if subs and subs[0] else "")
+        sub = subs[0] if subs and subs[0] else ""
+        if not sub and str(getattr(ref[0], "Name", "")).startswith(VERTEX_PLANE):
+            support = getattr(ref[0], "AttachmentSupport", None) or []
+            names = [n for _o, ns in support for n in (ns if isinstance(ns, (list, tuple)) else [ns]) if n]
+            if names and names[0].startswith("Vertex"):
+                return names[0]
+        return sub.split(".")[-1] if sub else ref[0].Label
     return ""
 
 
@@ -1483,11 +1519,11 @@ class Side2Fields(QtCore.QObject):
 
     def items(self):
         wanted = FIRST_ITEMS2 if (self.owner.first and not self.owner.cut) else ITEMS2
-        have = [self.mode.itemText(i) for i in range(self.mode.count())]
+        have = [native_name(self.mode, i) for i in range(self.mode.count())]
         return [item for item in wanted if FREECAD_MODE[item] in have]
 
     def current(self):
-        text = self.mode.currentText()
+        text = native_name(self.mode)
         if text != "Up To Surface":
             return text
         if self.choice in self.FACE_ITEMS:
@@ -1499,7 +1535,7 @@ class Side2Fields(QtCore.QObject):
         return "Up To Surface"
 
     def _set_mode(self, text):
-        index = self.mode.findText(text)
+        index = native_index(self.mode, text)
         if index >= 0 and index != self.mode.currentIndex():
             self.mode.setCurrentIndex(index)
 

@@ -181,19 +181,46 @@ def _cover_start(mw):
     w.setGeometry(mw.rect())
     w.show()
     w.raise_()
+    # coverfix-1127: the panel alone did not hide the stock window (screen frames on the PC: FreeCAD's own menus,
+    # toolbars and Model pane showed for about 1 s with the panel on top in Qt's stack; the 3D view's GL surface
+    # takes the window's composition). The whole window stays fully see-through until the add-on's window is in place.
+    try:
+        mw.setWindowOpacity(0.0)
+        _cover["opacity"] = True
+    except Exception as _fw_err:
+        _show_window()          # coverfix-1127-v2: never left see-through
+        _fw_log("startup.py:cover-opacity", _fw_err)
     f = _CoverFilter(mw)
     mw.installEventFilter(f)
     _cover.update(widget=w, filter=f, covered=time.time())
     QtCore.QTimer.singleShot(COVER_LIMIT_MS, _uncover)
 
 
+def _show_window():
+    """coverfix-1127-v2: the main window fully shown, whatever state the cover is in."""
+    try:
+        mw = Gui.getMainWindow()
+        if mw is not None:
+            mw.setWindowOpacity(1.0)
+    except Exception as _fw_err:
+        _fw_log("startup.py:show-window", _fw_err)
+
+
 def _uncover():
     import time
+    _show_window()      # coverfix-1127-v2: unconditional, also when the cover is already gone (the 20 s fallback)
     w, f = _cover["widget"], _cover["filter"]
     _cover["widget"] = _cover["filter"] = None
     if w is None:
         return
     _cover["uncovered"] = time.time()
+    if _cover.pop("opacity", False):        # coverfix-1127: the window shows again, all at once
+        try:
+            mw = w.parentWidget()
+            if mw is not None:
+                mw.setWindowOpacity(1.0)
+        except Exception as _fw_err:
+            _fw_log("startup.py:uncover-opacity", _fw_err)
     try:
         mw = w.parentWidget()
         if mw is not None and f is not None:
@@ -239,7 +266,33 @@ def _start_when_ready():
         if _cover["widget"] is not None:
             import time
             _cover["built"] = time.time()
-            QtCore.QTimer.singleShot(COVER_MS, _uncover)
+            QtCore.QTimer.singleShot(COVER_MS, _uncover_when_placed)
+
+
+COVER_PLACED_LIMIT = 6.0     # coverfix-1127: s after the shell is built at most, then uncovered anyway
+
+
+def _uncover_when_placed():
+    """coverfix-1127: uncovered once the add-on's title row is on screen (the PC showed a bare 3D view for a
+    moment when the cover went a fixed 250 ms after the build), then COVER_MS more for its placing passes."""
+    import time
+    if _cover["widget"] is None:
+        return
+    placed = False
+    try:
+        from . import shell
+        s = getattr(shell, "_shell", None)
+        top = getattr(s, "topbar", None) if s is not None else None
+        placed = top is not None and top.isVisible() and top.width() > 0
+        if s is None or not getattr(s, "enabled", True):
+            placed = True        # the look is off or failed: nothing to wait for
+    except Exception as _fw_err:
+        _fw_log("startup.py:uncover-placed", _fw_err)
+        placed = True
+    if placed or time.time() - _cover.get("built", 0.0) > COVER_PLACED_LIMIT:
+        QtCore.QTimer.singleShot(COVER_MS, _uncover)
+    else:
+        QtCore.QTimer.singleShot(50, _uncover_when_placed)
 
 
 REQUEST_FILE = "swstyle-theme.request"
@@ -273,8 +326,38 @@ def theme_request():
     return match[0]
 
 
+FEM_WARM_TYPES = ("Fem::FemMeshObject", "Fem::FemMeshObjectPython", "Fem::FemMeshShapeObject",
+                  "Fem::FemMeshShapeBaseObjectPython", "Fem::FemMeshShapeNetgenObject")
+
+
+def _warm_fem_first():
+    """femwarm-1127: one of each FEM mesh object (with its view provider) made and dropped before anything of the
+    add-on starts. Once the add-on is up, FreeCAD 1.1 refuses every FEM mesh object for the rest of the session
+    ("Cannot add static property"): New Study, Fatigue and Drop Test made studies with no mesh (PC modal132,
+    simtypes132, walk132). addintabs.warm_fem_meshes ran too late for that (after the event loop started) and in a
+    hidden document, which makes no view provider. A mesh object made this early keeps it working all session."""
+    doc = None
+    try:
+        doc = App.newDocument("FwWarmFem", "FwWarmFem", False, True)       # visible (view providers), temporary
+        for t in FEM_WARM_TYPES:
+            try:
+                o = doc.addObject(t, "Warm")
+                doc.removeObject(o.Name)
+            except Exception as _fw_err:
+                _fw_log("startup.py:femwarm %s" % t, _fw_err)
+    except Exception as _fw_err:
+        _fw_log("startup.py:femwarm", _fw_err)
+    finally:
+        if doc is not None:
+            try:
+                App.closeDocument(doc.Name)
+            except Exception as _fw_err:
+                _fw_log("startup.py:femwarm close", _fw_err)
+
+
 def init():
     global _poll, _manipulator
+    _warm_fem_first()       # femwarm-1127: before anything else of the add-on
     try:
         # first: observers and Python-owned Qt objects go before FreeCAD shuts down (exit crashes, review 1119)
         from . import teardown
@@ -343,6 +426,12 @@ def init():
         msgicons.install()
     except Exception as error:
         App.Console.PrintWarning("FreeCAD: message box pictures: %s\n" % error)
+    try:
+        # every dialog fits its screen with its buttons on it (1080p at 200 %, 1366 x 768): fh246
+        from . import screenfit
+        screenfit.install()
+    except Exception as error:
+        App.Console.PrintWarning("FreeCAD: screen fit: %s\n" % error)
     params = paths.params()
     Gui.addCommand("SWStyle_Toggle", ToggleCommand())
     try:
@@ -351,6 +440,11 @@ def init():
         multibody.install()
         from . import memtrim             # extapps/63: shape caches let go of a part when it closes
         memtrim.install()
+        try:
+            from . import winreap         # winreap-1127: a closed window a newer one replaced is freed
+            winreap.install()
+        except Exception as _wr_err:
+            App.Console.PrintLog("FreeCAD: winreap not added: %s\n" % _wr_err)
         from . import surfacebodies       # the Surface Bodies folder
         surfacebodies.install()
     except Exception as error:
@@ -578,6 +672,18 @@ def init():
     except Exception as error:
         App.Console.PrintWarning("FreeCAD: matte faces not set: %s\n" % error)
     try:
+        # model edges keep their weight at 150 % / 200 % screen scaling (edgescale.py)
+        from . import edgescale
+        edgescale.install()
+    except Exception as error:
+        App.Console.PrintWarning("FreeCAD: edge width scaling not set: %s\n" % error)
+    try:
+        # a conflicting relation no longer turns the whole sketch yellow (sketchconflict.py)
+        from . import sketchconflict
+        sketchconflict.install()
+    except Exception as error:
+        App.Console.PrintWarning("FreeCAD: sketch conflict colours not set: %s\n" % error)
+    try:
         # Tools > Evaluate > Import Diagnostics: faulty faces and gaps of an imported body, healed
         from . import importdiag
         importdiag.install()
@@ -678,6 +784,11 @@ def init():
 
         from . import filletpm
         filletpm.install()
+        try:
+            from . import feedbackpill      # feedbackpill-1127: Donate | Feedback button, bottom right
+            feedbackpill.install()
+        except Exception as error:
+            App.Console.PrintLog("FreeCAD: feedback button: %s\n" % error)
         from . import extrudepm
         extrudepm.startup()
         from . import pmtakeover
@@ -847,6 +958,12 @@ def init():
     except Exception as error:
         App.Console.PrintWarning("FreeCAD: drawing tables not added: %s\n" % error)
     try:
+        # a drawing view made from a saved section view shows the model cut (secdrawview.py)
+        from . import secdrawview
+        secdrawview.install()
+    except Exception as error:
+        App.Console.PrintWarning("FreeCAD: section in drawing views not set: %s\n" % error)
+    try:
 
         from . import replaceface
         replaceface.register()
@@ -854,10 +971,22 @@ def init():
         App.Console.PrintWarning("FreeCAD: Replace Face not added: %s\n" % error)
     try:
 
+        from . import dimtext
+        dimtext.install()
+    except Exception as error:
+        App.Console.PrintWarning("FreeCAD: sketch dimension text not set: %s\n" % error)
+    try:
+
         from . import untrimsurface
         untrimsurface.register()
     except Exception as error:
         App.Console.PrintWarning("FreeCAD: Untrim Surface not added: %s\n" % error)
+    try:
+
+        from . import hiddenpick
+        hiddenpick.install()
+    except Exception as error:
+        App.Console.PrintWarning("FreeCAD: hidden edge picking not started: %s\n" % error)
     try:
 
         from . import rollbackhold
@@ -1090,6 +1219,7 @@ def init():
         if params.GetBool("CoverStart", True) and mw is not None and not mw.isVisible():
             _cover_start(mw)
     except Exception as _fw_err:
+        _show_window()          # coverfix-1127-v2: a cover that failed half way never leaves the window see-through
         _fw_log("startup.py:cover", _fw_err)
     try:
         from .widgets import release_python_hooks

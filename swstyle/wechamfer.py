@@ -232,7 +232,7 @@ class ViewProviderWeldmentChamfer:
 
     def onDelete(self, vobj, subelements):
         wetrim.clear(vobj.Object)
-        QtCore.QTimer.singleShot(0, lambda: wetrim._refresh_later(vobj.Object.Document))
+        QtCore.QTimer.singleShot(0, lambda doc=vobj.Object.Document: wetrim._refresh_later(doc))
         return True
 
     def dumps(self):
@@ -424,11 +424,23 @@ class Panel:
     def reject(self):
         doc = self.obj.Document
         doc.abortTransaction()
-        from . import wemember
-        try:
-            wemember.refresh(doc)
-        except Exception:
-            doc.recompute()
+        # The abort put the members back as they were. Rebuilding them anyway (wemember.refresh)
+        # removed and remade the trim objects outside any step, which FreeCAD kept as a separate
+
+        # Undo step. Rebuild only when the abort left something to recompute.
+        stale = []
+        for o in doc.Objects:
+            try:
+                if o.isTouched() or "Invalid" in o.State:
+                    stale.append(o)
+            except Exception as _fw_err:
+                _fw_log("wechamfer.py:reject", _fw_err)
+        if stale:
+            from . import wemember
+            try:
+                wemember.refresh(doc)
+            except Exception:
+                doc.recompute()
         self._close()
         return True
 

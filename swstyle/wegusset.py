@@ -600,7 +600,7 @@ class Panel:
                 _fw_log("wegusset.py:575", _fw_err)
             return
         if sub.startswith("Face"):
-            QtCore.QTimer.singleShot(0, lambda: self._picked(doc, name, sub))
+            from . import safe_later as _sl; _sl.later(0, lambda: self._picked(doc, name, sub), self, "error")
 
     def _picked(self, doc_name, name, sub):
         # The panel can close between addSelection and this queued callback. Recheck before touching

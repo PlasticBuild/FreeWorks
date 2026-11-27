@@ -252,6 +252,32 @@ def find(name):
     return mw.findChild(QtWidgets.QToolBar, _object_name(name)) if mw is not None else None
 
 
+
+# Toolbars) these two rows are the panes themselves, ticked while shown (read chrome.md A3, READ-LIST-1119)
+PANES = ("Task Pane", "MotionManager")
+
+
+def listed_shown(name):
+    if name in PANES:
+        try:
+            from . import uiextras
+            if name == "Task Pane":
+                return bool(uiextras.task_pane_shown() and uiextras._tasks_widget() is not None)
+            return bool(uiextras.motion_manager_shown())
+        except Exception as _fw_err:
+            _fw_log("swtoolbars.py:pane-shown", _fw_err)
+            return False
+    return is_shown(name)
+
+
+def listed_show(shell, name, on):
+    if name in PANES:
+        from . import uiextras
+        (uiextras.set_task_pane if name == "Task Pane" else uiextras.set_motion_manager)(bool(on))
+        return None
+    return show(shell, name, on)
+
+
 def is_shown(name):
     bar = find(name)
     return bar is not None and alive(bar) and bar.isVisible()
@@ -445,9 +471,9 @@ def fill_menu(menu, shell):
     for name, _ in TOOLBARS:
         act = menu.addAction(name)
         act.setCheckable(True)
-        act.setChecked(is_shown(name))
-        act.setEnabled(bool(keys_of(name)) or (name in FOREIGN and find(name) is not None))
-        act.triggered.connect(lambda checked=False, n=name: toggle(shell, n))
+        act.setChecked(listed_shown(name))           # cmmenu-1126
+        act.setEnabled(bool(keys_of(name)) or name in PANES or (name in FOREIGN and find(name) is not None))
+        act.triggered.connect(lambda checked=False, n=name: listed_show(shell, n, not listed_shown(n)))
     menu.addSeparator()
     act = menu.addAction("Customize...")
     act.triggered.connect(customize)

@@ -114,7 +114,7 @@ class FaceCurvesPanel:
     def addSelection(self, doc, obj, sub, pnt):
         if doc != self.doc.Name:
             return
-        QtCore.QTimer.singleShot(0, lambda o=obj, s=sub, p=pnt: self.take(o, s, p))
+        from . import safe_later as _sl; _sl.later(0, lambda o=obj, s=sub, p=pnt: self.take(o, s, p), self, "position")
 
     def take(self, name, sub, pnt):
         obj = self.doc.getObject(name)

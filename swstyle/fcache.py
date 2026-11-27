@@ -69,12 +69,12 @@ def _value(value, h, depth=0):
         h.update(repr(value).encode())
 
 
-def key(obj, base):
+def key(obj, base, skip=()):
     h = hashlib.sha1()
     h.update(obj.FullName.encode())
     shape_sig(base, h)
     for name in sorted(obj.PropertiesList):
-        if name in _SKIP:
+        if name in _SKIP or name in skip:
             continue
         try:
             _value(getattr(obj, name), h)

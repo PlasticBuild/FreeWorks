@@ -828,16 +828,52 @@ def _patch_insert():
     if getattr(panel, "_fw_materef", False):
         return
     old = panel._options
+    old_clicked = panel._clicked
+
+    def _clicked(self, cb):
+        # asmpkg363: the round face or edge under the drop (the preview itself left out), so a mate reference
+
+        self._fw_drop_at = None
+        try:
+            pos = cb.getEvent().getPosition().getValue()
+            self._fw_drop_at = _round_under(self, (int(pos[0]), int(pos[1])))
+        except Exception as _fw_err:
+            _fw_log("asmrefgeom.py:drop point", _fw_err)
+        return old_clicked(self, cb)
 
     def _options(self, comp):
         old(self, comp)
         try:
-            auto_mate(self.asm, comp)
+            auto_mate(self.asm, comp, getattr(self, "_fw_drop_at", None))
         except Exception as error:
             App.Console.PrintWarning("Mate Reference: %s\n" % error)
 
+    panel._clicked = _clicked
     panel._options = _options
     panel._fw_materef = True
+
+
+def _round_under(panel, pos):
+    """The picked point on a round face or circular edge of another component under pos, else None."""
+    preview = getattr(panel, "preview", None)
+    # every hit along the ray: the preview under the pointer is skipped below (asmpkg364: it was hidden
+    # for the pick, a Visibility change that marks the document changed)
+    infos = panel.view.getObjectsInfo(pos) or []
+    for info in infos:
+        try:
+            root = info.get("ParentObject") or App.getDocument(info["Document"]).getObject(info["Object"])
+            sub = info.get("SubName", "") or info.get("Component", "")
+            if preview is not None and (root is preview or preview.Name in sub.split(".")):
+                continue
+            import Part
+            el = Part.getShape(root, sub, needSubElement=True)
+            if el.ShapeType == "Face" and el.Surface.TypeId == "Part::GeomCylinder" or \
+                    el.ShapeType == "Edge" and el.Curve.TypeId == "Part::GeomCircle":
+                return App.Vector(info["x"], info["y"], info["z"])
+            return None         # the nearest thing under the drop is not round: no geometry mate
+        except Exception:
+            continue
+    return None
 
 
 class _Focus(QtCore.QObject):
@@ -1174,6 +1210,7 @@ class GroundPlanePanel:
             bl = QtWidgets.QVBoxLayout(box)
             self.pick = QtWidgets.QListWidget(box)
             self.pick.setObjectName("SWGroundPick")
+            self.pick.setProperty("swpickbox", True)
             self.pick.setMaximumHeight(28)
             bl.addWidget(self.pick)
             row = QtWidgets.QHBoxLayout()
@@ -1213,7 +1250,7 @@ class GroundPlanePanel:
             return
         obj = self.doc.getObject(name)
         if obj is not None:
-            QtCore.QTimer.singleShot(0, lambda: (self._add(obj, sub), self.update()))
+            from . import safe_later as _sl; _sl.later(0, lambda: (self._add(obj, sub), self.update()), self, "pick")
 
     def _add(self, obj, sub):
         from . import refplane

@@ -989,7 +989,9 @@ def show_menu(pos, at=None):
         pick(item)
     name = "PartEmpty" if item is None else "Part" + _leaf(item[2]).rstrip("0123456789")
     _LAST_POS[:] = [QtCore.QPoint(pos)]
-    return rcmenus.show(rcmenus.Builder(name, items(item) + [_freecad_item()], row=row(item), chevron=True), pos)
+    # rmbparity-1127: a face's long menu has a line over Customize Menu (read 11-19 0(d)); the edge's has none
+    return rcmenus.show(rcmenus.Builder(name, items(item) + [_freecad_item()], row=row(item), chevron=True,
+                                        line_before_customize=(name == "PartFace")), pos)
 
 
 _LAST_POS = []

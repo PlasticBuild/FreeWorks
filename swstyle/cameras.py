@@ -395,7 +395,8 @@ class CameraPanel:
             point = _picked_point(doc, obj, sub, pnt)
             prop = self.picking
             label = App.getDocument(doc).getObject(obj).Label
-            self.picked[prop].setText("%s of %s" % (sub.split(".")[-1], label) if sub else label)
+            from . import pmboxes
+            self.picked[prop].setText(pmboxes.sw_name("%s of %s" % (sub.split(".")[-1], label) if sub else label))
             self._set_boxes(prop, point)
             self.changed(prop)
         except Exception as _fw_err:

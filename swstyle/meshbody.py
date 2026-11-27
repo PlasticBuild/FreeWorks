@@ -163,7 +163,7 @@ if Gui is not None:
                     obj = inner or obj
                 except Exception as _fw_err:
                     _fw_log("meshbody.py:164", _fw_err)
-            QtCore.QTimer.singleShot(0, lambda: self._picked(obj))
+            from . import safe_later as _sl; _sl.later(0, lambda: self._picked(obj), self, "advanced")
 
         def _picked(self, obj):
             try:

@@ -188,9 +188,24 @@ def _isolate_bodies(comp):
     iso._show_bar()
 
 
+def _part_object(comp):
+    """The part a component stands for. An instance in another configuration links its own copy
+    (copy-on-change, kept in the assembly's file): the part is the copy's source (GitHub #5)."""
+    if comp.TypeId == "App::Link":
+        try:
+            from . import asmcfginst
+            if asmcfginst.is_copy(comp):
+                src = asmcfginst.source(comp)
+                if src is not None:
+                    return src
+        except Exception as _fw_err:
+            _fw_log("asmmenu.py:part object", _fw_err)
+        return comp.getLinkedObject(True)
+    return comp.LinkedObject if ac.is_subassembly(comp) else comp
+
+
 def part_document(comp):
-    target = comp.getLinkedObject(True) if comp.TypeId == "App::Link" else \
-        (comp.LinkedObject if ac.is_subassembly(comp) else comp)
+    target = _part_object(comp)
     doc = getattr(target, "Document", None)
     return doc if doc is not None and doc is not comp.Document else None
 
@@ -568,7 +583,7 @@ class ComponentPropertiesDialog(QtWidgets.QDialog):
         self.description = QtWidgets.QLineEdit(component_description(comp))
         self.description.setObjectName("FW_ComponentDescription")
         form.addRow("Component Description:", self.description)
-        target = comp.getLinkedObject(True) if comp.TypeId == "App::Link" else comp
+        target = _part_object(comp) if comp.TypeId == "App::Link" else comp
         path = getattr(getattr(target, "Document", None), "FileName", "") or "(not saved)"
         form.addRow("Model document path:", QtWidgets.QLabel(path))
         outer.addWidget(gen)
@@ -671,8 +686,9 @@ class ComponentPropertiesDialog(QtWidgets.QDialog):
             it = QtWidgets.QListWidgetItem(n)
             self.config_list.addItem(it)
             it.setSelected(n == active)
-        self.config_list.setEnabled(False)
-        self.specify.toggled.connect(self.config_list.setEnabled)
+        # never greyed: picking a configuration in the list picks Specify configuration(s) (asmpkg356)
+        from .asmpattern import _takes_over
+        _takes_over(self.config_list, self.specify, True)
         outer.addWidget(self.config_list)
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -1257,8 +1273,7 @@ def sw_component_items(comp, long_form=False):
          lambda: _in_transaction(doc, "Temporary Fix/Group",
                                  (lambda: asmcomp.release_temporary(asm)) if temp else (lambda: asmcomp.temporary_fix(asm, picked))),
          True, True),
-        ("FormNewSubassembly", "Form New Subassembly",
-         lambda: _in_transaction(doc, "Form New Subassembly", lambda: asmcomp.form_new_subassembly(asm, picked)),
+        ("FormNewSubassembly", "Form New Subassembly", lambda: form_new_subassembly(comp, asm, picked),
          not ac.is_subassembly(comp), True),
         ("Reload", "Reload", lambda: asmcomp.reload(comp), part_document(comp) is not None, False),
         ("ReplaceComponents", "Replace Components", lambda: asmcomp.replace_dialog(comp), True, False),
@@ -1268,8 +1283,9 @@ def sw_component_items(comp, long_form=False):
          lambda: _in_transaction(doc, "Save Assembly (in External File)", lambda: asmcomp.save_sub_external(asm, comp)),
          asmcomp.is_virtual_sub(comp), True),
         ("MakeIndependent", "Make Independent",
-         lambda: _in_transaction(doc, "Make Independent", lambda: asmcomp.make_independent(asm, comp)),
-         len(asmcomp.instances(asm, comp)) > 1, True),
+         (lambda: _in_transaction(doc, "Make Independent", lambda: asmcomp.make_nested_independent(comp))) if inner is not None
+         else (lambda: _in_transaction(doc, "Make Independent", lambda: asmcomp.make_independent(asm, comp))),
+         inner is not None or len(asmcomp.instances(asm, comp)) > 1, True),     # inner: the subassembly too (asmpkg357)
         ("CopyWithMates", "Copy with Mates", lambda: _run(comp, "SWStyle_CopyWithMates"), True, True),
 
         ("ExternalRefs", "External References...", lambda: _external_refs(comp), _has_refs(comp), True),
@@ -1286,6 +1302,47 @@ def sw_component_items(comp, long_form=False):
                                            "Reload", "MakeIndependent", "AddConfiguration", "FormNewSubassembly")
                                   and not i[3])]
     return out if long_form else [i for i in out if i[4]]
+
+
+def _picked_inner():
+    """The parts inside subassemblies that are picked (the deepest component on each picked path)."""
+    out = []
+    for sel in Gui.Selection.getSelectionEx("", 0):
+        for sub in sel.SubElementNames or ():
+            try:
+                chain = sel.Object.getSubObjectList(sub)
+            except Exception:
+                continue
+            found = [o for o in chain[1:] if inner_source(o) is not None]
+            if found and found[-1] not in out:
+                out.append(found[-1])
+    return out
+
+
+def form_new_subassembly(comp, asm, picked):
+    ""
+
+    from . import asmcomp
+    inner = inner_source(comp)
+    if inner is None:
+        return _in_transaction(comp.Document, "Form New Subassembly", lambda: asmcomp.form_new_subassembly(asm, picked))
+    sub_asm, src = inner
+    comps = [src]
+    for p in list(picked) + _picked_inner():
+        other = inner_source(p) if p is not comp else None
+        if other is not None and other[0] is sub_asm and other[1] not in comps:
+            comps.append(other[1])
+    sub_doc = src.Document
+    sub_doc.openTransaction("Form New Subassembly")
+    try:
+        made = asmcomp.form_new_subassembly(sub_asm, comps)
+        # the top assembly's copies follow inside the same step: rebuilt after it, their changes made a
+
+        _after_inner(sub_doc, comp.Document)
+    finally:
+        sub_doc.commitTransaction()
+    _refresh()
+    return made
 
 
 def _has_refs(comp):
@@ -1543,7 +1600,12 @@ def row_entries(shell, target):
     items = component_items(target) if k == "component" else mate_items(target) if k == "mate" else []
     out = []
     for key, label, run, enabled in items:
-        if key in MENU_ONLY:
+        if k == "mate" and key in ("FlipMate", "ReplaceMate"):
+
+            # Selection (read 11-19); Flip Mate Alignment is in the menu only
+            if key == "FlipMate":
+                continue
+        elif key in MENU_ONLY:
             continue
         out.append(contextbar.Entry(key, label, _icon(shell, key), contextbar._tip(label, target.Label), run, enabled))
     if k == "component":
@@ -1602,9 +1664,81 @@ def config_entry(shell, comp):
         return None         # one configuration: nothing to choose
 
     def run():
-        config_menu(comp).exec(QtGui.QCursor.pos())
-    return contextbar.Entry("QuickConfigurations", "Configurations", _icon(shell, "QuickConfigurations"),
-                            contextbar._tip("Configurations", "%s: %s" % (comp.Label, now)), run, True)
+        b = _CONFIG_BUTTON[0] if _CONFIG_BUTTON else None
+        try:
+            at = b.mapToGlobal(QtCore.QPoint(0, b.height())) if b is not None and b.isVisible() else QtGui.QCursor.pos()
+        except RuntimeError:
+            at = QtGui.QCursor.pos()
+        config_menu(comp).exec(at)
+    entry = _config_entry_class()("QuickConfigurations", "Configurations", _icon(shell, "QuickConfigurations"),
+                                  contextbar._tip("Configurations", "%s: %s" % (comp.Label, now)), run, True)
+    entry.caption = now or ""
+    entry.make = _config_button_class()
+    return entry
+
+
+_CONFIG_BUTTON = []
+_CONFIG_CLASSES = {}
+
+
+def _config_entry_class():
+    """contextbar.Entry with the shown configuration's name and its own button."""
+    if "entry" not in _CONFIG_CLASSES:
+        from . import contextbar
+
+        class ConfigEntry(contextbar.Entry):
+            __slots__ = ("caption", "make")
+        _CONFIG_CLASSES["entry"] = ConfigEntry
+    return _CONFIG_CLASSES["entry"]
+
+
+def _config_button_class():
+    ""
+
+    if "button" not in _CONFIG_CLASSES:
+        from . import contextbar, style
+
+        class ConfigButton(contextbar.Button):
+            def __init__(self, entry, parent):
+                super().__init__(entry, parent)
+                self.setObjectName("FW_QuickConfigurationsButton")
+                self.caption = getattr(entry, "caption", "") or ""
+                self.setAccessibleName("Configurations: %s" % self.caption)
+                self.setFixedSize(int(round(self.row_width(contextbar.BUTTON[0]) * self.k)), self.height())
+                _CONFIG_BUTTON[:] = [self]
+
+            def row_width(self, w):
+                fm = QtGui.QFontMetrics(self.font())
+                text = fm.horizontalAdvance(self.caption) if hasattr(fm, "horizontalAdvance") else fm.width(self.caption)
+                return int(w + 4 + text / max(self.k, 0.01) + 12)
+
+            def paintEvent(self, event):
+                painter = QtGui.QPainter(self)
+                T = style.T
+                if self.isDown():
+                    painter.fillRect(self.rect(), QtGui.QColor(T.down))
+                elif self.underMouse() and self.isEnabled():
+                    painter.fillRect(self.rect(), QtGui.QColor(T.hover))
+                s = self._icon_size
+                h = self.height()
+                icon_rect = QtCore.QRect(int(3 * self.k), (h - s) // 2, s, s)
+                if self._icon is not None and not self._icon.isNull():
+                    style.paint_icon(painter, self._icon, icon_rect, QtCore.Qt.AlignCenter,
+                                     QtGui.QIcon.Normal if self.isEnabled() else QtGui.QIcon.Disabled)
+                painter.setPen(QtGui.QColor(T.text))
+                x = icon_rect.right() + int(4 * self.k)
+                arrow = int(10 * self.k)
+                painter.drawText(QtCore.QRect(x, 0, self.width() - x - arrow, h),
+                                 int(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft), self.caption)
+                cx, cy = self.width() - arrow // 2 - int(2 * self.k), h // 2
+                d = max(2, int(3 * self.k))
+                painter.setBrush(QtGui.QColor(T.text))
+                painter.setPen(QtCore.Qt.NoPen)
+                painter.drawPolygon(QtGui.QPolygon([QtCore.QPoint(cx - d, cy - d // 2), QtCore.QPoint(cx + d, cy - d // 2),
+                                                    QtCore.QPoint(cx, cy + d)]))
+                painter.end()
+        _CONFIG_CLASSES["button"] = ConfigButton
+    return _CONFIG_CLASSES["button"]
 
 
 def menu_entries(original, shell, target, view):
@@ -1613,13 +1747,17 @@ def menu_entries(original, shell, target, view):
     k = kind(target)
     if k == "assembly":
         items = original(shell, target.Document, view)
-        drop = ("Material", "TopLevelTransparency", "Purge")
+
+        # its Appearances is on the icon row
+        drop = ("Material", "Appearance")
         out = []
         for key, label, run, enabled in items:
             if key is None:
                 label = "Assembly (%s)" % target.Document.Label
             if key in drop:
                 continue
+            if key == "Purge":       # rmbtop-1127: only when there is something to purge (no dead rows)
+                enabled = enabled and bool(fmmenu.unused_features(target.Document))
             out.append((key, label, run, enabled))
         return out
     if k == "matesfolder":
@@ -1835,6 +1973,87 @@ def mates_folder_items(shell, target, view):
             ("TreeItems", "Hide/Show Tree Items...", fmmenu.tree_items, True),
             ("-", None, None, False),
             ("Customize", "Customize Menu", None, True)]
+
+
+# ----------------------------------------------------------------------------- top assembly row (rmbtop-1127)
+def top_items(asm):
+    ""
+
+
+    from . import fmmenu, asmcomp
+    comps = list(ac.components(asm)) if asm is not None else []
+    hidden = [c for c in comps if c.ViewObject is not None and not shown(c)]
+    out = [("Isolate", "Isolate", lambda: _top_isolate(comps), bool(comps)),
+           ("ShowWithDependents", "Show with Dependents", lambda: _top_show(asm, hidden), bool(hidden))]
+
+    def display_menu(m):
+        for name, _style in asmcomp.DISPLAYS:
+            a = m.addAction(name)
+            a.triggered.connect(lambda _c=False, n=name: _in_transaction(asm.Document, "Component Display",
+                                lambda: [asmcomp.component_display(c, n) for c in comps]))
+    out.append(("ComponentDisplay", "Component Display", fmmenu.Sub(display_menu), bool(comps)))
+    try:
+        from . import asmviewmenu
+        _origin, groups = asmviewmenu._ref_groups(asm)
+        out.append(("RefGeometryDisplay", "Reference Geometry Display",
+                    fmmenu.Sub(lambda m: asmviewmenu.fill_reference_geometry(m, asm)), bool(groups)))
+    except Exception as _fw_err:
+        _fw_log("asmmenu.py:top ref geometry", _fw_err)
+
+    def new_sub():
+        from . import asmmenubar
+        _in_transaction(asm.Document, "Insert New Subassembly", lambda: asmmenubar.new_assembly(asm))
+        _refresh()
+    out.append(("InsertNewSubassembly", "Insert New Subassembly", new_sub, asm is not None))
+    try:        # asmtop-1127 (Menus): Speedpak Options >, Unload Hidden Components, Edit Component References...
+        from . import asmtoprows
+        out += asmtoprows.items(asm)
+    except Exception as _fw_err:
+        _fw_log("asmmenu.py:top rows", _fw_err)
+    return out
+
+
+def _top_isolate(comps):
+    from . import asmisolate
+    asmisolate.isolate(comps)
+
+
+def _top_show(asm, hidden):
+    def go():
+        for c in hidden:
+            c.ViewObject.Visibility = True
+    _in_transaction(asm.Document, "Show with Dependents", go)
+
+
+def top_row(shell, target, entries):
+    """The top assembly row's icon box (read 11-19): Open Drawing, Hide Components, Top Level Transparency, Mate /
+    Zoom to Selection, Appearances, Dynamic Reference Visualization (Parent), (Child)."""
+    from . import contextbar
+    asm = ac.assembly_of(target.Document)
+    comps = list(ac.components(asm)) if asm is not None else []
+    by = {e.key: e for e in entries}
+    seen = [c for c in comps if shown(c)]
+
+    def hide_all():
+        on = not seen
+        def go():
+            for c in comps:
+                if c.ViewObject is not None:
+                    c.ViewObject.Visibility = on
+        _in_transaction(target.Document, "Hide Components", go)
+    extra = {}
+    if comps:
+        label = "Hide Components" if seen else "Show Components"
+        extra["HideComponents"] = contextbar.Entry("HideComponents", label, _icon(shell, "HideComponents"),
+                                                   contextbar._tip(label, target.Label), hide_all)
+        extra["MateComponent"] = contextbar.Entry("MateComponent", "Mate", _icon(shell, "ViewMates"),
+                                                  contextbar._tip("Mate", target.Label),
+                                                  lambda: Gui.runCommand("SWStyle_Mate", 0))
+    order = ("OpenDrawing", "HideComponents", "TopLevelTransparency", "MateComponent",
+             "ZoomSelection", "EditAppearance", "DynamicReferenceParent", "DynamicReferenceChild")
+    out = [by.get(k) or extra.get(k) for k in order]
+    out = [e for e in out if e is not None]
+    return out + [e for e in entries if e.key not in order]
 
 
 # ----------------------------------------------------------------------------- hooks

@@ -119,19 +119,20 @@ PM_TITLE = {
     "Lofted Surface": "Surface-Loft", "Boundary Surface": "Boundary-Surface", "Offset Surface": "Offset Surface",
     "Knit Surface": "Knit Surface", "Filled Surface": "Fill Surface", "Linear Pattern": "Linear Pattern", "Circular Pattern": "Circular Pattern",
     "Reference Geometry Copy": None,
+    "Project Curve": "Projected Curve",     # cmfly-1126: the PropertyManager help keeps its title
 }
 
 # Hand-written steps for commands that open no page of their own in pmhelp.HELP
 STEPS = {
     "MirrorBody": ["Pick a plane or a flat face to mirror about, then the body to copy.",
                    "OK adds the mirrored copy; Merge solids joins it to the body it touches."],
-    "CenterOfMass": ["Click it with a part open: a point is added at the part's centre of mass.",
+    "CenterOfMass": ["Click it with a part open: a point is added at the part's center of mass.",
                      "The point moves with the part as it changes; delete it from the tree when you no longer need it."],
     "MateReference": ["Pick the faces, edges or vertices that will mate to other parts, and name the reference.",
                       "When the part goes into an assembly, those references mate first."],
     "ShapeBinder": ["Pick the faces, edges or sketches of another body or part to copy.",
                     "The copy follows the original; use it as a reference in this body."],
-    "Curves": ["Opens the list of curve tools: Split Line, Projected Curve, Composite Curve, Curve Through "
+    "Curves": ["Opens the list of curve tools: Split Line, Project Curve, Composite Curve, Curve Through "
                "Points, Helix and Spiral."],
     "CurveThroughXYZPoints": ["Type the X, Y and Z of each point in the table, or open a text file of points.",
                               "OK makes a smooth 3D curve through them, in order."],
@@ -159,7 +160,7 @@ STEPS = {
                  "Leave it with Exit Sketch in the confirmation corner at the top right."],
     "Measure": ["Click it, then pick faces, edges or points in the graphics area: the Measure window shows "
                 "distances, angles, lengths and areas between them. Esc or the cross closes it."],
-    "MassProperties": ["Click it with a part or assembly open: a window lists mass, volume, surface area, centre of "
+    "MassProperties": ["Click it with a part or assembly open: a window lists mass, volume, surface area, center of "
                        "mass and the moments of inertia, using the material's density.",
                        "Pick bodies or components first to measure only those."],
     "SectionProperties": ["Pick a flat face, a planar section or a closed sketch: the window lists its area, "
@@ -167,10 +168,10 @@ STEPS = {
     "Interference": ["Pick the components to check (all of them by default), then Calculate: the clashes are "
                      "listed and shown in the graphics area."],
     "Zebra": ["Click to turn it on or off: stripes run over the faces so you can see where they meet smoothly."],
-    "Curvature": ["Click to turn it on or off: faces are coloured by how tightly they curve."],
-    "DraftAnalysis": ["Pick the pull direction and set the draft angle: faces are coloured by whether they have "
-                      "enough draft to come out of a mould."],
-    "ThicknessAnalysis": ["Set the target thickness, then Calculate: thin and thick areas are coloured on the part."],
+    "Curvature": ["Click to turn it on or off: faces are colored by how tightly they curve."],
+    "DraftAnalysis": ["Pick the pull direction and set the draft angle: faces are colored by whether they have "
+                      "enough draft to come out of a mold."],
+    "ThicknessAnalysis": ["Set the target thickness, then Calculate: thin and thick areas are colored on the part."],
 }
 
 FAMILY = {
@@ -318,13 +319,13 @@ STEPS.update({
     ],
     "DrawSectionView": [
         "Pick the cutting line type: Vertical, Horizontal, Auxiliary or Aligned (or a Half Section shape).",
-        "Click in a view to place the cutting line; it snaps to centres and edges. A pop-up offers offsets "
+        "Click in a view to place the cutting line; it snaps to centers and edges. A pop-up offers offsets "
         "(arc, single or notch) before you go on.",
         "Click OK in the pop-up, then click where the section view goes. Flip Direction turns the arrows round.",
         "Set the hatch, Partial section, Slice section or Section depth in the PropertyManager, then OK.",
     ],
     "DrawDetailView": [
-        "Click in a view for the centre of the detail circle, then click again to set its size (or pick "
+        "Click in a view for the center of the detail circle, then click again to set its size (or pick "
         "Profile and click the corners of your own outline).",
         "Click on the sheet where the detail view goes.",
         "Set its scale (parent, sheet or your own), its outline and its label in the PropertyManager, then OK.",
@@ -384,29 +385,29 @@ STEPS.update({
     "CornerRectangle": _ent("Click the first corner, then the opposite corner.",
                             extra="The rectangle's sides get Horizontal and Vertical relations; the type buttons "
                                   "at the top of the PropertyManager switch to the other rectangles."),
-    "CenterRectangle": _ent("Click the centre, then a corner.",
-                            extra="Add construction lines draws its diagonals from the centre."),
+    "CenterRectangle": _ent("Click the center, then a corner.",
+                            extra="Add construction lines draws its diagonals from the center."),
     "ThreePointCornerRectangle": _ent("Click the first corner, then the second (this sets the angle), then the width."),
-    "ThreePointCenterRectangle": _ent("Click the centre, then the middle of a side (this sets the angle), then a "
+    "ThreePointCenterRectangle": _ent("Click the center, then the middle of a side (this sets the angle), then a "
                                       "corner."),
     "Parallelogram": _ent("Click the first corner, the second, then the third: the fourth follows."),
-    "Slot": _ent("Click the start of the slot's centre line, then its end, then move out and click for the width.",
+    "Slot": _ent("Click the start of the slot's center line, then its end, then move out and click for the width.",
                  extra="Add dimensions puts the length and width on as you place it."),
-    "CenterpointSlot": _ent("Click the slot's centre, then one end, then move out and click for the width."),
-    "ThreePointArcSlot": _ent("Click three points on the slot's centre arc, then move out and click for the width."),
-    "ArcSlot": _ent("Click the centre of the arc, then the radius and start, then the angle, then the width."),
-    "Circle": _ent("Click the centre, then move out and click for the radius.",
+    "CenterpointSlot": _ent("Click the slot's center, then one end, then move out and click for the width."),
+    "ThreePointArcSlot": _ent("Click three points on the slot's center arc, then move out and click for the width."),
+    "ArcSlot": _ent("Click the center of the arc, then the radius and start, then the angle, then the width."),
+    "Circle": _ent("Click the center, then move out and click for the radius.",
                    extra="Type the radius in Parameters to set it exactly."),
     "PerimeterCircle": _ent("Click three points on the rim: the circle runs through them."),
-    "CenterArc": _ent("Click the centre, then the start of the arc, then its end."),
+    "CenterArc": _ent("Click the center, then the start of the arc, then its end."),
     "ThreePointArc": _ent("Click the start, then the end, then a third point that sets how far the arc bows out."),
     "TangentArc": _ent("Click the end of a line or arc: the new arc leaves it tangent. Click where the arc ends.",
                        extra="While drawing lines, M switches between line and arc."),
-    "Polygon": _ent("Click the centre, then move out and click to set the size and the rotation.",
+    "Polygon": _ent("Click the center, then move out and click to set the size and the rotation.",
                     extra="Set the number of sides (U and J add and take away one) and Inscribed or Circumscribed "
                           "circle first."),
-    "Ellipse": _ent("Click the centre, then the end of the first axis, then the second axis."),
-    "PartialEllipse": _ent("Click the centre, then the first axis, then the second axis and the start of the arc, "
+    "Ellipse": _ent("Click the center, then the end of the first axis, then the second axis."),
+    "PartialEllipse": _ent("Click the center, then the first axis, then the second axis and the start of the arc, "
                            "then its end."),
     "Parabola": _ent("Click the focus, then the top of the parabola, then its two ends."),
     "Conic": _ent("Click the start and the end, then the top vertex, then move to set Rho (0.5 is a parabola, "
@@ -449,14 +450,14 @@ STEPS.update({
     "MoveEntities": ["Pick the entities, then a base point and where it goes (or type X and Y). Keep relations "
                      "holds what they are tied to. Then OK."],
     "CopyEntities": ["Pick the entities, then a base point and where the copy goes (or type X and Y). Then OK."],
-    "RotateEntities": ["Pick the entities, then the centre of rotation, and type the angle or drag. Then OK."],
+    "RotateEntities": ["Pick the entities, then the center of rotation, and type the angle or drag. Then OK."],
     "ScaleEntities": ["Pick the entities, then the base point, and type the scale factor. Copy makes scaled copies. "
                       "Then OK."],
     "StretchEntities": ["Pick the entities, then the base point and where it goes: the points picked move, the rest "
                         "stay, and relations hold. Then OK."],
     "LinearSketchPattern": ["Pick the entities to repeat, then set the spacing, count and angle in each direction "
                             "(or drag the handles). Then OK."],
-    "CircularSketchPattern": ["Pick the entities to repeat and the centre (the sketch origin by default), then set "
+    "CircularSketchPattern": ["Pick the entities to repeat and the center (the sketch origin by default), then set "
                               "the count and the angle. Then OK."],
     "SketchFillet": ["Pick two entities that meet, or their corner point, and set the radius. Keep constrained "
                      "corners keeps the corner's relations; Dimension each fillet adds a radius to each. Then OK."],
@@ -516,7 +517,7 @@ STEPS.update({
     "QuickSnaps": ["Click it (or press F3) to switch all sketch snapping off or on; the status bar says which.",
                    "Its arrow lists the Quick Snaps, each one the only snap for the next entity."],
 })
-for _k, _what in (("QSPoint", "end points and sketch points"), ("QSCenterPoint", "the centres of circles and arcs"),
+for _k, _what in (("QSPoint", "end points and sketch points"), ("QSCenterPoint", "the centers of circles and arcs"),
                   ("QSMidpoint", "the middles of lines and arcs"), ("QSQuadrant", "the quadrants of circles"),
                   ("QSIntersection", "where two curves cross"), ("QSNearest", "the nearest point on a curve"),
                   ("QSTangent", "tangent to circles and arcs"), ("QSPerpendicular", "square to lines"),
@@ -744,24 +745,24 @@ STEPS.update({
                           "what it can; right-click a row to heal only that one."],
     "DeviationAnalysis": ["Pick the edges between faces: the angle between the faces along them is shown (0 means they "
                           "join smoothly)."],
-    "SymmetryCheck": ["Pick the plane and the bodies: symmetric, asymmetric and unique faces are coloured."],
-    "UndercutAnalysis": ["Pick the direction of pull: faces the mould could not release are coloured."],
-    "PartingLineAnalysis": ["Pick the direction of pull: the line where the mould would split shows."],
+    "SymmetryCheck": ["Pick the plane and the bodies: symmetric, asymmetric and unique faces are colored."],
+    "UndercutAnalysis": ["Pick the direction of pull: faces the mold could not release are colored."],
+    "PartingLineAnalysis": ["Pick the direction of pull: the line where the mold would split shows."],
     "SurfaceCurvatureCombs": ["Pick faces, set the direction, number of curves and scale, then OK: the combs stay and "
                               "follow the part. Hide Curvature Combs takes them away."],
     "HideCurvatureCombs": ["Click it: all the surface curvature combs are taken away."],
-    "BodyCompare": ["Pick the reference body and the comparison body: where their volumes differ is coloured (blue only "
+    "BodyCompare": ["Pick the reference body and the comparison body: where their volumes differ is colored (blue only "
                     "in the reference, red only in the comparison) and listed."],
     "CompareDocuments": ["Open both documents, pick the reference and the modified one, then Run Comparison. The tabs "
                          "show their properties, features, geometry, parts and dimensions side by side."],
     "PerformanceEvaluation": ["Click it: each feature's rebuild time is listed, slowest first."],
     "AssemblyPerformance": ["Click it: the assembly's counts and its components' rebuild times are listed, with advice."],
     "AssemblyVisualization": ["Click it and pick a property (mass, volume, faces, rebuild time...): the components are "
-                              "listed by it and coloured from blue (least) to red (most)."],
+                              "listed by it and colored from blue (least) to red (most)."],
     "ClearanceVerification": ["Pick the components (or none, for every pair), set the minimum clearance, then Calculate: "
                               "the gaps under it are listed."],
-    "HoleAlignment": ["Set the hole centre deviation, then Calculate: holes in different components that line up but "
-                      "are off centre are listed."],
+    "HoleAlignment": ["Set the hole center deviation, then Calculate: holes in different components that line up but "
+                      "are off center are listed."],
     "PreviousReleaseCheck": ["Click it: the objects that an older setup could not open or rebuild are listed."],
     "EV_ReleaseCheck": ["Click it: the objects that an older setup could not open or rebuild are listed."],
     "CheckActiveDocument": ["Click it: the Design Checker standard runs on this document and each check shows Pass or "
@@ -778,7 +779,7 @@ STEPS.update({
     "DriveWorksXpress": ["Follow the wizard: pick the model, capture the sizes and features to drive, design the form, "
                          "write the rules, then Run to fill in the form and Create the new models."],
     "FloXpress": ["Follow the steps: check the closed fluid volume, pick the fluid, the inlet and outlet faces with "
-                  "their flow, then Solve. Results show the flow paths coloured by speed."],
+                  "their flow, then Solve. Results show the flow paths colored by speed."],
     "EV_Simulation": ["Click it and follow the tabs from left to right: Fixtures, Loads, Material, Run, then Results."],
     "EV_Costing": ["Click it on a part: its material and machining cost are worked out, per part and per batch."],
     "EV_DFM": ["Click it on a part: deep or small holes, sharp inside corners, thin walls and deep pockets are listed."],
@@ -796,12 +797,12 @@ STEPS.update({
     "PenSelect": ["Click it, then click ink strokes to pick them; the convert tools then work on the picked ink only."],
     "PenPowerModify": ["Click it, then scratch back and forth over sketch entities or ink to delete them."],
     "PenRuler": ["Click it and drag to lay the ruler; ink drawn along it comes out straight."],
-    "PenProtractor": ["Click it and drag from the centre out; ink drawn along its rim comes out round."],
+    "PenProtractor": ["Click it and drag from the center out; ink drawn along its rim comes out round."],
     "PenAutoShape": ["Click to turn it on: each stroke becomes lines, arcs or circles as you draw it."],
     "PenAutoSpline": ["Click to turn it on: each stroke becomes a spline as you draw it."],
     "PenAutoSketchEntities": ["Click to turn it on: each stroke becomes the sketch entity it looks like."],
     "PenTouch": ["Click to turn it on: a finger on a touch screen draws ink too."],
-    "InkColor": ["Click it and pick the colour of the next ink."],
+    "InkColor": ["Click it and pick the color of the next ink."],
     "Plane": ["Pick up to three references (faces, edges, points or planes) the plane follows, set the offset or "
               "angle, then OK."],
     "SectionView": ["Pick a plane (Front, Top, Right) or a flat face, drag the arrow or set the offset and the "
@@ -811,7 +812,7 @@ STEPS.update({
     "DrawMarkupDraw": ["Turn Markup on first, then press and drag on the sheet to draw; each stroke is one markup."],
     "DrawMarkupEraser": ["Turn Markup on first, then click the markups to erase. OK when done."],
     "DrawMarkupSelect": ["Turn Markup on first, then click a markup to pick it, to move or delete it."],
-    "DrawMarkupColor": ["Turn Markup on first, then click it and pick the markup pen's colour."],
+    "DrawMarkupColor": ["Turn Markup on first, then click it and pick the markup pen's color."],
     "DrawQuickSnaps": ["Click it for the sketch snap options on the sheet."],
     "DrawAddRelation": ["Pick sketch entities on the sheet, then click it: only the relations that fit them are offered."],
     "DrawDisplayDeleteRelations": ["Pick sketch entities on the sheet, then click it: their relations are listed; pick "
@@ -823,14 +824,14 @@ for _k, _how in (("DrawSketchLine", "Click the start, then the end; keep clickin
                  ("DrawSketchCenterline", "Click the start, then the end of the centerline."),
                  ("DrawSketchMidpointLine", "Click the middle, then one end."),
                  ("DrawSketchRectangle", "Click one corner, then the opposite corner."),
-                 ("DrawSketchCenterRectangle", "Click the centre, then a corner."),
-                 ("DrawSketchCircle", "Click the centre, then the radius."),
+                 ("DrawSketchCenterRectangle", "Click the center, then a corner."),
+                 ("DrawSketchCircle", "Click the center, then the radius."),
                  ("DrawSketchPerimeterCircle", "Click three points on the rim."),
-                 ("DrawSketchArc", "Click the centre, then the start, then the end."),
+                 ("DrawSketchArc", "Click the center, then the start, then the end."),
                  ("DrawSketchThreePointArc", "Click the start, the end, then a point on the arc."),
-                 ("DrawSketchEllipse", "Click the centre, then each axis."),
-                 ("DrawSketchPolygon", "Set the sides, then click the centre and a corner."),
-                 ("DrawSketchSlot", "Click the start and end of the centre line, then the width."),
+                 ("DrawSketchEllipse", "Click the center, then each axis."),
+                 ("DrawSketchPolygon", "Set the sides, then click the center and a corner."),
+                 ("DrawSketchSlot", "Click the start and end of the center line, then the width."),
                  ("DrawSketchSpline", "Click the points it runs through; double-click ends it."),
                  ("DrawSketchPoint", "Click where each point goes.")):
     STEPS[_k] = [_how + " Click inside a view and it belongs to that view, on the empty sheet it belongs to the sheet.",
@@ -840,10 +841,10 @@ for _k, _how in (("DrawTrimEntities", "Drag across the bits to remove, or click 
                  ("DrawMirrorEntities", "Pick the entities and the line to mirror about, then OK."),
                  ("DrawMoveEntities", "Pick the entities, then the base point and where it goes, then OK."),
                  ("DrawCopyEntities", "Pick the entities, then the base point and where the copy goes, then OK."),
-                 ("DrawRotateEntities", "Pick the entities, the centre and the angle, then OK."),
+                 ("DrawRotateEntities", "Pick the entities, the center and the angle, then OK."),
                  ("DrawScaleEntities", "Pick the entities, the base point and the factor, then OK."),
                  ("DrawLinearSketchPattern", "Pick the entities, set the spacing and count, then OK."),
-                 ("DrawCircularSketchPattern", "Pick the entities and the centre, set the count, then OK."),
+                 ("DrawCircularSketchPattern", "Pick the entities and the center, set the count, then OK."),
                  ("DrawSketchFillet", "Pick two entities that meet, set the radius, then OK."),
                  ("DrawSketchChamfer", "Pick two entities that meet, set the distances, then OK."),
                  ("DrawConvertEntities", "Pick model edges in a view, then OK: they become sketch entities.")):
@@ -872,7 +873,7 @@ STEPS.update({
                               "OK places them, each measured from the base."],
     "DrawChainDimension": ["Click the first vertex, then the next ones in turn.",
                            "OK places the chain, each dimension running from the vertex before it."],
-    "DrawAngularRunningDimension": ["Click the centre (a vertex), then the vertex at 0 degrees, then the vertices "
+    "DrawAngularRunningDimension": ["Click the center (a vertex), then the vertex at 0 degrees, then the vertices "
                                     "to dimension.", "OK places the angles, all measured from the same zero line."],
     "DrawChamferDimension": ["Click the chamfer edge, then a lead-in edge next to it, then where the text goes.",
                              "The text shows the chamfer's distance and angle."],
@@ -914,7 +915,7 @@ STEPS.update({
                            "It shows the current revision of the revision table."],
     "DrawLinearNotePattern": ["Set the spacing, number of instances and angle of each direction.",
                               "Click the note, balloon or symbol to pattern."],
-    "DrawCircularNotePattern": ["Click the pattern centre, then the note, balloon or symbol to pattern.",
+    "DrawCircularNotePattern": ["Click the pattern center, then the note, balloon or symbol to pattern.",
                                 "Set the number of instances and the angle."],
     "DrawFormatPainter": ["Click the dimension or annotation to copy the format from.",
                           "Then click the ones to paste it to; OK when done."],
@@ -1043,7 +1044,7 @@ _TDX = {
     "TDX_CustomFormat": "Pick a dimension or a label, then click it and edit its format text, then OK.",
     "TDX_AreaAnno": "Pick faces in a view, then click it: their area is written next to them.",
     "TDX_Area": "Pick a face in a view, then click it: its area is added.",
-    "TDX_SelectLineAttr": "Click it and set the line style, width and colour that the next cosmetic lines use.",
+    "TDX_SelectLineAttr": "Click it and set the line style, width and color that the next cosmetic lines use.",
     "TDX_ChangeLineAttr": "Pick cosmetic lines or centerlines, then click it: they take the line attributes set.",
     "TDX_ExtendLine": "Pick a cosmetic line or centerline, then click it: it gets longer at both ends.",
     "TDX_ShortenLine": "Pick a cosmetic line or centerline, then click it: it gets shorter at both ends.",
@@ -1063,10 +1064,10 @@ _TDX = {
     "TDX_Quadrants": "Pick circles in a view, then click it: points go at their quadrants.",
     "TDX_Intersection": "Pick two edges that cross in a view, then click it: points go where they cross.",
     "TDX_OffsetVertex": "Pick a point in a view, then click it and type the X and Y offset of the new point.",
-    "TDX_Circle1": "Pick a view, then click it: set the circle's centre and radius in the panel, then OK.",
-    "TDX_Circle2": "Pick the centre point, then a point on the circle, then click it: a cosmetic circle is drawn.",
+    "TDX_Circle1": "Pick a view, then click it: set the circle's center and radius in the panel, then OK.",
+    "TDX_Circle2": "Pick the center point, then a point on the circle, then click it: a cosmetic circle is drawn.",
     "TDX_Circle3": "Pick three points, then click it: a cosmetic circle is drawn through them.",
-    "TDX_CosArc": "Pick the centre, then the start and end points, then click it: a cosmetic arc is drawn.",
+    "TDX_CosArc": "Pick the center, then the start and end points, then click it: a cosmetic arc is drawn.",
     "TDX_2PointLine": "Pick two points in a view, then click it: a cosmetic line is drawn between them.",
     "TDX_Parallel": "Pick an edge and a point in a view, then click it: a cosmetic line parallel to the edge goes "
                     "through the point.",
@@ -1171,11 +1172,11 @@ STEPS.update({
     "MK_Touch": ["Click it to draw the marks with a finger or a pen on a touch screen."],
     "MK_Note": ["Click it, type the note in the Note text box of the Markup page, then click on the model where "
                 "it goes."],
-    "MK_Color": ["Click it and pick the colour of the next marks."],
+    "MK_Color": ["Click it and pick the color of the next marks."],
     "DrawMarkupTouch": ["Turn Markup on first, then click it to draw on the sheet with a finger or a pen."],
     "DrawMarkupNote": ["Turn Markup on first, then click it and click on the sheet where the note goes."],
     "DrawZoomToMarkup": ["Click it to zoom to the sheet's markups (there must be one on the sheet)."],
-    "DrawMarkupOptions": ["Click it to set the markup pen's colour and width."],
+    "DrawMarkupOptions": ["Click it to set the markup pen's color and width."],
     # MBD
     "MBD_RefDim": ["Click it, then pick the two items: a reference dimension (no tolerance) is added on the model."],
     "MBD_Note": ["Click it, type the note, then pick the face or edge its leader points to."],
@@ -1201,7 +1202,7 @@ STEPS.update({
     "MBD_STEP": ["Click it and choose where to save: the part is saved as STEP AP242."],
     "MBD_Compare": [
         "Open both parts, then click it. Pick the Reference part and the Modified one, then Compare.",
-        "The table lists each annotation in both, coloured as changed, added or removed.",
+        "The table lists each annotation in both, colored as changed, added or removed.",
     ],
     "MBD_CopyScheme": ["Pick the source configuration and the configurations to copy its annotations to, then OK. "
                        "Each copy shows only in its own configuration."],
@@ -1255,7 +1256,7 @@ STEPS.update({
     "SIM_MeshControl": ["Click it, pick the faces, edges or vertices to mesh finer, set the element size and the ratio, "
                         "then OK. Mesh the study again to use it."],
     "SIM_MeshQuality": ["Mesh the study first, then click it, pick Aspect Ratio or Jacobian, then OK: the mesh is "
-                        "coloured element by element."],
+                        "colored element by element."],
     # CAM
     "CAM_Setup": ["Open the part, then click it: pick the model, the stock and the origin of the machining job, "
                   "then OK. Add tools and operations from this tab."],

@@ -28,7 +28,7 @@ def _fw_log(site, err):
     try:
         if site not in _FW_SEEN:
             _FW_SEEN.add(site)
-            __import__("FreeCAD").Console.PrintLog("FreeWorks %s: %s\n" % (site, err))
+            __import__("FreeCAD").Console.PrintLog("FreeCAD %s: %s\n" % (site, err))
     except Exception:
         return
 
@@ -895,6 +895,29 @@ def _watch_styles():
         return False
 
 
+def _teardown():
+    """realview-teardown-1126: at quit, before FreeCAD writes its settings and Python goes away, the View parameter watcher
+    is detached, the document observer removed and the style poll stopped, so no Python callback runs during shutdown."""
+    for t in _timer[1:]:
+        try:
+            t.stop()
+        except Exception:
+            pass
+    del _timer[1:]
+    obs = _observer[0]
+    if obs is not None:
+        try:
+            App.removeDocumentObserver(obs)
+        except Exception as _fw_err:
+            _fw_log("realview.py:teardown-doc", _fw_err)
+    if len(_observer) >= 3:
+        try:
+            _observer[2].Detach(_observer[1])
+        except Exception as _fw_err:
+            _fw_log("realview.py:teardown-param", _fw_err)
+    _observer[:] = [None]
+
+
 def install():
     if _observer[0] is None:
         _watch_styles()
@@ -912,5 +935,9 @@ def install():
             _observer.append(grp)       # the group handle holds the observer: dropped, it detaches
         except Exception as _fw_err:
             _fw_log("realview.py:lightwatch", _fw_err)
+        try:
+            QtCore.QCoreApplication.instance().aboutToQuit.connect(_teardown)
+        except Exception as _fw_err:
+            _fw_log("realview.py:quit", _fw_err)
     if enabled():
         schedule()

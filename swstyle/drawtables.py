@@ -120,6 +120,9 @@ def make_table(page, rows, at, label, kind, widths=None):
     v.SWTable = kind
     hide_data(sheet)
     doc.recompute()
+    _fit_columns(sheet, rows)          # now that the table (and its text size) is there
+    sheet.recompute()
+    doc.recompute()
     return v
 
 
@@ -177,7 +180,10 @@ def fill(sheet, rows, widths=None, title=""):
     for r, row in enumerate(rows):
         for c, val in enumerate(row):
             text = "" if val is None else str(val)
-            sheet.set(_cell(c, r + top), "'" + text if text[:1] in "=+-0123456789" else text)
+            # a blank cell (a new General Table's " ") is kept as text: unquoted, the spreadsheet read it as the
+            # number 0 and every cell of the table showed "0"
+            sheet.set(_cell(c, r + top), "'" + text if text[:1] in "=+-0123456789" or (text and not text.strip())
+                      else text)
     if title:
 
         ncols = max([len(r) for r in rows] or [1])
@@ -205,7 +211,42 @@ def fill(sheet, rows, widths=None, title=""):
             sheet.setColumnWidth(COLS[c], int(w))
         except Exception as _fw_err:
             _fw_log("drawtables.py:167", _fw_err)
+    _fit_columns(sheet, rows)
     sheet.recompute()
+
+
+def _text_em(text, bold=False):
+    """A text's width in text heights (capitals and digits wider than lower case and stops; a bold header wider)."""
+    w = sum(0.3 if ch in " .,:;'|!ilI1" else 0.72 if ch.isupper() or ch.isdigit() else 0.55 for ch in text)
+    return w * (1.2 if bold else 1.0)
+
+
+def _drawn(view):
+    """The view has its edges (a view of a drawing being opened has none until it is computed)."""
+    try:
+        return bool(view.getVisibleEdges())
+    except Exception:
+        return False
+
+
+def _fit_columns(sheet, rows):
+    """A column too narrow for its longest text is widened to fit it, never narrowed (usage run 11-27: a BOM's
+    VENDOR column printed MCMASTER past the table's edge). A table whose widths are locked is left alone."""
+    try:
+        t = next((o for o in sheet.InList if o.isDerivedFrom("TechDraw::DrawViewSpreadsheet")), None)
+        if t is None or getattr(t, "SWLockColumnWidth", False):
+            return
+        size = float(getattr(t, "TextSize", 12.0) or 12.0)
+        for c in range(max([len(r) for r in rows] or [0])):
+            n = max([_text_em(str(r[c]), bold=(ri == 0)) for ri, r in enumerate(rows)
+                     if c < len(r) and r[c] is not None] or [0.0])
+            if not n:
+                continue
+            need = int(round(n * size + size * 0.8))       # the characters and a margin each side
+            if sheet.getColumnWidth(COLS[c]) < need:
+                sheet.setColumnWidth(COLS[c], need)
+    except Exception as _fw_err:
+        _fw_log("drawtables.py:fit columns", _fw_err)
 
 
 def rows_of(table, physical=False):
@@ -237,6 +278,8 @@ def set_rows(table, rows, widths=None):
     """Rows (header first) into the table; Table Header Bottom, merged cells and locked sizes are kept."""
     if getattr(table, "SWTable", "") in UPPER_KINDS:
         rows = table_text(table.Document, rows)
+    if getattr(table, "SWAllUppercase", False):
+        rows = upper_rows(table.Document, rows)
     still = None
     if not getattr(table, "SWAttachedToAnchor", False) and getattr(table, "SWAnchorCorner", ""):
         try:
@@ -603,8 +646,10 @@ def with_cut_lists(items, home=None, qty_prop=""):
 
 
 BOM_COLUMN_TYPES = ("Item No.", "Part Number", "Quantity", "Custom Property", "User Defined")
-BOM_PROPERTIES = ("Description", "Material", "Weight", "Mass", "Vendor", "Finish", "Cost", "Revision",
-                  "Sheet Metal Gauge", "Sheet Metal Thickness", "Bounding Box Length", "Bounding Box Width")
+
+# system properties), the material applied to the part and its mass; the plain names are the user's custom properties
+BOM_PROPERTIES = ("Description", "FW-Material", "FW-Mass", "Material", "Weight", "Mass", "Vendor", "Finish", "Cost",
+                  "Revision", "Sheet Metal Gauge", "Sheet Metal Thickness", "Bounding Box Length", "Bounding Box Width")
 
 
 def qty_title():
@@ -628,7 +673,8 @@ def default_columns(template="bom-standard"):
     cols = [{"type": "Item No.", "title": "ITEM NO."}, {"type": "Part Number", "title": "PART NUMBER"},
             {"type": "Custom Property", "prop": "Description", "title": "DESCRIPTION"}]
     if template == "bom-material":
-        cols.append({"type": "Custom Property", "prop": "Material", "title": "MATERIAL"})
+
+        cols.append({"type": "Custom Property", "prop": "FW-Material", "title": "MATERIAL"})
     elif template == "bom-weight":
         cols.append({"type": "Custom Property", "prop": "Weight", "title": "WEIGHT"})
     cols.append({"type": "Quantity", "title": qty_title()})
@@ -658,6 +704,19 @@ def _col_index(cols, kind):
     return next((i for i, c in enumerate(cols) if c.get("type") == kind), None)
 
 
+def mass_text(kg, obj=None):
+    ""
+
+    grams = float(kg) * 1000.0
+    try:
+        from . import customprops
+        unit = customprops._doc_unit("mass") or "g"
+        return "%.2f %s" % (grams / customprops.UNIT_SIZES["mass"][unit], unit)
+    except Exception as _fw_err:
+        _fw_log("drawtables.py:mass unit", _fw_err)
+        return "%.2f g" % grams
+
+
 def property_value(obj, name, config=None):
     ""
 
@@ -665,6 +724,11 @@ def property_value(obj, name, config=None):
     if obj is None:
         return ""
     low = name.lower()
+    if low in ("fw-material", "sw-material"):
+        return _material(obj)[0]            # the system property: the applied material
+    if low in ("fw-mass", "sw-mass"):
+        m = _mass(obj)
+        return "" if m is None else mass_text(m, obj)
     try:
         from . import fileprops
         got = fileprops.lookup(obj.Document, name, config)
@@ -676,7 +740,7 @@ def property_value(obj, name, config=None):
         return _material(obj)[0]
     if low in ("weight", "mass"):
         m = _mass(obj)
-        return "" if m is None else "%.2f g" % (m * 1000.0)     # MMGS: grams
+        return "" if m is None else mass_text(m, obj)
     if low == "description":
         return getattr(obj, "Label2", "") or ""
     try:
@@ -820,11 +884,14 @@ def bom_rows(view, bom_type="Top-level only", start=1, step=1, template="bom-sta
         LAST_IDENT[name] = item
         name = shown_pn(name)
         row = [item, name, desc]
+
+        # own property wins (a configuration's, then the Custom one, linked values evaluated), else the
+        # applied material / the mass
+        cfg = it[5] if obj is not None and len(it) > 5 else None
         if template == "bom-material":
-            row.append(_material(obj)[0] if obj is not None else (it[5] if len(it) > 5 else ""))
+            row.append(property_value(obj, "Material", cfg) if obj is not None else (it[5] if len(it) > 5 else ""))
         elif template == "bom-weight":
-            m = _mass(obj) if obj is not None else None
-            row.append("" if m is None else "%.2f g" % (m * 1000.0))     # MMGS: grams
+            row.append(property_value(obj, "Weight", cfg) if obj is not None else "")
         row.append(str(qty))
         rows.append(row)
         metas.append((item, name, desc, qty, obj, it[5] if obj is not None and len(it) > 5 else None))
@@ -1362,6 +1429,11 @@ def update_table(t):
             write_hole_rows(t, all_hole_rows(view, hole_origin(t, view), more_sets(t), **hole_options(t))[0])
     elif kind == "Bend":
         view = doc.getObject(t.SWTableView)
+        if view is not None and not _drawn(view):
+            # sheet metal run 11-27: a drawing opened again refreshed its bend table before the flat pattern view
+            # was drawn: no bends, so the tags were deleted and not made again, and the drawing (12 items saved,
+            # 10 read) opened read-only as damaged. The table waits for the view.
+            view = None
         if view is not None:
             rows, tags = bend_rows(view, getattr(t, "SWBendControl", "Alpha"), getattr(t, "SWBendStart", "A"))
             set_rows(t, rows, BEND_WIDTHS)
@@ -1441,12 +1513,80 @@ def _border_group(panel):
     grid.addWidget(panel.box_border, 0, 1)
     grid.addWidget(QtWidgets.QLabel("Grid border:", box), 1, 0)
     grid.addWidget(panel.grid_border, 1, 1)
+
+    # take the drawing's Document Properties > Tables values, and picking another thickness unticks it
+    panel.border_doc = QtWidgets.QCheckBox("Use document settings", box)
+    panel.border_doc.setObjectName("SWTableBorderDoc")
+    lay.addWidget(panel.border_doc)
     lay.addLayout(grid)
     panel.lay.addWidget(box)
+    panel.border_doc.toggled.connect(lambda on, p=panel: _border_doc(p, on))
+    for c in (panel.box_border, panel.grid_border):
+        c.activated.connect(lambda _i, p=panel: p.border_doc.setChecked(False))
+    # Text Format: [ ] All uppercase (the table's own setting; the drawing's Drafting Standard default ticks it)
+    tbox, tlay = D._group("Text Format", panel.form)
+    panel.all_upper = QtWidgets.QCheckBox("All uppercase", tbox)
+    panel.all_upper.setObjectName("SWTableAllUppercase")
+    try:
+        from . import drawdocprops
+        panel.all_upper.setChecked(bool(drawdocprops.prop(doc, "upper_tables")))
+    except Exception as _fw_err:
+        _fw_log("drawtables.py:all uppercase default", _fw_err)
+    tlay.addWidget(panel.all_upper)
+    panel.lay.addWidget(tbox)
+    order = tuple(getattr(panel, "GROUP_ORDER", ()) or ())     # Layer comes in after build(): Text Format is last
+    panel.GROUP_ORDER = order + tuple(t for t in ("Layer", "Text Format") if t not in order)
+
+
+def doc_border(doc):
+    """The drawing's Document Properties > Tables box and grid thickness texts."""
+    return (thickness_text(_row(doc, "Tables", "Box thickness", "Thin", "tbl_box")),
+            thickness_text(_row(doc, "Tables", "Grid thickness", "Thin", "tbl_grid")))
+
+
+def _border_doc(panel, on):
+    if not on:
+        return
+    box, grid = doc_border(panel.doc)
+    panel.box_border.setCurrentText(box)
+    panel.grid_border.setCurrentText(grid)
+
+
+def upper_rows(doc, rows):
+    """Rows in capitals (the drawing's uppercase Exclusion list is kept)."""
+    try:
+        from . import drawdocprops, docstyle
+        ex = drawdocprops.exclusions(doc)
+        return [[docstyle.upper(str(c), ex) if isinstance(c, str) else c for c in r] for r in rows]
+    except Exception:
+        return [[c.upper() if isinstance(c, str) else c for c in r] for r in rows]
+
+
+def set_all_uppercase(t, on):
+    """Text Format > All uppercase for one table (kept as SWAllUppercase); the cells are rewritten."""
+    if t is None:
+        return
+    if "SWAllUppercase" not in t.PropertiesList:
+        if not on:
+            return
+        t.addProperty("App::PropertyBool", "SWAllUppercase", "FreeCAD", "Text Format: All uppercase")
+    was = bool(t.SWAllUppercase)
+    t.SWAllUppercase = bool(on)
+    if on and not was:
+        set_rows(t, rows_of(t))
 
 
 def _apply_border(panel, t):
     set_border(t, float(panel.box_border.currentText()[:-2]), float(panel.grid_border.currentText()[:-2]))
+    if t is not None and getattr(panel, "border_doc", None) is not None:
+        if "SWBorderFromDoc" not in t.PropertiesList:
+            t.addProperty("App::PropertyBool", "SWBorderFromDoc", "FreeCAD", "Border: Use document settings")
+        t.SWBorderFromDoc = panel.border_doc.isChecked()
+    if t is not None and getattr(panel, "all_upper", None) is not None:
+        try:
+            set_all_uppercase(t, panel.all_upper.isChecked())
+        except Exception as _fw_err:
+            _fw_log("drawtables.py:all uppercase", _fw_err)
     if t is not None and getattr(panel, "attach", None) is not None:
         set_attached(t, panel.attach.isChecked())
 
@@ -1776,6 +1916,10 @@ class BomEditPanel(BomPanel):
         for c, name in ((self.box_border, "SWBoxBorder"), (self.grid_border, "SWGridBorder")):
             if name in t.PropertiesList:
                 c.setCurrentText("%gmm" % float(getattr(t, name)))
+        if getattr(self, "border_doc", None) is not None:
+            self.border_doc.setChecked(bool(getattr(t, "SWBorderFromDoc", False)))
+        if getattr(self, "all_upper", None) is not None and "SWAllUppercase" in t.PropertiesList:
+            self.all_upper.setChecked(bool(t.SWAllUppercase))
         if self.view is not None:
             self.fill_configs()
             want = list(getattr(t, "SWBomConfigurations", []) or [])
@@ -1801,6 +1945,7 @@ class BomEditPanel(BomPanel):
                 "SWBomFilter": self.checked_filters(),
                 "SWBoxBorder": float(self.box_border.currentText()[:-2]),
                 "SWGridBorder": float(self.grid_border.currentText()[:-2]),
+                "SWBorderFromDoc": self.border_doc.isChecked(), "SWAllUppercase": self.all_upper.isChecked(),
                 "SWAttachedToAnchor": self.attach.isChecked(),
                 "SWAnchorCorner": self.corner.checkedButton().text() if getattr(self, "corner", None) is not None
                 and self.corner.checkedButton() is not None else getattr(self.edit_table, "SWAnchorCorner", "")}
@@ -2852,11 +2997,23 @@ class WeldmentCutListPanel(D._Panel):
                 self.say("Click a view of a weldment or sheet metal part.")
                 return True
             self.view = v
+            self._view_clicked = True
             if self.attach.isChecked():
                 self.say("OK puts the table at the anchor point.")
             else:
                 self.say("Click where the table goes.")
             return True
+        if not getattr(self, "_view_clicked", False):
+            # the view was taken for the user (the sheet's only weldment view): a click on a weldment view is
+            # still the view pick, not the table's place (sheet metal run 11-27: the table landed on the frame)
+            from . import drawmenus
+            self._view_clicked = True
+            v = DV.view_at(self.page, p)
+            if v is not None and v in [f[0] for f in drawmenus.weldment_views(self.page)]:
+                self.view = v
+                if not self.attach.isChecked():
+                    self.say("Click where the table goes.")
+                return True
         if self.attach.isChecked():
             return True
         self.make(p)
@@ -3142,6 +3299,33 @@ def bend_note_svg(text, angle, style):
     return body, w / 2 + 3
 
 
+def line_of_bend(view, lines=None, bs=None):
+    """{bend index: bend line index} for a flat pattern view: the n-th bend from the fixed face goes with the n-th
+    bend line from it (the flat pattern lies on the fixed face's plane). Sheet metal run 11-27: parallel bends
+    were matched in list order, so a Bend Table's tags sat together on one line and the notes could swap
+    UP and DOWN. {} when it cannot tell (the callers keep their old matching)."""
+    import Part
+    lines = bend_lines(view) if lines is None else lines
+    bs = list(bends(view)) if bs is None else bs
+    flat = _flat_source(view)
+    if flat is None or not lines or len(lines) != len(bs):
+        return {}
+    try:
+        fixed = None
+        for solid in _solids(view):
+            fixed = _fixed_face(solid, flat)
+            if fixed is not None:
+                break
+        if fixed is None:
+            return {}
+        lo = sorted(range(len(lines)), key=lambda i: lines[i].distToShape(fixed)[0])
+        bo = sorted(range(len(bs)), key=lambda i: Part.Vertex(bs[i][2]).distToShape(fixed)[0])
+        return dict(zip(bo, lo))
+    except Exception as _fw_err:
+        _fw_log("drawtables.py:line of bend", _fw_err)
+        return {}
+
+
 def bend_notes(page, view, style=None):
     ""
 
@@ -3154,10 +3338,11 @@ def bend_notes(page, view, style=None):
     x0, y0 = D.view_position(view)
     k = DV.view_scale(view)
     made, used = [], set()
+    by_line = {li: bi for bi, li in line_of_bend(view, lines, bs).items()}
     for n, e in enumerate(lines):
         dirn = e.Curve.Direction
-        pick = None
-        for i, b in enumerate(bs):
+        pick = by_line.get(n)
+        for i, b in enumerate(bs if pick is None else ()):
             if i not in used and abs(abs(V(b[3]).normalize().dot(dirn)) - 1) < 1e-4:
                 pick = i
                 break
@@ -3594,9 +3779,15 @@ def bend_rows(view, control="Alpha", start="A"):
     rows = [["TAG", "DIRECTION", "ANGLE", "INNER RADIUS"]]
     tags = []
     digits = radius_digits(view.Document)
-    for n, (r, ang, mid, ax, way) in enumerate(bends(view)):
+    bs = list(bends(view))
+    lines = bend_lines(view)
+    on_line = line_of_bend(view, lines, bs)
+    for n, (r, ang, mid, ax, way) in enumerate(bs):
         tag = _seq_tag(n, control, start)
         rows.append([tag, way, "%g°" % round(ang, 2), "%.*f" % (digits, r)])
+        if n in on_line:                    # a flat pattern: the tag on its own bend line, not the formed bend
+            e = lines[on_line[n]]
+            mid = e.valueAt((e.FirstParameter + e.LastParameter) / 2)
         tags.append((tag, mid))
     return rows, tags
 
@@ -3773,7 +3964,7 @@ def model_weld_rows(page, view=None):
     for n, key in enumerate(kinds, 1):
         row = [str(n), str(qty[key]), key[0], key[1], "%.2f" % length[key], "-"]
         if mass:
-            row.append("%.2f g" % (mass.get(key, 0.0) * 1000.0))       # MMGS: grams
+            row.append(mass_text(mass.get(key, 0.0)))
         rows.append(row)
     return rows
 

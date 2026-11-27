@@ -364,7 +364,7 @@ class ThreadFeature:
             add("App::PropertyBool", "MirrorProfile", "Mirror the thread profile")
             add("App::PropertyEnumeration", "MirrorAxis", "Mirror horizontally or vertically")
             obj.MirrorAxis = ["Horizontal", "Vertical"]
-            add("App::PropertyAngle", "ProfileAngle", "Rotation Angle: the profile turned about its centre")
+            add("App::PropertyAngle", "ProfileAngle", "Rotation Angle: the profile turned about its center")
             add("App::PropertyEnumeration", "PreviewMode", "Preview Options while the PropertyManager is open")
             obj.PreviewMode = list(PREVIEWS)
         if "UseOffset" not in obj.PropertiesList:
@@ -603,7 +603,7 @@ class ThreadPanel:
         self.tilt.setRange(-360.0, 360.0)
         self.tilt.setSuffix(" \u00b0")
         self.tilt.setValue(float(obj.ProfileAngle))
-        self.tilt.setToolTip("Turns the thread profile about its centre")
+        self.tilt.setToolTip("Turns the thread profile about its center")
         form.addRow("Rotation Angle", self.tilt)
         self.locate = QtWidgets.QPushButton("Locate Profile")
         self.locate.setObjectName("SWThreadLocateProfile")
@@ -734,7 +734,7 @@ class ThreadPanel:
             edge = None
         if edge is None or _circle(edge) is None:
             return
-        QtCore.QTimer.singleShot(0, lambda: self.set_edge(sub))
+        from . import safe_later as _sl; _sl.later(0, lambda: self.set_edge(sub), self, "kind")
 
     def set_start(self, obj, sub):
         self.obj.StartAt = (obj, [sub] if sub else [])

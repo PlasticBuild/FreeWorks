@@ -72,6 +72,20 @@ def _rgbt(m):
     return list(m.DiffuseColor[:3]) + [float(m.Transparency)]
 
 
+def _recolour(m, rgbt):
+    """m with the kept colour and transparency, its other material values as they are (the look comes back
+    exactly as it was kept, not lit differently)."""
+    out = App.Material()
+    for attr in ("AmbientColor", "SpecularColor", "EmissiveColor", "Shininess"):
+        try:
+            setattr(out, attr, getattr(m, attr))
+        except Exception as _fw_err:
+            _fw_log("displaystates.py:recolour", _fw_err)
+    out.DiffuseColor = tuple(rgbt[:3])
+    out.Transparency = float(rgbt[3]) if len(rgbt) > 3 else 0.0
+    return out
+
+
 def capture(doc):
     """The look of doc now: {object name: {v, m, a?, sw?}}."""
     from . import appearance
@@ -93,7 +107,8 @@ def capture(doc):
                 _fw_log("displaystates.py:83", _fw_err)
         if obj.TypeId == "PartDesign::Body":
             item["sw"] = appearance.stored(obj)
-        elif hasattr(vo, "ShapeAppearance") and not _in_body(obj):
+        if hasattr(vo, "ShapeAppearance") and not _in_body(obj):
+            # a body coloured with FreeCAD's own Appearance (no Appearances PM map) keeps its colour per state too
             try:
                 item["a"] = [_rgbt(m) for m in vo.ShapeAppearance]
             except Exception as _fw_err:
@@ -119,13 +134,14 @@ def restore(doc, look):
             if item["sw"] != appearance.stored(obj):
                 appearance.store(obj, item["sw"])
             appearance.paint(obj)
-        elif "a" in item:
+        if "a" in item and not item.get("sw"):
             try:
                 now = list(vo.ShapeAppearance)
                 want = item["a"]
                 if len(want) != len(now):
                     want = want[:1] * len(now)
-                vo.ShapeAppearance = [appearance._material(now[i], c) for i, c in enumerate(want)]
+                if any(abs(a - b) > 1e-4 for m, c in zip(now, want) for a, b in zip(_rgbt(m), c)):
+                    vo.ShapeAppearance = [_recolour(now[i], c) for i, c in enumerate(want)]
             except Exception as _fw_err:
                 _fw_log("displaystates.py:120", _fw_err)
         if "t" in item:
@@ -405,7 +421,7 @@ class PropertiesPanel:
         lay.addStretch(1)
 
     def getStandardButtons(self):
-        return int(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        return QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel    # sketchfirst-1126
 
     def accept(self):
         try:

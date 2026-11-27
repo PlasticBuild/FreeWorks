@@ -240,7 +240,7 @@ def render_into(tab):
                 continue
             have = (per_cfg if c.get("config") else custom).get(name)
             value = have[1] if have else str(c.get("default", ""))
-            if value.startswith("$PRP"):
+            if customprops.is_link(value):
                 kind = have[0] if have else "Text"
                 w = QtWidgets.QLineEdit(customprops.evaluate(doc, kind, value, config if c.get("config") else None))
                 w.setReadOnly(True)

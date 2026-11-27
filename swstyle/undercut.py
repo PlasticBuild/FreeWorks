@@ -158,7 +158,7 @@ class UndercutWindow(evaluate.ReportWindow):
 
 
 @evaluate.command("SWStyle_UndercutAnalysis", "Undercut Analysis",
-                  "Colours the faces a two-part mould pulling along a direction could not release.")
+                  "Colors the faces a two-part mold pulling along a direction could not release.")
 def undercut_analysis():
     return evaluate._show(UndercutWindow)
 

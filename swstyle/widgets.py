@@ -247,17 +247,16 @@ def _offers(key, native, takes=False):
 
 
 
-# empty Part2 and Part9 with no sketch open). FreeCAD's tool-first wrappers are always active, so the
-
-NEEDS_SOLID = frozenset(("CutExtrude", "Hole", "CutRevolve", "CutSweep", "CutLoft", "CutBoundary", "Fillet", "Rib",
-                         "Draft", "Shell", "Wrap", "Intersect", "Mirror"))
-NEEDS_PROFILE = frozenset(("BossSweep",))                      # live once the part has a sketch or a solid
-NEEDS_PROFILES = frozenset(("BossLoft", "BossBoundary"))       # two profiles: live with two sketches or a solid
-NEEDS_SOLID_IN_SKETCH = frozenset(("LinearPattern",))          # live in an empty part, grey while sketching one
-NOT_IN_2D_SKETCH = frozenset(("OffsetOnSurface",))             # cmgrey3-1121: a 3D sketch tool, grey in a 2D sketch
-NEEDS_OPEN_SKETCH = frozenset(("Trim", "Offset", "MirrorEntities", "LinearSketchPattern", "CircularSketchPattern",
-                               "MoveEntities", "CopyEntities", "RotateEntities", "ScaleEntities", "StretchEntities",
-                               "Relations", "RepairSketch", "ShadedSketchContours", "SketchFillet", "SketchChamfer"))
+# empty Part2 and Part9 with no sketch open). solidfirst-1126: NO DEAD CONTROLS overrides that. In an empty part
+# every one of them opens its own page (the cuts, Hole, Fillet... open their flow, or solidfirstlive's "a solid
+# comes first" page; the sketch tools start a sketch first), on the ribbon and on the S-key bar alike, so only
+# the two that do nothing without an open sketch stay grey (bench, greykeys check).
+NEEDS_SOLID = frozenset()
+NEEDS_PROFILE = frozenset()
+NEEDS_PROFILES = frozenset()
+NEEDS_SOLID_IN_SKETCH = frozenset()
+NOT_IN_2D_SKETCH = frozenset(("OffsetOnSurface", "Sketch3DPlane"))   # cmgrey3-1121 + nodead-1126: 3D sketch tools, grey in a 2D sketch
+NEEDS_OPEN_SKETCH = frozenset()   # sketchfirst-1126: Repair Sketch and Sketch Chamfer open a "open a sketch first" page
 _PART_STATE = [None, 0.0, None]     # (doc name, object count), time read, (is part, has solid, has sketch)
 
 
@@ -316,12 +315,46 @@ def sw_greyed(key):
     if key in NOT_IN_2D_SKETCH:
         return featureflow.editing_sketch() is not None
     if key in NEEDS_SOLID:
+        if key == "Fillet" and not solid:
+
+            # while the part has a surface body, as the click then opens that page (sfvar440 on the PC)
+            try:
+                from . import solidfirstlive
+                if solidfirstlive.has_surface(App.ActiveDocument):
+                    return False
+            except Exception as _fw_err:
+                _fw_log("widgets.py:cmgrey-surface", _fw_err)
         return not solid
     if key in NEEDS_SOLID_IN_SKETCH:
         return not solid and featureflow.editing_sketch() is not None
     if key in NEEDS_PROFILES:
         return not (solid or sketch >= 2)
     return not (solid or sketch)
+
+
+# greycm-1126: what to do first, for the buttons sw_greyed keeps from running
+SW_GREY_TEXTS = {
+    "OffsetOnSurface": "Offset On Surface works in a 3D sketch. Exit the 2D sketch first, or start a 3D Sketch.",
+    "Sketch3DPlane": "3D Sketch On Plane works in a 3D sketch. Exit the 2D sketch first, or start a 3D Sketch.",
+}
+
+
+def sw_grey_tell(key):
+    """notready's Message page; over an open sketch (its own page stays) a tip at the pointer and the status bar."""
+    text = SW_GREY_TEXTS.get(key, "Exit the 2D sketch first, or start a 3D Sketch.")
+    try:
+        from . import notready
+        if notready.show(key, text=text):
+            return
+    except TypeError:       # notready before greyrows-1126: no text of its own
+        pass
+    except Exception as _fw_err:
+        _fw_log("widgets.py:greycm", _fw_err)
+    try:
+        QtWidgets.QToolTip.showText(QtGui.QCursor.pos(), text)
+        Gui.getMainWindow().statusBar().showMessage(text, 8000)
+    except Exception as _fw_err:
+        _fw_log("widgets.py:greycm-tip", _fw_err)
 
 
 def _pm_open():
@@ -354,7 +387,11 @@ class Binding(QtCore.QObject):
 
     @property
     def implemented(self):
-        return bool(self.native or self.cmd.call)
+        from . import smengine
+
+        return bool(self.native or self.cmd.call) and (
+            not smengine.is_sheet_metal_command(self.cmd.key) or smengine.enabled()
+        )
 
     def resolve(self):
         if self.action is not None and alive(self.action):
@@ -412,8 +449,18 @@ class Binding(QtCore.QObject):
         elif not enabled and self.native and not self.cmd.call and getattr(
                 self, "_free_enabled", App.ActiveDocument is not None and self.native.startswith(("SWStyle_", "FreeWorks_"))):
             enabled = self._pm_override = True
-        if enabled and sw_greyed(self.cmd.key):
-            enabled = False
+        self._sw_grey = False
+        if sw_greyed(self.cmd.key):
+            enabled = self._sw_grey = True     # greycm-1126: NO DEAD CONTROLS: live, a click says what to do first
+        self._notready = False
+        if (not enabled and self.native and not self.cmd.call and App.ActiveDocument is not None
+                and self.cmd.key not in CommandButton.IDLE_HIDDEN and not sw_greyed(self.cmd.key)):
+            try:        # notready-1126: no greyed button; a click that finds the command still inactive opens a page
+                from . import notready
+                if notready.exists(self.native):
+                    enabled = self._notready = True
+            except Exception as _fw_err:
+                _fw_log("widgets.py:notready", _fw_err)
         shown = self._style_key() if self.cmd.key in STYLE_BUTTONS else None
         if enabled != self._enabled or checked != self._checked or shown != getattr(self, "_shown", None):
             self._enabled, self._checked, self._shown = enabled, checked, shown
@@ -541,6 +588,10 @@ class Binding(QtCore.QObject):
             self.update_state()
         if not self._enabled:
             return
+        if getattr(self, "_sw_grey", False) and sw_greyed(self.cmd.key):
+            sw_grey_tell(self.cmd.key)
+            QtCore.QTimer.singleShot(0, self.update_state)
+            return
         if getattr(self, "_pm_override", False):
             # refnest: Plane, Axis, Point, Coordinate System run over an open feature page and go back to it
 
@@ -569,6 +620,12 @@ class Binding(QtCore.QObject):
             setupoffer.run(self.cmd.key, self.native)
             QtCore.QTimer.singleShot(0, self.update_state)
             return
+        if getattr(self, "_notready", False):
+            from . import notready
+            if not notready.can_act(self.native):
+                notready.show(self.cmd.key)       # notready-1126: says what it works on and what to do first
+                QtCore.QTimer.singleShot(0, self.update_state)
+                return
         if self.action is not None and alive(self.action):
             self.action.trigger()
         elif self.native:
@@ -695,10 +752,15 @@ class CommandButton(QtWidgets.QWidget):
 
     ICON = 20
 
+    # at 20 px the icons on the big Sketch / Features buttons read as text-only buttons in the dark theme
+    LARGE_ICON = 26
+
     # a button with nothing to act on yet (no markup on the sheet...): hidden from its tab, not greyed (NO DEAD
     # CONTROLS); the tab closes up round it and it comes back once its command can act
     IDLE_HIDDEN = {"DrawMarkupEraser", "DrawMarkupSelect", "DrawZoomToMarkup",
-                   "OffsetOnSurface"}   # fix230 (look audit K6): 3D sketch only, so off the tab in a 2D sketch
+                   "OffsetOnSurface",   # fix230 (look audit K6): 3D sketch only, so off the tab in a 2D sketch
+                   "Sketch3D", "Sketch3DOnPlane",   # nodead-1126: they cannot start inside a 2D sketch: off, not grey
+                   "Sketch3DPlane"}   # nodead-1126: the Sketch tab's Plane cell is a 3D sketch tool too
 
 
     # COMPACT (cmgr-1119): Use Large Buttons with Text off, every CommandManager button a small icon in one row
@@ -726,6 +788,7 @@ class CommandButton(QtWidgets.QWidget):
         self._lines = self.binding.cmd.caption.split("\n") if kind == "large" else [self.binding.cmd.label]
         self.k = ui_scale()
         self.icon = scaled(self.ICON, self.k)
+        self.large_icon = scaled(self.LARGE_ICON, self.k)     # bigicons-1127
         self.show_mode = self.FULL
 
     def s(self, value):
@@ -777,8 +840,8 @@ class CommandButton(QtWidgets.QWidget):
             return size(s(33) if self.has_arrow() else s(24), s(23))
         if self.kind == "large":
             if not self.shows_text():
-                return size(self.icon + s(10), s(70))
-            text = max([fm.horizontalAdvance(line) for line in self._lines] + [self.icon])
+                return size(self.large_icon + s(10), s(70))
+            text = max([fm.horizontalAdvance(line) for line in self._lines] + [self.large_icon + s(4)])
             return QtCore.QSize(int(text + s(6) + 0.999), int(round(s(70))))
         if self.kind == "stack":
             if not self.shows_text():
@@ -872,9 +935,16 @@ class CommandButton(QtWidgets.QWidget):
             return super().mousePressEvent(event)
         self._pressed = self._area(event.position().toPoint())
         self.update()
+        if self._pressed == "main" and self._eye():
+            return
         if self._pressed == "arrow" or (self.binding.cmd.call in ("menu", "scene_menu")):
             self._pressed = "arrow"
             self.show_flyout()
+
+    def _eye(self):
+        ""
+
+        return self.kind == "hud" and self.binding.cmd.key == "HideShowItems"
 
     def mouseReleaseEvent(self, event):
         if event.button() != Qt.LeftButton:
@@ -882,6 +952,9 @@ class CommandButton(QtWidgets.QWidget):
         pressed, self._pressed = self._pressed, None
         self.update()
         if pressed == "main" and self.rect().contains(event.position().toPoint()):
+            if self._eye():
+                Gui.runCommand("SWStyle_HideAllTypes")
+                return
             self.binding.run()
 
     def show_flyout(self):
@@ -928,21 +1001,22 @@ class CommandButton(QtWidgets.QWidget):
         arrow_color = T.arrow if enabled else T.arrow_disabled
         k = self.shape()
         s = self.s
-        n = self.icon
+        n = self.large_icon if k == "large" else self.icon     # bigicons-1127
         box = lambda x, y: QtCore.QRect(int(round(x)), int(round(y)), n, n)
         arrow = s(5)
         if k == "large":
             x = (self.width() - n) / 2.0
             if not self.shows_text():
                 # the icon alone, a little above the middle, the flyout arrow where it always is
-                style.paint_icon(painter, icon, box(x, s(22)), Qt.AlignCenter, mode)
+                style.paint_icon(painter, icon, box(x, s(19)), Qt.AlignCenter, mode)
             else:
-                style.paint_icon(painter, icon, box(x, s(3)), Qt.AlignCenter, mode)
-                baseline = s(35)
+                # bigicons-1127: the 26 px icon at the top, the text close under it, the flyout arrow kept clear
+                style.paint_icon(painter, icon, box(x, s(2)), Qt.AlignCenter, mode)
+                baseline = s(40)
                 for line in self._lines[:3]:
                     w = painter.fontMetrics().horizontalAdvance(line)
                     painter.drawText(QtCore.QPointF((self.width() - w) / 2.0, baseline), line)
-                    baseline += s(15)
+                    baseline += s(14)
             if self.has_arrow():
                 draw_arrow(painter, self.width() / 2.0, s(63), arrow_color, arrow)
         elif k == "stack":
@@ -1138,6 +1212,23 @@ def glyph_close(painter, rect, widget):
     c = rect.center()
     painter.drawLine(QtCore.QPointF(c.x() - 5.5, c.y() - 5.5), QtCore.QPointF(c.x() + 5.5, c.y() + 5.5))
     painter.drawLine(QtCore.QPointF(c.x() + 5.5, c.y() - 5.5), QtCore.QPointF(c.x() - 5.5, c.y() + 5.5))
+    painter.restore()
+
+
+def glyph_help(painter, rect, widget):
+    """Help: a question mark in a ring (helpglyph-1127; drawn when the pack has no MINMAX_HELP)."""
+    painter.save()
+    painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
+    pen = QtGui.QPen(T.text)
+    pen.setWidthF(1.1)
+    painter.setPen(pen)
+    c = rect.center()
+    painter.drawEllipse(c, 7.5, 7.5)
+    f = QtGui.QFont(widget.font())
+    f.setPixelSize(11)
+    f.setBold(True)
+    painter.setFont(f)
+    painter.drawText(QtCore.QRectF(c.x() - 7, c.y() - 7, 14, 14), Qt.AlignCenter, "?")
     painter.restore()
 
 

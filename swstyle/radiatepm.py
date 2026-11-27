@@ -218,7 +218,7 @@ class RadiatePanel:
             parts = sub.split(".")
             obj = obj.getSubObject(".".join(parts[:-1]) + ".", retType=1) or obj
             sub = parts[-1]
-        QtCore.QTimer.singleShot(0, lambda: (self.pick(obj, sub), Gui.Selection.clearSelection()))
+        from . import safe_later as _sl; _sl.later(0, lambda: (self.pick(obj, sub), Gui.Selection.clearSelection()), self, "note")
 
     def _changed(self, *args):
         o = self.obj

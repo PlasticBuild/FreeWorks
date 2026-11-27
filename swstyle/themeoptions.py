@@ -47,7 +47,7 @@ class LookPage:
         self.theme.setMinimumWidth(180)
         for key, label in THEME_LABELS:
             self.theme.addItem(label, key)
-        self.theme.setToolTip("Light: a light grey interface. Dark: dark greys "
+        self.theme.setToolTip("Light: a light gray interface. Dark: dark grays "
                               "with light text and a dark 3D view. AMOLED: pure black panes and a black 3D "
                               "view for OLED screens. FreeCAD's own panels change with it")
         form.addRow("Background:", self.theme)
@@ -57,9 +57,9 @@ class LookPage:
         self.scene.addItem(SCENE_OWN, -1)
         for i, (name, _colours, _gradient) in enumerate(style.SCENES):
             self.scene.addItem(name, i)
-        self.scene.setToolTip("The 3D view's background. The theme's own is a light blue-grey gradient for "
-                              "Light, a dark grey gradient for Dark and black for AMOLED; the others are the "
-                              "Apply Scene choices (3 Point Faded, the light gradient, is the first). The sketch colours "
+        self.scene.setToolTip("The 3D view's background. The theme's own is a light blue-gray gradient for "
+                              "Light, a dark gray gradient for Dark and black for AMOLED; the others are the "
+                              "Apply Scene choices (3 Point Faded, the light gradient, is the first). The sketch colors "
                               "follow the scene")
         form.addRow("Viewport scene:", self.scene)
         lay.addWidget(colours)

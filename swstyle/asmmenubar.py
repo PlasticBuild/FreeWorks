@@ -202,16 +202,33 @@ def _view():
         if isinstance(e, tuple) and e[0] == "Hide / Show":
             rows = []
             for r in e[1]:
+                if isinstance(r, tuple) and r[0] == "Live Section Planes":
+                    continue        # viewrows-1126: an assembly's MENU 26 has it after Planes
                 rows.append(r)
+                if isinstance(r, tuple) and r[0] == "Planes":
+                    rows.append(("Live Section Planes", "ViewLiveSectionPlanes"))
                 if isinstance(r, tuple) and r[0] == "All Annotations":
                     rows += [("Component Envelopes", W("env_comp")), ("Top Level Envelopes", W("env_top"))]
+            e = (e[0], tuple(rows))
+        elif isinstance(e, tuple) and e[0] == "Lights and Cameras":     # viewrows-1126: MENU 26 Take Snapshot
+            rows = []
+            for r in e[1]:
+                rows.append(r)
+                if r == "PlayWalkThrough":
+                    rows.append(("Take Snapshot", C("SWStyle_TakeSnapshot")))
             e = (e[0], tuple(rows))
         elif isinstance(e, tuple) and e[0] == "Display":
             rows = []
             for r in e[1]:
                 rows.append(r)
+                if r == "AmbientOcclusion":     # viewrows-1126: MENU 26 (View/display pkg155)
+                    rows.append(("Use Component Color In HLR/HLV", C("SWStyle_ComponentColorHLR")))
+                if r == "Cartoon":              # viewrows-1126: MENU 26, after Simulation Display (View/display pkg156)
+                    rows.append(("Optimize Zoom/Pan/Rotate", C("SWStyle_OptimizeZoomPanRotate")))
                 if r == "SectionView":
-                    rows.append("TakeSnapshot")
+
+                    # command itself; catalog key TakeSnapshot is Save Camera)
+                    rows.append(("Take Snapshot", C("SWStyle_TakeSnapshot")))
                 if r == "Isolate":
 
                     rows += [("Isolate including suppressed", W("iso_supp")), S,
@@ -299,6 +316,9 @@ def _insert():
 def _tools():
     sketch = _part_entries(swmenus.TOOLS, ("Sketch Entities", "Sketch Tools", "Sketch Settings", "Blocks",
                                            "Spline Tools", "Dimensions", "Relations", "Quick Snaps"))
+
+    sketch = tuple(_without(_without(_without(e, "Baseline"), "Chain"), "Symmetric") if e[0] == "Dimensions" else e
+                   for e in sketch)
     return ("&Tools", (
         ("FreeCAD Applications", (
             ("Sustainability...", C("SWStyle_Sustainability")), ("Costing", C("SWStyle_Costing")),
@@ -1554,7 +1574,10 @@ def item(name, label):
         from . import asmreplacecomp
         return _item(label, True, lambda: asmreplacecomp.start(one))
     if action == "derive":
-        return _item(label, one is not None and not ac.is_subassembly(one), lambda: derive_component_part(asm, one))
+        # live always (no greyed control): with no part component picked it says what to do first
+        if one is not None and not ac.is_subassembly(one):
+            return _item(label, True, lambda: derive_component_part(asm, one))
+        return _item(label, True, _derive_first)
     if action == "iso_supp":
         from . import asmisolate
         return _item(label, bool(asmisolate.picked(asm)), asmisolate.isolate_including_suppressed)
@@ -1563,6 +1586,25 @@ def item(name, label):
         shown = envelopes_shown(asm, top)
         return _item(label, bool(envelopes(asm, top)), lambda: show_envelopes(asm, top, not shown), checked=shown)
     return None
+
+
+def _derive_first():
+    """Derive Component Part with no part component picked: the Message page (what to do first)."""
+    from . import notready
+    key = "DeriveComponentPart"
+    notready.TEXTS.setdefault(key, "Derive Component Part makes a new part from a component of this assembly. "
+                                   "Pick a part component in the graphics area or the FeatureManager design tree "
+                                   "(not a subassembly), then use Derive Component Part again.")
+    try:
+        if Gui.Control.activeDialog():
+            return False
+    except Exception as _fw_err:
+        _fw_log("asmmenubar.py:derive_first", _fw_err)
+    page = notready.NotReadyPage(key)
+    page.form.setProperty("swstyle_pm_title", "Derive Component Part")
+    Gui.Selection.clearSelection()
+    Gui.Control.showDialog(page)
+    return True
 
 
 def _reorg(asmreorg, asm, picked):

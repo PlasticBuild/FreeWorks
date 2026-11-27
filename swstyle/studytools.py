@@ -459,7 +459,79 @@ if Gui is not None:
     def _has_job():
         return bool(_jobs(App.ActiveDocument)) and _no_dialog()
 
+
+    # FreeCAD's whole Preferences window. The pages are FreeCAD's own (they read and write FreeCAD's CAM settings).
+    CAM_PAGES = (("Job", "Path.Main.Gui.PreferencesJob", "JobPreferencesPage"),
+                 ("Tool Assets", "Path.Tool.assets.ui.preferences", "AssetPreferencesPage"),
+                 ("Dressups", "Path.Dressup.Gui.Preferences", "DressupPreferencesPage"),
+                 ("Advanced", "Path.Base.Gui.PreferencesAdvanced", "AdvancedPreferencesPage"))
+
+    def _cam_pages():
+        """[(tab name, page)] for the CAM pages that load, settings read in."""
+        import importlib
+        try:
+            from . import addintabs
+            addintabs.load("CAM")              # the CAM workbench's set-up (assets, dressups), as the CAM tab does
+        except Exception as _fw_err:
+            _fw_log("studytools.py:camload", _fw_err)
+        try:
+            import Path  # noqa: F401
+            import PathGui  # noqa: F401  (the pages' .ui files)
+            import Path.GuiInit
+            Path.GuiInit.Startup()             # registers the dressup pages; runs once
+        except Exception as _fw_err:
+            _fw_log("studytools.py:camgui", _fw_err)
+        out = []
+        for name, mod, cls in CAM_PAGES:
+            try:
+                page = getattr(importlib.import_module(mod), cls)()
+                page.loadSettings()
+                out.append((name, page))
+            except Exception as _fw_err:
+                _fw_log("studytools.py:campage:" + name, _fw_err)
+        return out
+
+    class CamOptionsDialog(QtWidgets.QDialog):
+        def __init__(self, pages, parent=None):
+            super().__init__(parent or Gui.getMainWindow())
+            self.setObjectName("SWCAMOptions")
+            self.setWindowTitle("CAM Options")
+            self.pages = pages
+            lay = QtWidgets.QVBoxLayout(self)
+            self.tabs = QtWidgets.QTabWidget(self)
+            self.tabs.setObjectName("SWCAMOptionsTabs")
+            for name, page in pages:
+                self.tabs.addTab(page.form, name)
+            lay.addWidget(self.tabs)
+            box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+                                             | QtWidgets.QDialogButtonBox.Apply, self)
+            box.accepted.connect(self.accept)
+            box.rejected.connect(self.reject)
+            box.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self.apply)
+            lay.addWidget(box)
+            self.resize(640, 560)
+
+        def apply(self):
+            from . import addintabs
+            for name, page in self.pages:
+                try:
+                    page.saveSettings()
+                except Exception as error:
+                    addintabs._warn("CAM Options", "%s: the settings were not kept (%s)." % (name, error))
+
+        def accept(self):
+            self.apply()
+            super().accept()
+
     def cam_options():
+        pages = _cam_pages()
+        if pages:
+            dlg = CamOptionsDialog(pages)
+            dlg.exec_()
+            # camopts-1127-v2: each open builds new CAM pages; the closed box goes, with them
+            dlg.deleteLater()
+            return True
+        # no CAM page could load (no CAM workbench): FreeCAD's Preferences at the CAM pages, as before
         for group in ("CAM", "Path"):
             try:
                 Gui.showPreferences(group)
@@ -469,12 +541,25 @@ if Gui is not None:
         Gui.runCommand("Std_DlgPreferences", 0)
         return None
 
+    # FreeCAD icons some FreeCAD builds lack (look-audit BB37: "Cannot find icon"): our drawing instead
+    DRAWN = {"FEM_PostVisualizationTable": "SIM_Compare"}
+
+    def _pixmap(name):
+        if name in DRAWN:
+            try:
+                from . import simicons
+                return simicons.svg(DRAWN[name]) or ""
+            except Exception as _fw_err:
+                _fw_log("studytools.py:pixmap", _fw_err)
+                return ""
+        return name
+
     class _Cmd:
         def __init__(self, label, tip, run, active, pixmap=""):
             self.label, self.tip, self.run, self.active, self.pixmap = label, tip, run, active, pixmap
 
         def GetResources(self):
-            return {"MenuText": self.label, "ToolTip": self.tip, "Pixmap": self.pixmap}
+            return {"MenuText": self.label, "ToolTip": self.tip, "Pixmap": _pixmap(self.pixmap)}
 
         def IsActive(self):
             try:
@@ -502,10 +587,10 @@ if Gui is not None:
         "SWStyle_FlowBatchRun": _Cmd("Batch Run", KEYS[4][3], lambda: _run_all_ask("Batch Run", True),
                                      lambda: _doc_has(True) and _no_dialog(), "FEM_SolverRun"),
         "SWStyle_CAMOptions": _Cmd("CAM Options", KEYS[8][3], cam_options, lambda: True, "preferences-system"),
-        "SWStyle_CAMPost": _Cmd("Post Process", KEYS[9][3], lambda: _job_run("Post Process", "CAM_Post"), _has_job, "CAM_Post"),
-        "SWStyle_CAMCheck": _Cmd("Check Job", KEYS[10][3], lambda: _job_run("Check Job", "CAM_Sanity"), _has_job, "CAM_Sanity"),
+        "SWStyle_CAMPost": _Cmd("Post Process", KEYS[9][3], lambda: _job_run("Post Process", "CAM_Post"), _has_job, "FW_CAM_Post"),     # camicons-1126
+        "SWStyle_CAMCheck": _Cmd("Check Job", KEYS[10][3], lambda: _job_run("Check Job", "CAM_Sanity"), _has_job, "FW_CAM_Sanity"),     # camicons-1126
         "SWStyle_CAMStep": _Cmd("Step Thru Toolpath", KEYS[11][3], lambda: _job_run("Step Thru Toolpath", "CAM_Inspect", True),
-                                _has_job, "CAM_Inspect"),
+                                _has_job, "FW_CAM_Inspect"),     # camicons-1126
     }
 
 

@@ -83,7 +83,7 @@ def export_part(objs, path):
                 json.dump(data, fh)
             job, args = "save-tree", [tree, step, path]
         bak = _backup(path)
-        label = "SolidWorks is saving %s..." % os.path.basename(path)
+        label = "Saving %s..." % os.path.basename(path)
         try:
             try:
                 res = swapp.run(job, args, label)
@@ -92,7 +92,7 @@ def export_part(objs, path):
                     raise
 
                 res = swapp.run("save-part", [step, path], label)
-                res.update(how="solid", tree_not_saved="SolidWorks stopped while rebuilding the features (%s)" % exc)
+                res.update(how="solid", tree_not_saved="The other CAD program stopped while rebuilding the features (%s)" % exc)
         except swapp.HelperError as exc:
             if bak:
                 shutil.copy2(bak, path)
@@ -106,7 +106,7 @@ def export_part(objs, path):
             msg("%s: saved with its feature tree" % os.path.basename(path))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-    msg("SolidWorks wrote %s" % path)
+    msg("Saved %s" % path)
 
 
 def _assembly(objs):
@@ -202,7 +202,7 @@ def _mates(asm, index):
             name = j.Label.split(" (")[0]
             kind = _mate_kind(j)
             if kind is None:
-                notes.append("%s: %s mate not saved (SolidWorks has no plain mate for it)" % (name, j.JointType))
+                notes.append("%s: %s mate not saved (the file format has no plain mate for it)" % (name, j.JointType))
                 continue
             refs = [_mate_ref(j.Reference1, index), _mate_ref(j.Reference2, index)]
             if kind == "Lock":
@@ -275,7 +275,7 @@ def export_assembly(objs, path):
             except swapp.HelperError as exc:
                 if "save-asm2" not in str(exc) and "unknown" not in str(exc).lower():
                     raise SaveError(str(exc))
-                msg("SolidWorks helper without save-asm2: saving components and mates only")
+                msg("The helper has no assembly save: saving components and mates only")
     folder = os.path.dirname(os.path.abspath(path))
     tmp = tempfile.mkdtemp(prefix="fw-sw-")
     try:
@@ -333,7 +333,7 @@ def export_assembly(objs, path):
             json.dump({"parts": parts, "components": components, "mates": mates, "fixed": fixed}, fh)
         _backup(path)
         try:
-            res = swapp.run("save-asm", [spec, path], "SolidWorks is saving %s..." % os.path.basename(path),
+            res = swapp.run("save-asm", [spec, path], "Saving %s..." % os.path.basename(path),
                             timeout=1800)
         except swapp.HelperError as exc:
             raise SaveError(str(exc))
@@ -342,7 +342,7 @@ def export_assembly(objs, path):
     made = [m for m in res.get("mates", []) if m.get("ok")]
     notes += res.get("notes", [])
     notes += ["%s: %s" % (m["name"], m.get("why", "not made")) for m in res.get("mates", []) if not m.get("ok")]
-    msg("SolidWorks wrote %s (%d components, %d part files, %d with their feature tree, %d of %d mates)" % (
+    msg("Saved %s (%d components, %d part files, %d with their feature tree, %d of %d mates)" % (
         path, len(res.get("components", [])), len(res.get("parts_written", [])), res.get("parts_with_tree", 0),
         len(made), len(res.get("mates", []))))
     if notes:

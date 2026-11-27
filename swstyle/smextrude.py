@@ -8,6 +8,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -35,7 +36,7 @@ EPS = 1e-4
 def _edited():
     try:
         vp = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument is not None else None
-        return vp.Object if vp is not None else None
+        return editobj.of(vp) if vp is not None else None
     except Exception:
         return None
 

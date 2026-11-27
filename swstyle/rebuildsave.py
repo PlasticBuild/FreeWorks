@@ -28,6 +28,17 @@ FOOTER = ("When features are edited or externally-referenced documents change, t
           "reflected in the model until it is rebuilt.")
 
 
+def _colours():
+    ""
+    try:
+        from . import style
+        if style.dark():
+            return "#a8c7fa", "#bbbbbb", "#5a5a5a"
+    except Exception as _fw_err:
+        _fw_log("rebuildsave.py:colours", _fw_err)
+    return "#1f4e9c", "#555555", "#cccccc"
+
+
 def needs_rebuild(doc):
     for o in doc.Objects:
         try:
@@ -140,8 +151,10 @@ def ask(doc):
     icon.setAlignment(QtCore.Qt.AlignTop)
     top.addWidget(icon)
     question = QtWidgets.QLabel(QUESTION)
-    question.setStyleSheet("font-size: 11pt; color: #1f4e9c;")
+    blue, grey, line = _colours()
+    question.setStyleSheet("font-size: 11pt; color: %s;" % blue)
     question.setWordWrap(True)
+    question.setObjectName("FW_RebuildSaveQuestion")
     top.addWidget(question, 1)
     lay.addLayout(top)
     choice = {"v": 0}
@@ -164,7 +177,8 @@ def ask(doc):
     lay.addLayout(row)
     foot = QtWidgets.QLabel(FOOTER)
     foot.setWordWrap(True)
-    foot.setStyleSheet("color: #555; border-top: 1px solid #ccc; padding-top: 6px;")
+    foot.setObjectName("FW_RebuildSaveFooter")
+    foot.setStyleSheet("color: %s; border-top: 1px solid %s; padding-top: 6px;" % (grey, line))
     lay.addWidget(foot)
     box.setMinimumWidth(460)
     box.exec()

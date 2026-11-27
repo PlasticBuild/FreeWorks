@@ -995,12 +995,14 @@ class _DragStart(QtCore.QObject):
                 _smart["first"] = None
                 _smart["flip"] = False
                 _smart_cursor(None)
+                smart_see_through(None, False)      # a drag whose release was never seen
                 if event.button() == Qt.LeftButton and _dragging_assembly() and event.modifiers() & Qt.AltModifier:
                     asm = ac.assembly_of(App.ActiveDocument)
                     if asm is not None:
                         _smart["first"] = smart_ref_at(asm, obj, event.position())
                         if _smart["first"] is not None:
                             _smart["start"] = App.Placement(_smart["first"][0].Placement)
+                            smart_see_through(_smart["first"][0], True)
                 if event.button() == Qt.LeftButton and _dragging_assembly():
                     self.press = (QtCore.QPointF(event.position()), QtCore.QPointF(event.globalPosition()),
                                   event.modifiers())
@@ -1024,6 +1026,7 @@ class _DragStart(QtCore.QObject):
                 except Exception as _fw_err:
                     _fw_log("asmui.py:830", _fw_err)
                 _smart_cursor(None)
+                smart_see_through(None, False)
                 if event.button() == Qt.LeftButton and _smart.get("first") is not None:
                     first, _smart["first"] = _smart["first"], None
                     flip = _smart.pop("flip", False)
@@ -1163,6 +1166,39 @@ def _smart_hover(widget, pos):
     _smart_cursor(kind)
 
 
+def smart_see_through(comp, on):
+    ""
+
+    was = _smart.pop("see", None)
+    if was is not None:
+        c, override, material = was
+        try:
+            vo = c.ViewObject
+            if material is not None:
+                vo.ShapeMaterial = material
+            vo.OverrideMaterial = override
+        except Exception as _fw_err:      # deleted meanwhile
+            _fw_log("asmui.py:smart see-through", _fw_err)
+    if not on or comp is None:
+        return
+    vo = getattr(comp, "ViewObject", None)
+    if vo is None or not hasattr(vo, "OverrideMaterial"):
+        return
+    try:
+        override = bool(vo.OverrideMaterial)
+        material = vo.ShapeMaterial
+        m = vo.ShapeMaterial
+        if not override:
+            source = getattr(getattr(comp, "LinkedObject", None), "ViewObject", None)
+            m.DiffuseColor = tuple((getattr(source, "ShapeColor", None) or (0.8, 0.8, 0.8))[:3])
+        m.Transparency = max(float(m.Transparency), 0.6)
+        _smart["see"] = (comp, override, material)
+        vo.ShapeMaterial = m
+        vo.OverrideMaterial = True
+    except Exception as _fw_err:
+        _fw_log("asmui.py:smart see-through", _fw_err)
+
+
 def smart_drop(first, widget, pos, refs=None, flip=False):
     """Alt-drag released: the first entity under the drop that is on another component gets the
     SmartMate (the dragged component goes back to where the drag began, then to the mate)."""
@@ -1215,6 +1251,10 @@ class _SmartPopup:
         self.angle.setRange(0.0, 360.0)
         self.angle.setDecimals(2)
         self.angle.setSuffix("deg")
+        # Concentric: the pop-up's Lock rotation, as after a mate made in the Mate PropertyManager
+        self.lock_rotation = QtWidgets.QCheckBox("Lock rotation")
+        self.lock_rotation.setChecked(bool(getattr(joint, ac.LOCK_PROP, False)))
+        self.lock_rotation.toggled.connect(self._lock)
         self._sync_value()
         self.distance.valueChanged.connect(lambda v: self._typed("Distance", v))
         self.angle.valueChanged.connect(lambda v: self._typed("Angle", v))
@@ -1255,13 +1295,28 @@ class _SmartPopup:
         doc.recompute()
         refresh()
 
+    def _lock(self, on):
+        if self.kind != "Concentric":
+            return
+        from . import asmquickmates as qm
+        s1, s2 = ac.element(*self.first), ac.element(*self.target)
+        doc = self.asm.Document
+        doc.openTransaction("SmartMates")
+        try:
+            ac.change_mate(self.asm, self.joint, "Concentric", qm.current_value("Concentric", s1, s2), bool(on))
+        finally:
+            doc.commitTransaction()
+        doc.recompute()
+        refresh()
+
     def choose(self, kind):
         from . import asmquickmates as qm
         s1, s2 = ac.element(*self.first), ac.element(*self.target)
         doc = self.asm.Document
         doc.openTransaction("SmartMates")
         try:
-            ac.change_mate(self.asm, self.joint, kind, qm.current_value(kind, s1, s2))
+            ac.change_mate(self.asm, self.joint, kind, qm.current_value(kind, s1, s2),
+                           kind == "Concentric" and self.lock_rotation.isChecked())
         finally:
             doc.commitTransaction()
         doc.recompute()
@@ -1450,6 +1505,14 @@ class _Observer:
                 return
         except Exception as _fw_err:
             _fw_log("asmui.py:_due", _fw_err)
+        try:
+            # asmpkg359: not while a file is still being read (FreeCAD's progress bar gives the event
+            # loop turns): the tree was worked out twice for a half-read assembly, then once more
+            if any(d.Restoring for d in App.listDocuments().values()):
+                self.timer.start()
+                return
+        except Exception as _fw_err:
+            _fw_log("asmui.py:_due restoring", _fw_err)
         refresh()
 
     def soon(self, *args):
@@ -1507,6 +1570,7 @@ def assembly_layout(model, doc):
     for name, _draw, tip in fmtree.VIRTUAL:
         part.add(fmtree.Node(text=name, icon=model.icons[name], tip=tip))
     rows = [(i, fmtree._object(doc, plain(i.data(Qt.DisplayRole)))) for i in model._children(asm_index)]
+    rows += _stray_components(asm, kids, rows, doc)
 
     from . import asmbom
     tables = [(i, o) for i, o in rows if asmbom.is_bom(o)]
@@ -1563,6 +1627,25 @@ def assembly_layout(model, doc):
     return True
 
 
+def _stray_components(asm, kids, rows, doc):
+    """asmpkg366: FreeCAD's own tree sometimes files a component placed with Insert Components under the document
+    instead of under the assembly (its row was made for the preview following the pointer, and FreeCAD did not move
+    it when the component joined the assembly). The FeatureManager took only the assembly's rows, so the component
+    had no row (Interface usability run 11-27: the second part inserted). Such a row is taken from the document's
+    rows, in its place among the components."""
+    from . import fmtree
+    have = {o.Name for _i, o in rows if o is not None}
+    want = {c.Name for c in ac.components(asm)} - have
+    if not want:
+        return []
+    out = []
+    for i in kids:
+        o = fmtree._object(doc, plain(i.data(Qt.DisplayRole)))
+        if o is not None and o.Name in want:
+            out.append((i, o))
+    return out
+
+
 def _has_rows(comp):
     """The component's part shows rows of its own under it (a Body's features), once opened."""
     try:
@@ -1616,6 +1699,7 @@ def _component_mates(model, part, doc, asm, mates_rows):
         if not mine or (not node.children and _has_rows(o)):
             continue        # an unopened component: FreeCAD fills its rows when it is opened, then this runs again
         folder = fmtree.Node(text=title, icon=icon, tip="The mates that hold %s" % o.Label)
+        _MATES_IN[folder] = asm         # asmpkg363: its right-click menu (a folder row's)
         folder.parent = node
         node.children.insert(0, folder)
         for r, child in enumerate(node.children):
@@ -1624,6 +1708,43 @@ def _component_mates(model, part, doc, asm, mates_rows):
             model._mirror(folder, by_name[j.Name], doc, deep=False)
 
 
+
+
+import weakref as _fw_weakref
+_MATES_IN = _fw_weakref.WeakKeyDictionary()     # "Mates in <assembly>" row (fmtree.Node, slots) -> its assembly
+
+
+def _patch_mates_in_menu():
+    """asmpkg363: a right-click on a component's "Mates in <assembly>" folder showed no menu (a row with no
+    object of its own, a dead row). It shows the folder rows' menu: Go To..., Hide/Show Tree Items...,
+    Collapse Items, Customize Menu."""
+    try:
+        from . import fmtree, fmmenu
+    except Exception:
+        return
+    cls = getattr(fmtree, "FeatureTree", None)
+    if cls is None or getattr(cls, "_fw_mates_in", False):
+        return
+    old = cls.contextMenuEvent
+
+    def contextMenuEvent(self, event):
+        try:
+            index = self.indexAt(event.pos())
+            node = self.fm.node(index) if index.isValid() else None
+            asm = _MATES_IN.get(node) if node is not None else None
+            if asm is not None and not (QtWidgets.QApplication.keyboardModifiers() & Qt.ShiftModifier):
+                # the rows every tree folder has (Go To..., Hide/Show Tree Items..., Collapse Items), as fmmenu gives
+                # the other folder rows with no object of their own (pkg257's Flat-Pattern folder)
+                row = fmmenu.Folder("flatfolder", asm.Document, str(index.data(Qt.DisplayRole) or ""))
+                if fmmenu.show(self.shell, row, event.globalPos(), self) is not None:
+                    event.accept()
+                    return
+        except Exception as _fw_err:
+            _fw_log("asmui.py:mates in menu", _fw_err)
+        return old(self, event)
+
+    cls.contextMenuEvent = contextMenuEvent
+    cls._fw_mates_in = True
 
 
 SUB_ORIGIN_NAMES = {"XZ_Plane": "Front Plane", "XY_Plane": "Top Plane", "YZ_Plane": "Right Plane"}
@@ -1748,7 +1869,12 @@ def hollow_icon(base):
 
     if not isinstance(base, QtGui.QIcon) or base.isNull():
         return base
-    key = base.cacheKey()
+    try:
+        from . import style as _style
+        tree_dark = bool(_style.dark())
+    except Exception:
+        tree_dark = False
+    key = (base.cacheKey(), tree_dark)
     if key in _HOLLOW_ICONS:
         return _HOLLOW_ICONS[key]
     icon = QtGui.QIcon()
@@ -1761,6 +1887,8 @@ def hollow_icon(base):
         out = QtGui.QImage(w, h, QtGui.QImage.Format_ARGB32)
         out.fill(QtCore.Qt.transparent)
         line, fill = QtGui.QColor(70, 70, 70).rgba(), QtGui.QColor(255, 255, 255).rgba()
+        if tree_dark:                  # Dark: a light outline and a clear inside (white fill read as a solid blob)
+            line, fill = QtGui.QColor(190, 190, 190).rgba(), QtGui.QColor(0, 0, 0, 0).rgba()
         for y in range(h):
             for x in range(w):
                 if alpha[y][x] < 96:
@@ -1783,7 +1911,10 @@ def _patch_fmtree():
 
     def _build(self):
         doc = App.ActiveDocument
-        if doc is not None and ac.assembly_of(doc) is not None:
+        # an assembly tree or not, read once per build: the assembly layers over data() return at once in a
+        # part or drawing (they cost about 30% of each pick there with nothing to add)
+        self._fw_asm = doc is not None and ac.assembly_of(doc) is not None
+        if self._fw_asm:
             self.root, self.by_id, self.part, self.flat = fmtree.Node(), {}, None, None
             self.doc = doc
             try:
@@ -1798,6 +1929,8 @@ def _patch_fmtree():
     data0 = fmtree.Model.data
 
     def data(self, index, role=Qt.DisplayRole):
+        if not getattr(self, "_fw_asm", True):
+            return data0(self, index, role)     # not an assembly tree: nothing to add
         # a mirrored row given its own text (a subassembly's "Top Plane") shows that text
         if role == Qt.DisplayRole and index.isValid():
             node = self.node(index)
@@ -1817,6 +1950,10 @@ def _patch_fmtree():
                 return hollow_icon(own)
             if own is not None:
                 return own
+        if role == Qt.EditRole and index.isValid():
+
+            text = data0(self, index, role)
+            return plain(text) if isinstance(text, str) else text
         return data0(self, index, role)
     fmtree.Model.data = _qt_safe(data)
     # rows that show "(f) Plate<1>" still name their component
@@ -2098,6 +2235,12 @@ def register():
         asmincontext.install()         # Join, Cavity... take other components while a part is edited in context
     except Exception as error:
         App.Console.PrintLog("FreeCAD: in-context picks: %s\n" % error)
+    try:
+        from . import asmmateglyph
+        asmmateglyph.install()
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: mate glyphs: %s\n" % error)
+    _patch_mates_in_menu()      # asmpkg363: "Mates in <assembly>" rows have the Mates folder's menu
     _patch_later()
     global _drag_start
     if _drag_start is None:

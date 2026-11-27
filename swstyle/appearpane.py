@@ -108,9 +108,53 @@ METAL_SUBFOLDERS = tuple((name, tuple(("%s %s" % (finish, name.lower()), _shade(
 
 
 
+
+# viewdisplay/appearance-library-1126.md)
+_COLOURS = (("black", (0.05, 0.05, 0.05)), ("white", (0.94, 0.94, 0.93)), ("red", (0.78, 0.07, 0.07)),
+            ("blue", (0.08, 0.24, 0.72)), ("green", (0.10, 0.52, 0.20)), ("yellow", (0.95, 0.78, 0.10)),
+            ("grey", (0.50, 0.51, 0.52)))
+
+
+def _named(pattern, colours, k=1.0, tr=0.0):
+    return tuple((pattern % name, _shade(rgb, k), tr) for name, rgb in colours)
+
+
+SUBFOLDERS = {
+    "Plastic": (("High Gloss", _named("%s high gloss plastic", _COLOURS)),
+                ("Medium Gloss", _named("%s medium gloss plastic", _COLOURS)),
+                ("Low Gloss", _named("%s low gloss plastic", _COLOURS)),
+                ("Textured", _named("%s textured plastic", _COLOURS[:2] + _COLOURS[-1:], 0.95)),
+                ("Transparent", (("clear plastic", (0.85, 0.90, 0.95), 0.7),
+                                 ("blue transparent plastic", (0.35, 0.55, 0.85), 0.6),
+                                 ("red transparent plastic", (0.85, 0.25, 0.25), 0.6),
+                                 ("smoke transparent plastic", (0.30, 0.30, 0.32), 0.5)))),
+    "Painted": (("Car", _named("%s car paint", (("red", (0.70, 0.05, 0.06)), ("blue", (0.06, 0.18, 0.55)),
+                                                ("black", (0.04, 0.04, 0.05)), ("silver", (0.72, 0.73, 0.75)),
+                                                ("white", (0.93, 0.93, 0.92))))),
+                ("Powder Coat", _named("%s powder coat", _COLOURS[:4] + _COLOURS[-1:])),
+                ("Sprayed", _named("%s sprayed paint", _COLOURS[:3] + _COLOURS[-1:]))),
+    "Rubber": (("Matte", _named("%s matte rubber", (("black", (0.09, 0.09, 0.09)), ("grey", (0.40, 0.40, 0.40))))),
+               ("Textured", _named("%s textured rubber", (("black", (0.10, 0.10, 0.10)), ("grey", (0.42, 0.42, 0.42)))))),
+    "Glass": (("Gloss", (("clear glass", (0.90, 0.95, 0.97), 0.8), ("blue glass", (0.45, 0.60, 0.80), 0.6),
+                         ("green glass", (0.45, 0.70, 0.55), 0.6), ("smoke glass", (0.30, 0.31, 0.33), 0.5))),
+              ("Textured", (("frosted glass", (0.92, 0.93, 0.94), 0.4), ("textured glass", (0.88, 0.92, 0.94), 0.5)))),
+    "Organic": (("Wood", (("oak", (0.72, 0.56, 0.36), 0.0), ("maple", (0.86, 0.73, 0.53), 0.0),
+                          ("walnut", (0.40, 0.27, 0.18), 0.0), ("cherry", (0.62, 0.33, 0.20), 0.0),
+                          ("pine", (0.88, 0.76, 0.52), 0.0), ("beech", (0.80, 0.62, 0.42), 0.0),
+                          ("mahogany", (0.45, 0.20, 0.13), 0.0))),),
+}
+
+
+
 # (diffuse, specular, spread, reflection, blurry, luminous). RealView shows the difference
 # (a metal reflects the studio in its own colour, glass turns mirror-like at a grazing angle).
 _LIGHTS = (
+    (("high gloss", "car paint"), (0.8, 0.7, 0.1, 0.3, 0.0, 0.0)),
+    (("medium gloss", "powder coat"), (0.8, 0.4, 0.3, 0.12, 0.1, 0.0)),
+    (("low gloss", "sprayed", "textured", "matte rubber"), (0.8, 0.1, 0.7, 0.03, 0.5, 0.0)),
+    (("smoke glass", "textured glass"), (0.3, 0.8, 0.1, 0.4, 0.3, 0.0)),
+    (("transparent plastic",), (0.8, 0.6, 0.15, 0.3, 0.0, 0.0)),
+    (("beech", "mahogany"), (0.8, 0.05, 0.9, 0.0, 0.8, 0.0)),
     (("white light", "warm light", "red light", "green light", "blue light", "amber light"),
      (0.8, 0.1, 0.5, 0.0, 0.0, 1.0)),
     (("leather", "nylon", "wax"), (0.8, 0.3, 0.4, 0.1, 0.3, 0.0)),
@@ -148,9 +192,13 @@ def payload_of(label, rgb, tr):
 
 
 
+
 SCENE_FOLDERS = (
-    ("Basic Scenes", ("Plain White", "Backdrop - Grey with Overhead Light", "Black", "Reflective Floor Black")),
-    ("Studio Scenes", ("3 Point Faded", "Soft Spotlight", "Studio Dark", "Backdrop - Black with Fill Lights")),
+    ("Basic Scenes", ("3 Point Beige", "3 Point Blue", "3 Point Faded", "3 Point Green", "3 Point Orange",
+                      "Backdrop - Ambient White", "Backdrop - Black with Fill Lights",
+                      "Backdrop - Grey with Overhead Light", "Backdrop - Lightbox Studio", "Backdrop - Studio Room",
+                      "Backdrop - Studio with Fill Lights", "Soft Box", "Soft Spotlight")),
+    ("Studio Scenes", ("Plain White", "Reflective Floor Black", "Studio Dark", "Black")),
     ("Presentation Scenes", ("Rooftop", "Courtyard Background", "Urban 5 Background", "Urban 5 Image 6",
                              "Landscape 2 Image 4", "Retail Store", "Villa Interior", "Warehouse",
                              "Factory Background", "Modern Garage", "Fall Street")),
@@ -163,7 +211,8 @@ def scenes_of(group, order):
         return list(order)
     from . import style
     names = dict(SCENE_FOLDERS).get(group, ())
-    return [i for i in order if style.SCENES[i][0] in names]
+    by_name = {style.SCENES[i][0]: i for i in order}
+    return [by_name[n] for n in names if n in by_name]
 
 
 def entries_of(folder):
@@ -173,11 +222,32 @@ def entries_of(folder):
         if folder is None or folder == name or folder.startswith(name + "/"):
             if folder is None or folder == name:
                 out.extend(entries)
-            if name == "Metal":
-                for sub, more in METAL_SUBFOLDERS:
-                    if folder in (None, "Metal", "Metal/" + sub):
-                        out.extend(more)
+            for sub, more in subfolders(name):
+                if folder in (None, name, name + "/" + sub):
+                    out.extend(more)
     return out
+
+
+def subfolders(name):
+    """A top folder's subfolders: ((name, swatches), ...)."""
+    return METAL_SUBFOLDERS if name == "Metal" else SUBFOLDERS.get(name, ())
+
+
+def folder_of(label):
+    """Where a swatch lives in the library ("Plastic/High Gloss"), or None."""
+    for name, entries in PALETTE:
+        if any(e[0] == label for e in entries):
+            return name
+        for sub, more in subfolders(name):
+            if any(e[0] == label for e in more):
+                return name + "/" + sub
+    return None
+
+
+def tooltip(label):
+    """A swatch's tooltip: its name, then where it lives in the library."""
+    folder = folder_of(label)
+    return "%s\nAppearances(color) > %s" % (label, " > ".join(folder.split("/"))) if folder else label
 
 
 def scene_icon(index, size=40):
@@ -243,10 +313,16 @@ def swatch_icon(rgb, size=40, transparency=0.0):
     # a lit ball even when the colour is near black: the light's highlight and the room seen in the rim
     p.setOpacity(1.0)
     rim = QtGui.QRadialGradient(size * 0.5, size * 0.5, size * 0.5)
-    rim.setColorAt(0.78, QtGui.QColor(255, 255, 255, 0))
-    rim.setColorAt(0.98, QtGui.QColor(255, 255, 255, 60))
+    deep = c.lightnessF() < 0.25
+    # look-audit TP-4 (BB22): a near-black ball shows its round edge on the dark list too (a brighter rim and
+    # a thin grey outline); lighter colours keep the soft rim
+    rim.setColorAt(0.70 if deep else 0.78, QtGui.QColor(255, 255, 255, 0))
+    rim.setColorAt(0.98, QtGui.QColor(255, 255, 255, 120 if deep else 60))
     p.setBrush(QtGui.QBrush(rim))
+    if deep:
+        p.setPen(QtGui.QPen(QtGui.QColor(128, 128, 128, 170), max(1.0, size / 80.0)))
     p.drawEllipse(2, 2, size - 4, size - 4)
+    p.setPen(Qt.NoPen)
     shine = QtGui.QRadialGradient(size * 0.33, size * 0.3, size * 0.22)
     shine.setColorAt(0, QtGui.QColor(255, 255, 255, 200))
     shine.setColorAt(1, QtGui.QColor(255, 255, 255, 0))
@@ -713,11 +789,11 @@ def page(pane):
         it.setIcon(0, folder)
         it.setData(0, ROLE, ("folder", name))
         top.addChild(it)
-        if name == "Metal":
-            for sub, more in METAL_SUBFOLDERS:
+        if subfolders(name):
+            for sub, more in subfolders(name):
                 child = QtWidgets.QTreeWidgetItem([sub])
                 child.setIcon(0, folder)
-                child.setData(0, ROLE, ("folder", "Metal/" + sub))
+                child.setData(0, ROLE, ("folder", name + "/" + sub))
                 it.addChild(child)
     tree.addTopLevelItem(top)
     scene_folder = _folder_icon("scene")
@@ -850,7 +926,7 @@ def page(pane):
             for label, rgb, tr in entries_of(name):
                 s = QtWidgets.QListWidgetItem(swatch_icon(rgb, SWATCH, tr), label)
                 s.setData(ROLE, payload_of(label, rgb, tr))
-                s.setToolTip(label)
+                s.setToolTip(tooltip(label))
                 sw.addItem(s)
         elif kind == "scenes":
             from . import style

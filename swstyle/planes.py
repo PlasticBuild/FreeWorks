@@ -100,12 +100,28 @@ def _datum_coords(plane):
     return min(xs), max(xs), min(ys), max(ys)
 
 
+def manual_box(plane):
+    ""
+
+    try:
+        box = [float(x) for x in (getattr(plane, "SWPlaneBox", None) or [])]
+    except Exception:
+        return None
+    if len(box) == 4 and box[1] > box[0] and box[3] > box[2]:
+        return tuple(box)
+    return None
+
+
 def extents(plane):
     """(origin, u, v, umin, umax, vmin, vmax) of the square to draw for the plane, in model space."""
     placement = plane.getGlobalPlacement()
     o = placement.Base
     u = placement.Rotation.multVec(App.Vector(1, 0, 0))
     v = placement.Rotation.multVec(App.Vector(0, 1, 0))
+    if not is_datum(plane):
+        box = manual_box(plane)
+        if box is not None:
+            return (o, u, v) + box
     if is_datum(plane):
         try:
             box = _datum_coords(plane)        # the size FreeCAD gives it (and the handles change)
@@ -517,7 +533,7 @@ class PickedPlane(QtCore.QObject):
                 self._hide(name)
         for name, (picked, shown) in docs.items():
             self._mute(name, shown)
-            if any(is_datum(p) for p in picked):
+            if any(is_datum(p) or _origins(p) for p in picked):
                 try:
                     from . import planehandles
                     planehandles.watch(name)

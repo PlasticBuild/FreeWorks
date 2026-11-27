@@ -539,6 +539,182 @@ def insert(path, body, face_obj, face_name, point=None, picks=(), locating_value
     return result
 
 
+# --------------------------------------------------------------------------- the preview (libprev-fix01)
+CUT_TYPES = ("PartDesign::Pocket", "PartDesign::Hole", "PartDesign::Groove")
+
+
+def capture(lib_body):
+    """What the preview needs from the library file, kept after the file is closed: each sketch's
+    geometry and constraints, each feature's kind and depth, the dimension rows in the PM's order."""
+    data = {"sketches": {}, "features": [], "dims": []}
+    if lib_body is None:
+        return data
+    for o in lib_body.Group:
+        if o.TypeId.startswith("Sketcher::"):
+            data["sketches"][o.Name] = ([g.copy() for g in o.Geometry], list(o.Constraints))
+        elif o.TypeId.startswith("PartDesign::"):
+            prof = getattr(o, "Profile", None)
+            prof = prof[0] if isinstance(prof, tuple) else prof
+            props = {}
+            for p in ("Type", "Length", "Length2", "Reversed", "Midplane"):
+                if p in o.PropertiesList:
+                    v = getattr(o, p)
+                    props[p] = v.Value if hasattr(v, "Value") else v
+            data["features"].append({"type": o.TypeId, "name": o.Name, "profile": prof.Name if prof is not None else None,
+                                     "props": props})
+    data["dims"] = [(o.Name, k) for _l, o, k, _v in dimensions(list(lib_body.Group))]
+    return data
+
+
+def _point(geom, pos):
+    if pos == 1:
+        return geom.StartPoint
+    if pos == 2:
+        return geom.EndPoint
+    if pos == 3:
+        return geom.Center
+    return None
+
+
+def _sketch_placement(face_obj, face_name, point):
+    """Where a dropped sketch sits: on the face (FlatFace), its origin at the drop point (as insert_feature)."""
+    import Part
+    att = Part.AttachEngine("Attacher::AttachEngine3D")
+    att.References = [(face_obj, face_name)]
+    att.Mode = "FlatFace"
+    plm = att.calculateAttachedPlacement(App.Placement())
+    if point is not None:
+        loc = plm.inverse().multVec(point)
+        plm = plm.multiply(App.Placement(App.Vector(loc.x, loc.y, 0), App.Rotation()))
+    return plm
+
+
+def preview_solids(data, refs, locs, face_obj, face_name, point, picks, loc_values=None, overrides=None):
+    """[(kind, solid)]: the library feature where OK would put it, solved off the document (a free
+    Sketcher.Sketch per sketch, the picked edges held fixed in it). kind is "cut" or "boss"."""
+    import Part
+    import Sketcher
+    loc_values, overrides = loc_values or {}, overrides or {}
+    plm = _sketch_placement(face_obj, face_name, point)
+    inv = plm.inverse()
+    new_value = {}                                   # (object name, key) -> the overridden value
+    for row, value in overrides.items():
+        if 0 <= int(row) < len(data["dims"]):
+            new_value[tuple(data["dims"][int(row)])] = float(value)
+    faces = {}
+    for name, (geos, cons) in data["sketches"].items():
+        sk = Sketcher.Sketch()
+        for g in geos:
+            sk.addGeometry(g.copy())
+        n = len(geos)
+        for i, c in enumerate(cons):
+            key = (name, "Constraints.%d" % i)
+            if key in new_value and c.Type in DIMENSIONAL:
+                rec = _record(c)
+                rec["value"] = new_value[key] if c.Type != "Angle" else new_value[key] / 57.29577951308232
+                c = _rebuild(rec, lambda g: g)
+            if c is not None:
+                sk.addConstraint(c)
+        fixed = {}                                   # library reference index -> its fixed line here
+        lines = []
+        for r in refs:
+            if r.get("sketch") != name or r["index"] >= len(picks) or picks[r["index"]] is None:
+                continue
+            obj, sub = picks[r["index"]]
+            try:
+                edge = obj.Shape.getElement(sub)
+                a, b = inv.multVec(edge.Vertexes[0].Point), inv.multVec(edge.Vertexes[-1].Point)
+                if (b - a).Length < 1e-9:
+                    continue
+                k = sk.addGeometry(Part.LineSegment(App.Vector(a.x, a.y, 0), App.Vector(b.x, b.y, 0)))
+                for pos, pt in ((1, a), (2, b)):     # held in place (a free Sketch has no Block)
+                    sk.addConstraint(Sketcher.Constraint("DistanceX", k, pos, pt.x))
+                    sk.addConstraint(Sketcher.Constraint("DistanceY", k, pos, pt.y))
+                fixed[r["index"]] = k
+                lines.append(Part.LineSegment(App.Vector(a.x, a.y, 0), App.Vector(b.x, b.y, 0)))
+            except Exception as _fw_err:
+                _fw_log("libfeature.py:preview-ref", _fw_err)
+        all_geo = list(geos) + lines
+        for rec in locs:
+            if rec.get("sketch") != name:
+                continue
+            base = rec.get("refbase", 0)
+            ok = [True]
+
+            def geo(g, base=base):
+                if g is None or g == UNDEF or g > -3:
+                    return g
+                idx = base + (-3 - g)
+                if idx not in fixed:
+                    ok[0] = False
+                    return g
+                return fixed[idx]
+            rec2 = dict(rec)
+            if rec["label"] in loc_values:
+                v = float(loc_values[rec["label"]])
+                rec2["value"] = v if rec["type"] != "Angle" else v / 57.29577951308232
+            if rec["type"] in ("DistanceX", "DistanceY"):           # the side of the new reference (as _side)
+                F, FP, S, SP = rec["a"][:4]
+                try:
+                    pa, pb = _point(all_geo[geo(F)], FP), _point(all_geo[geo(S)], SP)
+                    now = (pb - pa).x if rec["type"] == "DistanceX" else (pb - pa).y
+                    if ok[0] and abs(now) > 1e-9 and (now < 0) != (rec2["value"] < 0):
+                        rec2["value"] = -rec2["value"]
+                except Exception as _fw_err:
+                    _fw_log("libfeature.py:preview-side", _fw_err)
+            c = _rebuild(rec2, geo)
+            if c is not None and ok[0]:
+                sk.addConstraint(c)
+        sk.solve()
+        edges = [e for e in sk.Shape.Edges]
+        own = []
+        for e in edges:                                       # the fixed reference lines are not profile
+            if not any(_same_line(e, ln) for ln in lines):
+                own.append(e)
+        try:
+            wires = [w for w in (Part.Wire(es) for es in Part.sortEdges(own)) if w.isClosed()]
+            face = Part.makeFace(wires, "Part::FaceMakerBullseye") if wires else None
+        except Exception:
+            face = None
+        if face is not None and not face.isNull():
+            face.Placement = plm.multiply(face.Placement)
+            faces[name] = face
+    out = []
+    normal = plm.Rotation.multVec(App.Vector(0, 0, 1))
+    for f in data["features"]:
+        face = faces.get(f["profile"])
+        if face is None:
+            continue
+        props = f["props"]
+        length = new_value.get((f["name"], "Length"), props.get("Length", 10.0))
+        if props.get("Type") in ("ThroughAll", 1):
+            length = 10000.0
+        cut = f["type"] in CUT_TYPES
+        d = normal * (-1.0 if cut else 1.0)
+        if props.get("Reversed"):
+            d = d * -1.0
+        try:
+            if props.get("Midplane"):
+                f2 = face.copy()
+                f2.translate(d * (-length / 2.0))
+                solid = f2.extrude(d * length)
+            else:
+                solid = face.extrude(d * length)
+            out.append(("cut" if cut else "boss", solid))
+        except Exception as _fw_err:
+            _fw_log("libfeature.py:preview-extrude", _fw_err)
+    return out
+
+
+def _same_line(e, ln):
+    try:
+        a, b = e.Vertexes[0].Point, e.Vertexes[-1].Point
+        p, q = ln.StartPoint, ln.EndPoint
+        return ((a - p).Length < 1e-6 and (b - q).Length < 1e-6) or ((a - q).Length < 1e-6 and (b - p).Length < 1e-6)
+    except Exception:
+        return False
+
+
 # =========================================================================== the PropertyManager
 if App.GuiUp:
     import FreeCADGui as Gui
@@ -555,6 +731,7 @@ if App.GuiUp:
             self.refs = references(lib_body) if lib_body else []
             self.loc = locating(lib_body) if lib_body else []
             self.dims = [(lbl, v) for lbl, _o, _k, v in dimensions(list(lib_body.Group) if lib_body else [])]
+            self.data = capture(lib_body)        # libprev-fix01: the preview's copy of the library feature
             configs = ["Default"]
             if opened:
                 designlib._close(src, body.Document)
@@ -566,7 +743,9 @@ if App.GuiUp:
             lay = QtWidgets.QVBoxLayout(self.form)
             g = QtWidgets.QGroupBox("Library Feature")
             gl = QtWidgets.QFormLayout(g)
-            self.name = QtWidgets.QLineEdit(os.path.splitext(os.path.basename(path))[0])
+            # libname-fix01: the instance's own name (Slot1, Slot2 ...): the file's bare name is taken by its
+            # feature (Slot), so the tree row came out as FreeCAD's "Slot001"
+            self.name = QtWidgets.QLineEdit(instance_name(body.Document, path))
             self.link = QtWidgets.QCheckBox("Link to library part")
             self.link.setObjectName("SWLibraryLink")
             self.config = QtWidgets.QComboBox()
@@ -616,6 +795,81 @@ if App.GuiUp:
             Gui.Selection.clearSelection()
             Gui.Selection.addObserver(self)
 
+            # references, locating dimensions and overridden sizes change
+            self.overlay = None
+            self._timer = QtCore.QTimer(self.form)
+            self._timer.setSingleShot(True)
+            self._timer.setInterval(120)
+            self._timer.timeout.connect(self.draw_preview)
+            for t in (self.loc_table, self.dim_table):
+                t.itemChanged.connect(self._later)
+            self.override.toggled.connect(self._later)
+            self.link.toggled.connect(self._later)
+            self.dissolve.toggled.connect(self._later)
+            self._later()
+
+        def _later(self, *_args):
+            try:
+                self._timer.start()
+            except RuntimeError as _fw_err:
+                _fw_log("libfeature.py:preview-timer", _fw_err)
+
+        def _overrides(self):
+            over = {}
+            if self.override.isChecked() and not self.link.isChecked():
+                for i in range(self.dim_table.rowCount()):
+                    try:
+                        over[i] = float(self.dim_table.item(i, 1).text())
+                    except (ValueError, AttributeError) as _fw_err:
+                        _fw_log("libfeature.py:preview-over", _fw_err)
+            return over
+
+        def preview(self):
+            """[(kind, solid)] drawn right now (for checks)."""
+            return list(getattr(self, "_shown", []))
+
+        def draw_preview(self):
+            self.clear_preview()
+            try:
+                solids = preview_solids(self.data, self.refs, self.loc, self.face[0], self.face[1], self.point,
+                                        self.picks, self._values(self.loc_table), self._overrides())
+            except Exception as error:
+                App.Console.PrintLog("FreeCAD: library feature preview: %s\n" % error)
+                return
+            body_shape = self.body.Shape
+            faces, kinds = [], set()
+            for kind, solid in solids:
+                try:
+                    # a cut: the material it takes away (as the cut features' preview); a boss: the solid it adds
+                    shown = solid.common(body_shape) if kind == "cut" and not body_shape.isNull() else solid
+                    faces += [f for f in shown.Faces if f.Area > 1e-6]
+                    kinds.add(kind)
+                except Exception as _fw_err:
+                    _fw_log("libfeature.py:preview-common", _fw_err)
+            self._shown = solids
+            if not faces:
+                return
+            try:
+                from . import filletpm, pmpreview
+                self.overlay = filletpm.Overlay()
+                self.overlay.show_preview(faces, sections=False)
+                kind = "cut" if kinds == {"cut"} else "boss"
+                if kind == "cut":
+                    pmpreview.Preview._see_through(self)          # see-through, in place: the cut features' look
+                pmpreview.Preview._colour(self, kind)
+            except Exception as error:
+                App.Console.PrintLog("FreeCAD: library feature preview: %s\n" % error)
+                self.overlay = None
+
+        def clear_preview(self):
+            self._shown = []
+            if getattr(self, "overlay", None) is not None:
+                try:
+                    self.overlay.remove()
+                except Exception as _fw_err:
+                    _fw_log("libfeature.py:preview-clear", _fw_err)
+            self.overlay = None
+
         def _table(self, rows, name):
             t = QtWidgets.QTableWidget(len(rows), 2)
             t.setObjectName(name)
@@ -646,6 +900,7 @@ if App.GuiUp:
             obj = App.getDocument(doc).getObject(name)
             self.picks[i] = (obj, sub)
             self.ref_list.item(i).setText(self._ref_text(self.refs[i], self.picks[i]))
+            self._later()
 
         def _values(self, table):
             out = {}
@@ -657,6 +912,11 @@ if App.GuiUp:
             return out
 
         def _stop(self):
+            try:
+                self._timer.stop()
+            except Exception as _fw_err:
+                _fw_log("libfeature.py:preview-stop", _fw_err)
+            self.clear_preview()
             try:
                 Gui.Selection.removeObserver(self)
             except Exception as _fw_err:

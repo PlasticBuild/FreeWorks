@@ -248,9 +248,72 @@ def load_kind(o):
     return None
 
 
+def shell_entry(a, out):
+    ""
+
+    try:
+        from . import simpms, simroutes
+        g = simpms.target(a.Document, a)
+        shape = getattr(g, "Shape", None)
+        if shape is None or shape.isNull():
+            return
+        free = len(shape.Faces) - sum(len(s.Faces) for s in shape.Solids)
+        if free > 0 and hasattr(simroutes, "open_shell"):
+            out.append(("-", None))
+            out.append(("Define Shell By Selected Faces...", lambda: simroutes.open_shell()))
+    except Exception as _fw_err:
+        _fw_log("simtree.py:shell_entry", _fw_err)
+
+
+def draft_entry(a, out):
+    ""
+
+    from . import simpms
+    m = simpms.gmsh_of(a)
+    if m is None or "ElementOrder" not in m.PropertiesList:
+        return
+    draft = m.ElementOrder == "1st"
+
+    def flip():
+        import Fem
+        m.ElementOrder = "2nd" if draft else "1st"
+        k = simpms.kept(m)
+        if k:
+            k["draft"] = not draft
+            simpms._keep(m, **k)
+        if getattr(getattr(m, "FemMesh", None), "NodeCount", 0):
+            m.FemMesh = Fem.FemMesh()
+        m.Document.recompute()
+        refresh()
+    out.append(("Apply High Quality Mesh" if draft else "Apply Draft Quality Mesh", flip))
+
+
 def _item_text(o):
     sup = " (Suppressed)" if is_suppressed(o) else ""
-    return o.Label + sup
+    try:
+        from . import simpms
+        name = simpms.study_name(o)
+    except Exception:
+        name = o.Label
+    return name + _load_words(o) + sup
+
+
+def _load_words(o):
+    ""
+    try:
+        if getattr(o, "TypeId", "") != "Fem::ConstraintForce" or getattr(o, "Suppressed", False):
+            return ""
+        from . import simpms
+        k = simpms.kept(o)
+        if "value" not in k or k.get("direction") or k.get("kind") not in (None, "Force"):
+            return ""
+        v = float(k["value"])
+        text = "{:,.0f}".format(v) if abs(v - round(v)) < 1e-9 else "{:,g}".format(v)
+        sign = "" if k.get("reverse") else "-"
+        return " (:%s: %s%s %s:)" % ("Per item" if k.get("per_item") else "Total", sign, text, k.get("unit") or "N")
+    except Exception as _fw_err:
+        _fw_log("simtree.py:load words", _fw_err)
+        return ""
 
 
 def unrun_mark(a):
@@ -332,6 +395,8 @@ def study_rows(a):
         for c in mesh_children(m):
             mesh.add(Row(_item_text(c), "SIM_MeshControl" if "Region" in ftype(c) else "SIM_MeshBoundary", c, "item"))
     _result_rows(a, results)
+    if not results.rows and not _results(a):
+        root.rows.remove(results)
     from . import simreport
     done = simreport.reports(a)
     if done:
@@ -426,13 +491,19 @@ def signature(a):
         card = getattr(o, "Material", None)
         if isinstance(card, dict):
             out.append(card.get("Name"))          # Apply Material: the part row's (-name-) follows
-        out.append((o.Name, o.Label, getattr(o, "Suppressed", None), len(getattr(o, "Group", None) or []),
+        out.append((o.Name, o.Label, getattr(o, "FwSimPM", None), getattr(o, "Suppressed", None), len(getattr(o, "Group", None) or []),
                     len(getattr(o, "Filter", None) or []), getattr(getattr(o, "ViewObject", None), "Visibility", None)))
         for c in list(getattr(o, "Group", None) or []) + list(getattr(o, "Filter", None) or []):
             walk(c)
     for o in a.Group:
         walk(o)
     out.append(getattr(a, "FwPlots", ""))
+    for o in a.Group:                          # look-audit SM-2: the Mesh row's green check as soon as it is meshed
+        if o.isDerivedFrom("Fem::FemMeshObject"):
+            try:
+                out.append(bool(o.FemMesh.NodeCount))
+            except Exception:
+                out.append(None)
     out.append(getattr(a, "FwGlobalInteraction", None))       # an assembly study's Global Interaction (-Contact-) row
     out.append(tuple(getattr(a, "FwReports", []) or ()))      # a published report: the Report folder
     try:
@@ -749,6 +820,139 @@ def copy_study(a):
     return b
 
 
+# ------------------------------------------------------------------ Copy / Paste between studies
+
+# or Copy (Ctrl+C) and Paste (Ctrl+V) there. The copy keeps its definition and takes the next name in that study.
+CLIP = {"doc": None, "items": []}       # items: [(object name, folder kind)]
+COPY_FOLDERS = ("connections", "fixtures", "loads")
+MIME = "application/x-freecad-sim-items"
+
+
+def _folder_rows(a):
+    root = study_rows(a)
+    return {r.what: r for r in root.rows if r.what in COPY_FOLDERS}
+
+
+def _copyable(a):
+    """[(object, folder kind)] of the rows Copy can take in study a."""
+    out = []
+    for what, r in _folder_rows(a).items():
+        for c in r.rows:
+            o = c.obj
+            if c.what == "item" and o is not None and getattr(o, "Document", None) is not None:
+                from . import asmsim
+                if asmsim.AUTO not in o.PropertiesList:
+                    out.append((o, what))
+    return out
+
+
+def copy_items(a, objs):
+    """Copy (Ctrl+C) in the study tree: the fixtures, loads or connectors objs of study a."""
+    fold = {o.Name: w for o, w in _copyable(a)}
+    items = [(o.Name, fold[o.Name]) for o in objs if o is not None and o.Name in fold]
+    if items:
+        CLIP["doc"], CLIP["items"] = a.Document.Name, items
+    return items
+
+
+def clipboard(doc, b=None, folder=None):
+    """[(object, folder kind)] Paste would put in study b (in folder, else in the folders b has)."""
+    if doc is None or CLIP["doc"] != doc.Name:
+        return []
+    have = set(_folder_rows(b)) if b is not None else set(COPY_FOLDERS)
+    out = []
+    for name, what in CLIP["items"]:
+        o = doc.getObject(name)
+        if o is not None and what in have and (folder is None or what == folder):
+            out.append((o, what))
+    return out
+
+
+def _base_name(o):
+    from . import simpms
+    import re
+    return re.sub(r"-\d+$", "", simpms.study_name(o)) or o.Label
+
+
+def paste_items(b, objs):
+    """The copies of objs (fixtures, loads, connectors) in study b, each with b's next name (Fixed-1, Fixed-2...)."""
+    from . import simpms
+    doc = b.Document
+    made = []
+    doc.openTransaction("Paste")
+    try:
+        for o in objs:
+            k = simpms.kept(o)
+            helpers = [doc.getObject(n) for n in (k.get("helpers") or [])]
+            helpers = [h for h in helpers if h is not None]
+            copies = {}
+            c = doc.copyObject(o, False)
+            copies[o.Name] = c
+            for h in helpers:
+                copies[h.Name] = doc.copyObject(h, False)
+            for x in copies.values():            # the copies point at each other, not back at the originals
+                for prop in x.PropertiesList:
+                    if prop in ("Group", "ExpressionEngine", "Label", "Label2"):
+                        continue
+                    try:
+                        v = x.getPropertyByName(prop)
+                    except Exception:
+                        continue
+                    if isinstance(v, App.DocumentObject) and v.Name in copies:
+                        setattr(x, prop, copies[v.Name])
+                    elif isinstance(v, list) and v and all(isinstance(y, App.DocumentObject) for y in v) and \
+                            any(y.Name in copies for y in v):
+                        setattr(x, prop, [copies.get(y.Name, y) for y in v])
+            if helpers:
+                k["helpers"] = [copies[h.Name].Name for h in helpers]
+                simpms._keep(c, **k)
+            for h in helpers:
+                b.addObject(copies[h.Name])
+            b.addObject(c)
+            simpms._set_label(c, simpms._label(b, _base_name(o)))
+            try:
+                if c.TypeId in simpms.SYMBOL_COLOUR:
+                    simpms.symbol(c, simpms.SYMBOL_COLOUR[c.TypeId])
+                if getattr(o, "ViewObject", None) is not None and getattr(c, "ViewObject", None) is not None:
+                    c.ViewObject.Visibility = o.ViewObject.Visibility
+            except Exception as _fw_err:
+                _fw_log("simtree.py:pastelook", _fw_err)
+            made.append(c)
+    except Exception:
+        doc.abortTransaction()
+        raise
+    doc.commitTransaction()
+    doc.recompute()
+    if Gui is not None:
+        refresh()
+    return made
+
+
+def paste(b, folder=None):
+    """Paste (Ctrl+V) in study b: what Copy took, into the folders b has."""
+    return paste_items(b, [o for o, _w in clipboard(b.Document, b, folder)])
+
+
+def clip_entries(row, a, out):
+    """Copy on a fixture, load or connector row and on its folder; Paste on the study and the folder once there is
+    something Copy took that the study can have (never a dead Paste)."""
+    w, o = row.what, row.obj
+    if a is None:
+        return out
+    mine = {x.Name for x, _f in _copyable(a)}
+    if w == "item" and o is not None and o.Name in mine:
+        out.append(("Copy", lambda: copy_items(a, [o])))
+    elif w in COPY_FOLDERS:
+        kids = [c.obj for c in row.rows if c.obj is not None and c.obj.Name in mine]
+        if kids:
+            out.append(("Copy", lambda: copy_items(a, kids)))
+        if clipboard(a.Document, a, w):
+            out.append(("Paste", lambda: paste(a, w)))
+    elif w == "study" and clipboard(a.Document, a):
+        out.append(("Paste", lambda: paste(a)))
+    return out
+
+
 def rename(o, text):
     text = (text or "").strip()
     if text:
@@ -858,20 +1062,27 @@ def menu_entries(row, a):
             out.append(("Apply/Edit Material...", lambda: edit(mats[0])))
         else:
             key("Apply/Edit Material...", "SIM_ApplyMaterial")
+        if w == "part" and asmsim.is_assembly_study(a) is False:
+            draft_entry(a, out)
+        if w == "part" and asmsim.is_assembly_study(a) is False:
+            shell_entry(a, out)
         if w == "body":
             show_hide([o])
     elif w == "connections":
+        key("Connections Advisor...", "SIM_ConnAdvisor")
         key("Contact Set...", "SIM_Contact")
         asmsim.connections_extra(a, key)
         key("Rigid Connection...", "SIM_Rigid")
         show_hide(kids)
     elif w == "fixtures":
+        key("Fixtures Advisor...", "SIM_FixAdvisor")
         key("Fixed Geometry...", "SIM_Fixed")
         key("Roller/Slider...", "SIM_Roller")
         key("Fixed Hinge...", "SIM_Hinge")
         key("Elastic Support...", "SIM_Elastic")
         show_hide(kids)
     elif w == "loads":
+        key("External Loads Advisor...", "SIM_LoadAdvisor")
         key("Force...", "SIM_Force")
         key("Torque...", "SIM_Torque")
         key("Pressure...", "SIM_Pressure")
@@ -1030,6 +1241,10 @@ def menu_entries(row, a):
         out.append(("Hide", lambda: set_shown([o], False)))
         out.append(("-", None))
         out.append(("Delete", lambda: delete_objects([o])))
+    try:                                        # Copy / Paste of fixtures, loads and connectors between studies
+        clip_entries(row, a, out)
+    except Exception as _fw_err:
+        _fw_log("simtree.py:clip", _fw_err)
     try:
         from . import simrcmenus
         out = list(simrcmenus.arrange(w, out, o, a) or out)
@@ -1143,6 +1358,75 @@ if Gui is not None:
             self._filling = False
             self.rows = {}
             self.last_menu = None
+            if not flow:                    # drag a fixture, load or connector onto another study's tab: a copy there
+                self.setDragEnabled(True)
+                self.setDragDropMode(QtWidgets.QAbstractItemView.DragOnly)
+
+        def _current_objs(self):
+            row = self.row_of(self.currentItem())
+            if row is None or self.study is None:
+                return []
+            if row.what in COPY_FOLDERS:
+                return [c.obj for c in row.rows if c.obj is not None]
+            return [row.obj] if row.what == "item" and row.obj is not None else []
+
+        def _clip_key(self, e):
+            """"copy" / "paste" when Ctrl+C / Ctrl+V has something to do in this tree, else None."""
+            if self.flow or self.study is None or not hasattr(e, "matches"):
+                return None
+            if e.matches(QtGui.QKeySequence.Copy) and self._current_objs() and \
+                    {o.Name for o in self._current_objs()} & {x.Name for x, _f in _copyable(self.study)}:
+                return "copy"
+            if e.matches(QtGui.QKeySequence.Paste):
+                row = self.row_of(self.currentItem())
+                folder = row.what if row is not None and row.what in COPY_FOLDERS else None
+                if clipboard(self.study.Document, self.study, folder):
+                    return "paste"
+            return None
+
+        def event(self, e):
+            # FreeCAD's Edit > Copy / Paste (Std_Copy: copies to the system clipboard with the export dialog) would
+
+            try:
+                if e.type() == QtCore.QEvent.ShortcutOverride and self._clip_key(e):
+                    e.accept()
+                    return True
+            except Exception as _fw_err:
+                _fw_log("simtree.py:override", _fw_err)
+            return super().event(e)
+
+        def keyPressEvent(self, e):
+            """Ctrl+C copies the fixture, load or connector row (or its folder's rows); Ctrl+V pastes in this study."""
+            if not self.flow and self.study is not None:
+                try:
+                    if e.matches(QtGui.QKeySequence.Copy):
+                        if copy_items(self.study, self._current_objs()):
+                            e.accept()
+                            return
+                    elif e.matches(QtGui.QKeySequence.Paste):
+                        row = self.row_of(self.currentItem())
+                        folder = row.what if row is not None and row.what in COPY_FOLDERS else None
+                        if clipboard(self.study.Document, self.study, folder):
+                            paste(self.study, folder)
+                            e.accept()
+                            return
+                except Exception as _fw_err:
+                    _fw_log("simtree.py:keys", _fw_err)
+            super().keyPressEvent(e)
+
+        def startDrag(self, actions):
+            a = self.study
+            items = copy_items(a, self._current_objs()) if a is not None else []
+            if not items:
+                return
+            mime = QtCore.QMimeData()
+            mime.setData(MIME, QtCore.QByteArray(("%s\n%s" % (a.Document.Name, " ".join(n for n, _w in items))).encode()))
+            drag = QtGui.QDrag(self)
+            drag.setMimeData(mime)
+            it = self.currentItem()
+            if it is not None:
+                drag.setPixmap(it.icon(0).pixmap(16, 16))
+            drag.exec(QtCore.Qt.CopyAction)
 
         def fill(self, a, force=False):
             sig = (a.Name, signature(a)) if a is not None else None
@@ -1151,6 +1435,7 @@ if Gui is not None:
             self._sig = sig
             self.study = a
             opened = {self._path(it) for it in self._items() if it.isExpanded()}
+            known = {self._path(it) for it in self._items()}
             first = not opened
             self._filling = True
             try:
@@ -1162,7 +1447,8 @@ if Gui is not None:
                 top = self._add(None, root)
                 top.setFlags(top.flags() | Qt.ItemIsEditable)
                 for it in self._items():
-                    if first or self._path(it) in opened:
+
+                    if first or self._path(it) in opened or (known and self._path(it) not in known):
                         it.setExpanded(True)
                 f = top.font(0)
                 f.setBold(True)
@@ -1525,7 +1811,74 @@ if Gui is not None:
                         return None
             return press0(self, e)
 
+        def _study_at(self, e):
+            doc = _part_doc()
+            if doc is None:
+                return None
+            pos = e.position() if hasattr(e, "position") else e.pos()
+            hit = self._hit(pos.x())
+            if not hit or hit[0] != "tab":
+                return None
+            j = hit[1] - (len(self.subwindows()) or 1)
+            ex = self.extras()
+            if 0 <= j < len(ex) and ex[j][1] == "simstudy":
+                return doc.getObject(ex[j][2])
+            return None
+
+        def _ours(e):
+            return e.mimeData() is not None and e.mimeData().hasFormat(MIME)
+
+        def dragEnterEvent(self, e):
+            if _ours(e):
+                e.acceptProposedAction()
+            else:
+                e.ignore()
+
+        def dragMoveEvent(self, e):
+            if _ours(e) and self._study_at(e) is not None:
+                e.acceptProposedAction()
+            else:
+                e.ignore()
+
+        def dropEvent(self, e):
+            ""
+            b = self._study_at(e) if _ours(e) else None
+            if b is None:
+                e.ignore()
+                return
+            try:
+                text = bytes(e.mimeData().data(MIME)).decode()
+                docname, _sep, names = text.partition("\n")
+                if docname != b.Document.Name:
+                    e.ignore()
+                    return
+                objs = [b.Document.getObject(n) for n in names.split()]
+                have = set(_folder_rows(b))
+                fold = dict(CLIP["items"])
+                objs = [o for o in objs if o is not None and fold.get(o.Name, "fixtures") in have]
+                if objs:
+                    paste_items(b, objs)
+                    e.acceptProposedAction()
+                    self.refresh()
+                    return
+            except Exception as _fw_err:
+                _fw_log("simtree.py:drop", _fw_err)
+            e.ignore()
+
+        init0 = cls.__init__
+
+        def __init__(self, *args, **kw):
+            init0(self, *args, **kw)
+            self.setAcceptDrops(True)
+
         cls.extras, cls._open_extra, cls._activate, cls.mousePressEvent = extras, _open_extra, _activate, mousePressEvent
+        cls._study_at, cls.dragEnterEvent, cls.dragMoveEvent, cls.dropEvent = _study_at, dragEnterEvent, dragMoveEvent, dropEvent
+        cls.__init__ = __init__
+        try:
+            for w in Gui.getMainWindow().findChildren(cls):
+                w.setAcceptDrops(True)
+        except Exception as _fw_err:
+            _fw_log("simtree.py:tabsdrop", _fw_err)
         cls._fw_simtabs = True
 
     def _patch_asm():
@@ -1585,7 +1938,43 @@ if Gui is not None:
 
     _TIMER = []
 
+    def hide_result_pipelines(doc):
+        ""
+
+
+        hidden = []
+        for a in [o for o in doc.Objects if is_study(o)]:
+            for o in list(getattr(a, "Group", []) or []):
+                try:
+                    if o.isDerivedFrom("Fem::FemPostObject") and o.ViewObject is not None and o.ViewObject.Visibility:
+                        o.ViewObject.Visibility = False
+                        hidden.append(o.Name)
+                except Exception as _fw_err:
+                    _fw_log("simtree.py:hide pipeline", _fw_err)
+        return hidden
+
+    SEEN_DOCS = {}
+
+    def _new_docs():
+        """Each document once, as it opens (a closed and reopened part counts as new)."""
+        names = App.listDocuments()
+        for name in list(SEEN_DOCS):
+            if name not in names:
+                SEEN_DOCS.pop(name, None)
+        for name, doc in names.items():
+            if SEEN_DOCS.get(name) is doc:
+                continue
+            SEEN_DOCS[name] = doc
+            try:
+                hide_result_pipelines(doc)
+            except Exception as _fw_err:
+                _fw_log("simtree.py:new docs", _fw_err)
+
     def _tick():
+        try:
+            _new_docs()
+        except Exception as error:
+            App.Console.PrintLog("FreeCAD study pipelines: %s\n" % error)
         try:
             refresh()
         except Exception as error:

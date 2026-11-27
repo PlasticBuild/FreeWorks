@@ -252,7 +252,7 @@ class SheetFormatBox(QtWidgets.QWidget):
         left.addLayout(dims)
         lay.addLayout(left, 0, 0)
         right = QtWidgets.QVBoxLayout()
-        right.addWidget(QtWidgets.QLabel("Preview", self))
+        right.addWidget(QtWidgets.QLabel("Preview:", self))
         self.preview = QtWidgets.QLabel(self)
         self.preview.setObjectName("SWSheetPreview")
         self.preview.setFixedSize(220, 170)
@@ -375,7 +375,15 @@ class SheetFormatBox(QtWidgets.QWidget):
         self.file.setToolTip(path or "")
         self.file.setCursorPosition(0)
         w, h = svg_size(path) if path else (0, 0)
-        self.size_label.setText("Width: %gmm   Height: %gmm" % (w, h) if path else "")
+
+        self.size_label.setText("Width: %.2fmm\nHeight: %.2fmm" % (w, h) if path else "")
+        if path and self.standard.isChecked() and w and h:
+            # usage run 11-27 (File handling): Custom's Width/Height read 279.40 x 215.90 beside an A3 pick; they
+            # follow the picked size, so a switch to Custom starts from it
+            for spin, val in ((self.width, w), (self.height, h)):
+                spin.blockSignals(True)
+                spin.setValue(val)
+                spin.blockSignals(False)
         pix = QtGui.QPixmap(self.preview.size())
         pix.fill(QtGui.QColor("white"))
         if path:
@@ -408,6 +416,8 @@ class SheetFormatDialog(QtWidgets.QDialog):
         bb = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, self)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
+        for b in bb.buttons():
+            b.setIcon(QtGui.QIcon())
         lay.addWidget(bb)
         self.buttons = bb
 
@@ -1932,7 +1942,7 @@ class SheetTabs(QtWidgets.QWidget):
         p = d.getObject(self.tabs.tabData(i))
         if p is not None and p.Name != self.page_name:
             show_page(p)
-            QtCore.QTimer.singleShot(0, self.refresh)
+            from . import safe_later as _sl; _sl.later(0, self.refresh, self, "tabs")
 
     def menu(self, pos):
         i = self.tabs.tabAt(pos)

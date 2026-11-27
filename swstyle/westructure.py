@@ -27,6 +27,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -101,12 +102,47 @@ def plane_of(obj, sub=""):
     return f.CenterOfMass, f.normalAt(0, 0)
 
 
+def ref_kind(obj, sub=""):
+    ""
+
+
+    if sub:
+        return None
+    try:
+        s = Part.getShape(obj)
+    except Exception:
+        return None
+    if s.isNull():
+        return None
+    if s.Faces:
+        return "plane" if len(s.Faces) == 1 and s.Faces[0].Surface.TypeId == "Part::GeomPlane" else None
+    if len(s.Edges) == 1 and s.Edges[0].Curve.TypeId == "Part::GeomLine":
+        return "axis"
+    if not s.Edges and len(s.Vertexes) == 1:
+        return "point"
+    return None
+
+
+def picks_as(obj, sub=""):
+    """The kind of entity a pick is: "edge", "face", "point", "axis" or "plane" (None if none of them)."""
+    if sub.startswith("Edge"):
+        return "edge"
+    if sub.startswith("Face"):
+        return "face"
+    if sub.startswith("Vertex"):
+        return "point"
+    return ref_kind(obj, sub)
+
+
 def direction_of(obj, sub=""):
-    """A direction from an edge (along it) or a plane or face (square to it)."""
+    """A direction from an edge or axis (along it) or a plane or face (square to it)."""
+    if not sub and ref_kind(obj) == "axis":         # origin or reference axis (wsref-fix01)
+        e = Part.getShape(obj).Edges[0]
+        return App.Vector(e.tangentAt(e.FirstParameter)).normalize()      # an origin axis has no end vertices
     if sub.startswith("Edge"):
         e = _shape(obj, sub).Edges[0]
         if e.Curve.TypeId != "Part::GeomLine":
-            raise ValueError("The direction must be a straight edge, a plane or a flat face.")
+            raise ValueError("The direction must be a straight edge, an axis, a plane or a flat face.")
         return (e.Vertexes[-1].Point - e.Vertexes[0].Point).normalize()
     return plane_of(obj, sub)[1].normalize()
 
@@ -688,7 +724,7 @@ LISTS = {
                          "plane")],
     "Points And Length": [("Points", "SWWEPMPoints", "#d6ecff", "Points: where members start", "point"),
                           ("Direction", "SWWEPMDirection", "#ffd6ec",
-                           "Direction: an edge, a plane or a flat face", "direction"),
+                           "Direction: an edge, an axis, a plane or a flat face", "direction"),
                           ("EndTarget", "SWWEPMEndTarget", "#e6d6ff",
                            "End: the point, or the plane or flat face, the members go up to", "target")],
     "Face Plane Intersection": [("Faces", "SWWEPMFaces", "#d6ecff", "Faces", "face"),
@@ -1026,7 +1062,7 @@ class Panel:
         """A pick while the Align box is active: the one edge, axis, plane or face the profile lines up with.
         While the Split Member box is active: the points, planes or faces the members split at."""
         if getattr(self, "split_list", None) is not None and self.active is self.split_list:
-            if sub.startswith("Edge"):
+            if picks_as(obj, sub) not in ("point", "plane", "face"):
                 return True
             now = _subs(self.obj.SplitRefs)
             if (obj, sub) in now:
@@ -1039,7 +1075,7 @@ class Panel:
             return True
         if self.active is not self.align_list:
             return False
-        if not (sub.startswith(("Edge", "Face")) or not sub):
+        if picks_as(obj, sub) not in ("edge", "face", "axis", "plane"):
             return True
         now = _subs(self.obj.AlignTo)
         self.obj.AlignTo = [] if (obj, sub) in now else [(obj, sub)]
@@ -1100,6 +1136,14 @@ class Panel:
     def _show_type(self):
         kind = self.obj.MemberType
         self.type_pages.setCurrentIndex(TYPES.index(kind))
+        # look audit WE-2: a stacked widget is as tall as its tallest page, so the short Path Segments page left
+        # ~160 px of blank above Start/End Extend; the pages not shown take no height
+        for i in range(self.type_pages.count()):
+            page = self.type_pages.widget(i)
+            on = i == self.type_pages.currentIndex()
+            page.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
+                               QtWidgets.QSizePolicy.Preferred if on else QtWidgets.QSizePolicy.Ignored)
+        self.type_pages.adjustSize()
         self.lists = dict(self.lists_by_type[kind])
         self.active = self.lists_by_type[kind][0][1]
 
@@ -1208,7 +1252,7 @@ class Panel:
             gdoc = Gui.getDocument(self.obj.Document.Name)
             vp = gdoc.getInEdit() if gdoc is not None else None
             if vp is not None:
-                return vp.Object == self.obj
+                return editobj.of(vp) == self.obj
             # a new member's page is shown without an edit: it is this page while its form is up
             return self.obj.Document.getObject(self.obj.Name) is not None and self.form.isVisible()
         except Exception:
@@ -1221,7 +1265,7 @@ class Panel:
             except Exception as _fw_err:
                 _fw_log("westructure.py:1190", _fw_err)
             return
-        QtCore.QTimer.singleShot(0, lambda: self._editing() and self.picked(doc, name, sub))
+        from . import safe_later as _sl; _sl.later(0, lambda: self._editing() and self.picked(doc, name, sub), self, "form")
 
     def picked(self, doc_name, name, sub):
         try:
@@ -1237,10 +1281,11 @@ class Panel:
         what = next(x[4] for x in LISTS[kind] if x[0] == prop)
         # a pick that does not fit the active box goes to the box that takes it
         up_to_plane = getattr(self.obj, "EndCondition", "Length") == "Up To Plane"
-        fits = {"edge": sub.startswith("Edge"), "plane": sub.startswith("Face") or not sub,
-                "point": sub.startswith("Vertex"), "face": sub.startswith("Face"),
-                "direction": sub.startswith(("Edge", "Face")) or not sub,
-                "target": (sub.startswith("Face") or not sub) if up_to_plane else sub.startswith("Vertex")}
+        kind_of = picks_as(obj, sub)        # reference points, axes and planes count as their model entity (wsref-fix01)
+        fits = {"edge": kind_of == "edge", "plane": kind_of in ("face", "plane"),
+                "point": kind_of == "point", "face": kind_of == "face",
+                "direction": kind_of in ("edge", "face", "axis", "plane"),
+                "target": kind_of in (("face", "plane") if up_to_plane else ("point",))}
         if not fits[what]:
             for p, _n, _c, _t, w in LISTS[kind]:
                 if fits[w] and not dict(lists)[p].isHidden():
@@ -1725,7 +1770,7 @@ class SecondaryPanel(Panel):
                 if any(it[0] == point and ref in it[1:] for it in items):
                     return
                 items.append([point, ref])
-            elif sub.startswith("Vertex") and not waiting:
+            elif picks_as(obj, sub) == "point" and not waiting:
                 p = _shape(obj, sub).Vertexes[0].Point
                 items.append([[p.x, p.y, p.z]])
             else:
@@ -1740,7 +1785,7 @@ class SecondaryPanel(Panel):
             else:
                 items.append([ref])
             o.Pairs = json.dumps(items)
-        elif o.SecondaryType == "Support Plane" and ref is None and (sub.startswith("Face") or not sub):
+        elif o.SecondaryType == "Support Plane" and ref is None and picks_as(obj, sub) in ("face", "plane"):
             items = _subs(o.SupportPlanes)
             if (obj, sub) in items:
                 items.remove((obj, sub))

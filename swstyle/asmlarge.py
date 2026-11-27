@@ -375,7 +375,7 @@ def _patch_tree():
 
     def data(self, index, role=QtCore.Qt.DisplayRole):
         value = data0(self, index, role)
-        if role == QtCore.Qt.DecorationRole and index.isValid() and STATE["frozen"]:
+        if role == QtCore.Qt.DecorationRole and index.isValid() and STATE["frozen"] and getattr(self, "_fw_asm", True):
             node = self.node(index)
             obj = getattr(node, "obj", None) if node is not None else None
             try:

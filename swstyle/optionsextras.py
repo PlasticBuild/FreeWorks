@@ -118,7 +118,8 @@ def apply_step(box):
     if base is None:
         base = float(box.property("singleStep") or 0.0)
         box.setProperty("swStepBase", base)
-    if abs(base - 1.0) > 1e-9:
+    if abs(base - 1.0) > 1e-9 and not (kind == "angle" and abs(base - 10.0) < 1e-9):
+
         return None
     step = increment(kind)
     if quantity_box(box):
@@ -163,6 +164,27 @@ def _apply_quietly(box):
 # ---------------------------------------------------------------- unsaved document reminder
 def reminder_minutes():
     return max(1, _p().GetInt(REMIND_MINUTES, 20))
+
+
+def dismiss_seconds():
+    ""
+
+    g = App.ParamGet("User parameter:BaseApp/Preferences/NotificationArea")
+    if not g.GetBool("AutoRemoveUserNotifications", True):
+        return 0
+    return max(1, g.GetInt("NotificationTime", NOTE_SECONDS))
+
+
+NOTE_SECONDS = 5
+
+
+def default_note_seconds():
+    ""
+    g = App.ParamGet("User parameter:BaseApp/Preferences/NotificationArea")
+    if g.GetInt("NotificationTime", -1) == -1:
+        g.SetInt("NotificationTime", NOTE_SECONDS)
+        return True
+    return False
 
 
 class _SavedWatch:
@@ -248,6 +270,15 @@ class SaveReminder(QtCore.QObject):
         mw = Gui.getMainWindow()
         self.note = ReminderNote(mw, names, self)
         self.note.show_at_corner()
+        seconds = dismiss_seconds()
+        if seconds:
+
+            note = self.note
+            QtCore.QTimer.singleShot(seconds * 1000, lambda n=note: self._dismiss(n))
+
+    def _dismiss(self, note):
+        if self.note is note:
+            self.remind_later(list(note.names))
 
     def close_note(self):
         if self.note is not None:
@@ -490,6 +521,8 @@ def apply_detailing(doc=None):
     """Shows or hides the document's 3D annotations as the Detailing display filter says."""
     docs = [doc] if doc is not None else list(App.listDocuments().values())
     for d in docs:
+        if not _doc_alive(d):
+            continue        # closed before this deferred call ran (Quick View, a check closing its file)
         for o in d.Objects:
             if getattr(o, "SWStyleKind", "") != "PMI" or o.ViewObject is None:
                 continue
@@ -800,7 +833,7 @@ def apply_background_image(view=None):
         light = coin.SoLightModel()
         light.model = coin.SoLightModel.BASE_COLOR
         tex = coin.SoTexture2()
-        tex.filename = path
+        _texture_from_file(tex, path)
         coords = coin.SoCoordinate3()
         w = 1.0
         try:
@@ -816,6 +849,25 @@ def apply_background_image(view=None):
         for n in (pick, cam, depth, light, tex, coords, tc, face):
             sep.addChild(n)
         root.insertChild(sep, 0)
+
+
+def _texture_from_file(tex, path):
+    """The picture put in the texture as pixels read with Qt, as decalpm and scenebg do: Coin reads a file
+    named in SoTexture2.filename only through simage, which FreeCAD's Windows build may lack, and the
+    texture then draws nothing (the Options background picture showed nothing). Falls back to the file name."""
+    from pivy import coin
+    from PySide import QtGui
+    image = QtGui.QImage(path)
+    if image.isNull():
+        tex.filename.setValue(path)
+        return False
+    image = image.convertToFormat(QtGui.QImage.Format_RGBA8888).mirrored(False, True)     # Coin: bottom row first
+    w, h = image.width(), image.height()
+    stride = image.bytesPerLine()
+    raw = bytes(image.constBits())[:stride * h]
+    tex.filename.setValue("")
+    tex.image.setValue(coin.SbVec2s(w, h), 4, b"".join(raw[y * stride:y * stride + 4 * w] for y in range(h)))
+    return True
 
 
 # ---------------------------------------------------------------- install
@@ -873,6 +925,10 @@ def install():
         return _installed[0]
     app = QtWidgets.QApplication.instance()
     mw = Gui.getMainWindow()
+    try:
+        default_note_seconds()
+    except Exception as _fw_err:
+        _fw_log("optionsextras.py:note-seconds", _fw_err)
     close, reminder = _CloseWatch(mw), SaveReminder()
     app.focusChanged.connect(_focus_changed)    # a box gets the focus before its arrows, wheel or keys step it
     mw.installEventFilter(close)

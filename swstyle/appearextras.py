@@ -110,11 +110,11 @@ class SwatchBox(QtWidgets.QGroupBox):
         row = QtWidgets.QHBoxLayout()
         self.combo = QtWidgets.QComboBox(self)
         self.combo.setObjectName("SWSwatchPalette")
-        self.combo.setToolTip("The palette whose colours show below")
+        self.combo.setToolTip("The palette whose colors show below")
         row.addWidget(self.combo, 1)
-        self.add_button = self._tool(row, "+", "SWSwatchAdd", "Adds the colour now to this palette", self._add)
+        self.add_button = self._tool(row, "+", "SWSwatchAdd", "Adds the color now to this palette", self._add)
         self.new_button = self._tool(row, "New", "SWSwatchNew", "Makes a new, empty palette", self._new)
-        self.del_button = self._tool(row, "x", "SWSwatchDelete", "Deletes this palette (on a built-in one, the colours you added)",
+        self.del_button = self._tool(row, "x", "SWSwatchDelete", "Deletes this palette (on a built-in one, the colors you added)",
                                      self._delete)
         lay.addLayout(row)
         self.grid_host = QtWidgets.QWidget(self)

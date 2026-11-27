@@ -361,7 +361,7 @@ class DraftPanel(_PullPanel):
     NAME = "SWStyle_DraftAnalysis"
     TITLE = "Draft Analysis"
     ICON = "I3DVIEW_DRAFT_ANALYSIS"
-    BOXES = (("pull", "Direction of Pull", "A planar face, a straight edge or a plane: the direction the mould pulls", _is_pull),)
+    BOXES = (("pull", "Direction of Pull", "A planar face, a straight edge or a plane: the direction the mold pulls", _is_pull),)
 
     def build(self):
         win = self.win
@@ -433,7 +433,7 @@ class UndercutPanel(_PullPanel):
     NAME = "SWStyle_UndercutAnalysis"
     TITLE = "Undercut Analysis"
     ICON = "I3DVIEW_UNDERCUT_ANALYSIS"
-    BOXES = (("pull", "Direction of Pull", "A planar face, a straight edge or a plane: the direction the mould pulls", _is_pull),
+    BOXES = (("pull", "Direction of Pull", "A planar face, a straight edge or a plane: the direction the mold pulls", _is_pull),
              ("line", "Parting Line", "The edges of the parting line: faces above it are judged against direction 1, below it against direction 2", _is_edge))
 
     def single(self, key):
@@ -476,7 +476,7 @@ class PartingLinePanel(_PullPanel):
     NAME = "SWStyle_PartingLineAnalysis"
     TITLE = "Parting Line Analysis"
     ICON = "MOLD_PARTING_LINE_ANALYSIS"
-    BOXES = (("pull", "Direction of Pull", "A planar face, a straight edge or a plane: the direction the mould pulls", _is_pull),)
+    BOXES = (("pull", "Direction of Pull", "A planar face, a straight edge or a plane: the direction the mold pulls", _is_pull),)
 
     def build(self):
         win = self.win
@@ -518,7 +518,7 @@ class ThicknessPanel(EvalPanel):
     NAME = "SWStyle_ThicknessAnalysis"
     TITLE = "Thickness Analysis"
     ICON = "I3DVIEW_THICKNESS_ANALYSIS"
-    BOXES = (("bodies", "Faces or Bodies", "The bodies to analyse (none: every visible body)", _is_body),)
+    BOXES = (("bodies", "Faces or Bodies", "The bodies to analyze (none: every visible body)", _is_body),)
 
     def single(self, key):
         return False
@@ -536,7 +536,7 @@ class ThicknessPanel(EvalPanel):
         self.resolution.setToolTip("Resolution: Low, Medium or High (finer sampling takes longer)")
         self.resolution.valueChanged.connect(lambda v: win.resolution.setCurrentIndex(v))
         win.corners.setObjectName(PREFIX + "ThicknessCorners")
-        params = _group("Analysis Parameters", "Faces or Bodies to analyse:", self.box("bodies"),
+        params = _group("Analysis Parameters", "Faces or Bodies to analyze:", self.box("bodies"),
                         ["Target thickness:", win.target], win.thin, win.thick,
                         ["Thick region limit:", win.limit], ["Resolution:", self.resolution], win.corners, [win.recalc, None])
         win.full.setObjectName(PREFIX + "ThicknessFullRange")
@@ -613,17 +613,31 @@ class DeviationPanel(EvalPanel):
         _hide_all(win.layout_)
         win.samples.setObjectName(PREFIX + "DeviationSamples")
         win.recalc.setObjectName(PREFIX + "DeviationCheck")
-        self.boxes_group = _group("Edges", self.box("edges"), ["Number of sample points:", win.samples], [win.recalc, None])
+
+        self.boxes_group = _group("Analysis Parameters", "Edges for analysis:", self.box("edges"),
+                                  ["Number of sample points:", win.samples], [win.recalc, None])
         self.maximum = QtWidgets.QLabel("Maximum deviation: -")
         self.maximum.setObjectName(PREFIX + "DeviationMaximum")
         self.minimum = QtWidgets.QLabel("Minimum deviation: -")
         self.average = QtWidgets.QLabel("Average deviation: -")
+        self._hint()
         return [self.boxes_group, _group("Analysis Results", self.maximum, self.minimum, self.average, win.table, win.summary, [win.copy, None])]
+
+    HINT = "Select edges between faces, then click Check."
+
+    def _hint(self):
+        ""
+        try:
+            if not self.win.picks:
+                self.win.summary.setText(self.HINT)
+        except Exception as _fw_err:
+            _fw_log("evalpanel.py:deviation-hint", _fw_err)
 
     def compute(self):
         self.win.picks = list(self.picks["edges"])
         Gui.Selection.clearSelection()
         self.win.refresh()
+        self._hint()
         vals = getattr(self.win, "values", [])
         if vals:
             self.maximum.setText("Maximum deviation: %.4f deg" % max(vals))

@@ -850,6 +850,16 @@ def align_edge(view, edge, horizontal=True):
     return turn
 
 
+def projected_angle(view):
+    """Align Drawing View > Projected Angle: a view turned on the sheet (Horizontal/Vertical Edge, Horizontal to
+    Sheet, Rotate View) goes back to the angle its projection gives it."""
+    if abs(float(view.Rotation) % 360.0) < 1e-9:
+        return False
+    view.Rotation = 0.0
+    view.Document.recompute()
+    return True
+
+
 def rotate_view(view, deg):
     view.Rotation = (float(view.Rotation) + deg) % 360.0
     view.Document.recompute()
@@ -889,7 +899,10 @@ DRAWING_MENUS = (
     )),
     ("&View", (
         ("Redraw", "SWStyle_Redraw|TechDraw_RedrawPage"),
-        ("Screen Capture", (("Image Capture", "Std_ViewScreenShot"),)), S,
+        ("Screen Capture", (("Image Capture", "Std_ViewScreenShot"),
+
+                            ("Record Video...", "SWStyle_RecordVideo"),
+                            ("Stop Video Record", "SWStyle_StopVideoRecord"))), S,
         ("Display", (
             ("Wireframe", "FreeWorks_DrawDisplayWireframe"),
             ("Hidden Lines Visible", "FreeWorks_DrawDisplayHiddenVisible"),
@@ -898,12 +911,12 @@ DRAWING_MENUS = (
             ("Draft Quality HLR/HLV", "FreeWorks_DrawDraftQuality"), S,
             ("Tangent Edges Visible", "FreeWorks_DrawTangentVisible"),
             ("Tangent Edges With Font", "FreeWorks_DrawTangentWithFont"),
-            ("Tangent Edges Removed", "FreeWorks_DrawTangentRemoved"),
+            ("Tangent Edges Removed", "FreeWorks_DrawTangentRemoved"), S,      # mbar-1126: MENU 33 separator
             ("Tangent Edges With Hidden Ends", "FreeWorks_DrawTangentWithHiddenEnds"),
         )),
         ("Modify", (
-            ("Zoom to Fit", "Std_ViewFitAll"), ("Zoom to Sheet", "FreeWorks_DrawZoomToSheet"),
-            ("Zoom to Area", "FreeWorks_DrawZoomArea|Std_ViewBoxZoom"), ("Zoom In/Out", "Std_ViewZoomIn"),
+            ("Zoom to Fit", "SWStyle_ZoomFit|Std_ViewFitAll"), ("Zoom to Sheet", "FreeWorks_DrawZoomToSheet"),
+            ("Zoom to Area", "FreeWorks_DrawZoomArea|Std_ViewBoxZoom"), ("Zoom In/Out", "FreeWorks_DrawZoomInOut|Std_ViewZoomIn"),     # drawrows-1126: Drawings land352 drag tool
             ("Zoom to Selection", "Std_ViewFitSelection"), ("Zoom to Markup View", "FreeWorks_DrawZoomToMarkup"),
             ("Zoom About Screen Center", "FreeWorks_DrawZoomAboutCenter"), ("Pan", "FreeWorks_DrawPan"),
             ("Rotate View...", "FreeWorks_DrawRotateView"),
@@ -933,7 +946,7 @@ DRAWING_MENUS = (
         ("Xpress Products", (("Design Automation...", "SWStyle_DriveWorksXpress"),)), S,
         ("Selection", (("Select", "FreeWorks_DrawSelectTool"), ("Magnified Selection", "SWStyle_MagnifiedSelection"),
                        ("Box Selection", "SWStyle_BoxSelection"), ("Lasso Selection", "SWStyle_LassoSelection"),
-                       ("Select over Geometry", "SWStyle_BoxSelection|Std_BoxSelection"),
+                       ("Select over Geometry", "FreeWorks_DrawSelectOverGeometry|SWStyle_BoxSelection|Std_BoxSelection"),
                        ("Select All", "FreeWorks_DrawSelectAll|Std_SelectAll"),
                        ("Invert Selection", "SWStyle_InvertSelection"))), S,
         ("Compare", (
@@ -959,7 +972,7 @@ DRAWING_MENUS = (
             ("Break Alignment", "FreeWorks_DrawBreakAlignment"), S,
             ("Horizontal to Sheet Clockwise", "FreeWorks_DrawRotateClockwise"),
             ("Horizontal to Sheet Counterclockwise", "FreeWorks_DrawRotateCounterclockwise"),
-            ("Projected Angle", "FreeWorks_DrawAlignHorizontalEdge"), S,  # rough: the picked edge or axis flat
+            ("Projected Angle", "FreeWorks_DrawProjectedAngle"), S,
             ("Default Alignment", "FreeWorks_DrawDefaultAlignment"),
         )), S,
         ("Align", (
@@ -1063,7 +1076,7 @@ DRAWING_MENUS = (
         ("Relations", (
             ("Add...", "FreeWorks_DrawAddRelation"), ("Display/Delete...", "FreeWorks_DrawDisplayDeleteRelations"),
             ("Scan Equal...", "FreeWorks_DrawScanEqual"), ("Constrain All", "FreeWorks_DrawConstrainAll"),
-            ("Quick Snaps", "FreeWorks_DrawQuickSnaps"),
+            ("Quick Snaps", "fn:draw_quick_snaps"),
         )),
         ("Block", (
             ("Make", "FreeWorks_DrawMakeBlock"), ("Edit", "FreeWorks_DrawEditBlock"),
@@ -1078,7 +1091,7 @@ DRAWING_MENUS = (
                       ("Performance Evaluation", "cat:PerformanceEvaluation"),
                       ("Previous Release Check", "SWStyle_PreviousReleaseCheck"))), S,
         ("Add-Ins...", "SWStyle_AddIns|Std_AddonMgr"), ("Save/Restore Settings...", "SWStyle_SaveRestoreSettings"),
-        ("Customize...", "Std_DlgCustomize"), ("Options...", "SWStyle_Options|Std_DlgPreferences"),
+        ("Customize...", "SWStyle_Customize|Std_DlgCustomize"), ("Options...", "SWStyle_Options|Std_DlgPreferences"),
     )),
 )
 
@@ -1162,6 +1175,8 @@ COMMANDS = {
                                           "Turns the view so the picked edge is horizontal."),
     "FreeWorks_DrawAlignVerticalEdge": ("Vertical Edge", "TechDraw_View",
                                         "Turns the view so the picked edge is vertical."),
+    "FreeWorks_DrawProjectedAngle": ("Projected Angle", "TechDraw_View",
+                                     "Turns the picked view back to its projected angle."),
     "FreeWorks_DrawRotateClockwise": ("Horizontal to Sheet Clockwise", "TechDraw_View",
                                       "Turns the picked view 90 degrees clockwise."),
     "FreeWorks_DrawRotateCounterclockwise": ("Horizontal to Sheet Counterclockwise", "TechDraw_View",
@@ -1218,6 +1233,9 @@ class _Command:
         if n in ("FreeWorks_DrawAlignHorizontalEdge", "FreeWorks_DrawAlignVerticalEdge"):
             return picked_edge()[0] is not None
         if n in ("FreeWorks_DrawRotateClockwise", "FreeWorks_DrawRotateCounterclockwise"):
+            from . import drawselect
+            return bool(drawselect.picked_views())
+        if n == "FreeWorks_DrawProjectedAngle":
             from . import drawselect
             return bool(drawselect.picked_views())
         if n == "FreeWorks_DrawWeldmentCutList":
@@ -1292,10 +1310,13 @@ class _Command:
             show_link_variables(page)
         elif n == "FreeWorks_DrawZoneLines":
             zone_lines(page)
-        elif n == "FreeWorks_DrawFindReferences":
-            FindReferencesDialog(doc).exec_()
-        elif n == "FreeWorks_DrawPackAndGo":
-            PackAndGoDialog(doc).exec_()
+        elif n in ("FreeWorks_DrawFindReferences", "FreeWorks_DrawPackAndGo"):
+
+            # parts, assemblies and drawings (this drawing-only box had no Include, Flatten or Help)
+            from . import filecmds
+            App.setActiveDocument(doc.Name)
+            box = filecmds.FindReferencesDialog if n == "FreeWorks_DrawFindReferences" else filecmds.PackAndGoDialog
+            box().exec()
         elif n == "FreeWorks_DrawPageSetup":
             page_setup()
         elif n == "FreeWorks_DrawHyperlink":
@@ -1340,6 +1361,19 @@ class _Command:
                         pass
                     raise
                 doc.commitTransaction()
+        elif n == "FreeWorks_DrawProjectedAngle":
+            from . import drawselect
+            doc.openTransaction(COMMANDS[n][0])
+            try:
+                for v in drawselect.picked_views():
+                    projected_angle(v)
+            except BaseException:
+                try:
+                    doc.abortTransaction()
+                except Exception:
+                    pass
+                raise
+            doc.commitTransaction()
         elif n in ("FreeWorks_DrawRotateClockwise", "FreeWorks_DrawRotateCounterclockwise"):
             from . import drawselect
             doc.openTransaction(COMMANDS[n][0])

@@ -157,6 +157,10 @@ def _curve_feature(obj):
         return False
 
 
+
+PROMPTS = ("Select ", "Type ")
+
+
 class PickBox(QtWidgets.QListWidget):
     ""
 
@@ -433,7 +437,8 @@ class PM:
         except Exception as error:
             self.message.setText(str(error))
 
-            ink = "#000000" if str(error).startswith("Select ") else "#c00000"
+            # promptink-fix01: "Type two or more points ..." (Curve Through XYZ Points, nothing given yet) is a prompt too
+            ink = "#000000" if str(error).startswith(PROMPTS) else "#c00000"
             self.message.setStyleSheet("QLabel { color: %s; border: none; background: transparent; }" % ink)
             self.ok = False
         finally:
@@ -871,6 +876,94 @@ def _follow_along(pt):
     return True
 
 
+VERTEX_KEEP = "FwVertexEdges"
+
+
+def keep_vertex_edges(datum):
+    ""
+
+
+
+    import json
+    try:
+        keep = []
+        for obj, subs in datum.AttachmentSupport or []:
+            for sub in subs:
+                if not sub.startswith("Vertex"):
+                    continue
+                shape = obj.Shape
+                v = shape.getElement(sub)
+                names = []
+                for i, e in enumerate(shape.Edges, 1):
+                    if any(x.isSame(v) for x in e.Vertexes):
+                        m = shape.getElementMappedName("Edge%d" % i)
+                        m = m[0] if isinstance(m, (tuple, list)) else m
+                        if m:
+                            names.append(m)
+                keep.append([obj.Name, names])
+        if not keep and VERTEX_KEEP not in datum.PropertiesList:
+            return
+        if VERTEX_KEEP not in datum.PropertiesList:
+            datum.addProperty("App::PropertyString", VERTEX_KEEP, "FreeCAD references",
+                              "Edges meeting at the vertex the datum sits on")
+            datum.setEditorMode(VERTEX_KEEP, 2)
+        text = json.dumps(keep)
+        if getattr(datum, VERTEX_KEEP) != text:
+            setattr(datum, VERTEX_KEEP, text)
+    except Exception as _fw_err:
+        _fw_log("refgeom2.py:keep_vertex_edges", _fw_err)
+
+
+def _corner(obj, mapped):
+    """The vertex of obj ("VertexN") where the kept edges that still exist meet, when two or more are left."""
+    shape = obj.Shape
+    emap = shape.ElementMap
+    edges = []
+    for m in mapped:
+        n = emap.get(m)
+        if n and n.startswith("Edge"):
+            try:
+                edges.append(shape.getElement(n))
+            except Exception:
+                continue
+    if len(edges) < 2:
+        return None
+    hits = [i for i, v in enumerate(shape.Vertexes, 1) if all(any(x.isSame(v) for x in e.Vertexes) for e in edges)]
+    return "Vertex%d" % hits[0] if len(hits) == 1 else None
+
+
+def _follow_vertex(datum):
+    """A datum whose model vertex FreeCAD lost ("?VertexN") goes back on the corner where its kept edges meet."""
+    support = list(datum.AttachmentSupport or [])
+    if not any(s.startswith("?Vertex") for _o, subs in support for s in subs):
+        return False
+    import json
+    try:
+        kept = json.loads(getattr(datum, VERTEX_KEEP, "") or "[]")
+    except Exception:
+        return False
+    k, out, changed = 0, [], False
+    for obj, subs in support:
+        new = []
+        for s in subs:
+            if s.lstrip("?").startswith("Vertex"):
+                entry = kept[k] if k < len(kept) else None
+                k += 1
+                if s.startswith("?") and entry is not None and entry[0] == obj.Name:
+                    hit = _corner(obj, entry[1])
+                    if hit:
+                        s, changed = hit, True
+            new.append(s)
+        out.append((obj, new))
+    if not changed:
+        return False
+    mode = datum.MapMode
+    datum.AttachmentSupport = [(o, ss) for o, ss in out]
+    datum.MapMode = mode
+    keep_vertex_edges(datum)
+    return True
+
+
 _following = set()
 
 
@@ -878,15 +971,21 @@ def follow(doc):
     """After a rebuild: coordinate systems turned by a plane, and points a distance along a curve, follow."""
     if doc.Name in _following or current() is not None:
         return
-    changed = False
+    changed = corners = False
     for o in doc.Objects:
         try:
             if o.TypeId in ("PartDesign::CoordinateSystem", "Part::LocalCoordinateSystem") and "FwAxes" in o.PropertiesList:
                 changed = _follow_cs(o) or changed
             elif "FwAlongDistance" in o.PropertiesList:
                 changed = _follow_along(o) or changed
+            if VERTEX_KEEP in o.PropertiesList and _follow_vertex(o):
+                corners = True
         except Exception as error:
             App.Console.PrintLog("FreeCAD: %s not worked out again: %s\n" % (o.Label, error))
+    if corners:
+        # a datum put back on its corner is rebuilt once this rebuild is over (rebuilt from inside it, it kept
+        # FreeCAD's Invalid mark)
+        QtCore.QTimer.singleShot(0, lambda d=doc: _rebuild(d))
     if changed:
         _following.add(doc.Name)
         try:
@@ -895,13 +994,28 @@ def follow(doc):
             _following.discard(doc.Name)
 
 
+def _rebuild(doc):
+    try:
+        if doc.Name not in App.listDocuments() or doc.Name in _following:
+            return
+        _following.add(doc.Name)
+        try:
+            doc.recompute()
+        finally:
+            _following.discard(doc.Name)
+    except Exception as _fw_err:
+        _fw_log("refgeom2.py:_rebuild", _fw_err)
+
+
 def _attach_cs(cs, support, mode, offset):
     """FreeCAD's Translate mode takes only the origin from the vertex; the orientation is the
     object's own Placement, so Reverse and the numeric rotation go there (they did nothing before)."""
     if mode != "Translate":
         attach(cs, support, mode, offset)
+        keep_vertex_edges(cs)
         return
     attach(cs, support, mode, App.Placement(offset.Base, App.Rotation()))
+    keep_vertex_edges(cs)
     cs.Placement = App.Placement(cs.Placement.Base, offset.Rotation)
     cs.Document.recompute()
 
@@ -1034,6 +1148,7 @@ def place_point(pt, support, mode, extra):
                                "Distance along the curve (mm) the point keeps; -1 for a percentage")
                 pt.setEditorMode("FwAlongDistance", 2)
             pt.FwAlongDistance = float(extra.get("FwAlongDistance", -1.0))
+        keep_vertex_edges(pt)
         pt.Document.recompute()
         bad = "Invalid" in pt.State
         if not bad and "fallback" in extra and pt.Placement.Base.distanceToPoint(V(extra["fallback"])) > 1e-6:
@@ -1369,7 +1484,8 @@ def make_helix(sketch, **values):
     if App.GuiUp:
         from .curves import _CurveView
         _CurveView(obj.ViewObject)
-    obj.Label = "Helix/Spiral"
+    from . import naming
+    obj.Label = naming.next_label(doc, "Helix/Spiral")
     obj.Sketch = sketch
     for k, v in values.items():
         setattr(obj, k, v)
@@ -1658,7 +1774,8 @@ def make_projected_curve(doc, kind, sketch, faces=(), sketch2=None, reverse=Fals
     if App.GuiUp:
         from .curves import _CurveView
         _CurveView(obj.ViewObject)
-    obj.Label = "Curve"
+    from . import naming
+    obj.Label = naming.next_label(doc, "Curve")
     obj.ProjectionType = kind
     obj.Sketch, obj.Sketch2 = sketch, sketch2
     obj.Faces = [(o, [s]) for o, s in faces]

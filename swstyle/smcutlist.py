@@ -169,8 +169,8 @@ def _density(body):
     for o in (body,):
         mat = getattr(o, "ShapeMaterial", None)
         try:
-            d = mat.getPhysicalValue("Density")
-            v = float(App.Units.Quantity(d).getValueAs("kg/mm^3"))
+            d = (getattr(mat, "PhysicalProperties", None) or {}).get("Density") if mat is not None else None   # pkg448
+            v = float(App.Units.Quantity(d).getValueAs("kg/mm^3")) if d else 0.0
             if v > 0 and getattr(mat, "Name", "").lower() != "default":
                 return v
         except Exception as _fw_err:

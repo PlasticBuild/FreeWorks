@@ -71,7 +71,7 @@ HELP = {
     "Fillet": ("Rounds edges or faces with a constant, variable, face or full round fillet.",
                ["Fillet Type: Constant Size, Variable Size, Face Fillet, Full Round Fillet.",
                 "Items To Fillet: edges, faces, features or loops; Tangent propagation follows the edge "
-                "round tangent neighbours.",
+                "round tangent neighbors.",
                 "Fillet Parameters: the radius (symmetric or asymmetric); Multiple radius fillet gives each "
                 "edge its own value.",
                 "Setback Parameters and Fillet Options: how fillets meet at a vertex, Keep features, overflow."]),
@@ -97,7 +97,7 @@ HELP = {
     "Shell": ("Hollows the part, leaving walls of the given thickness; removed faces open it.",
               ["Parameters: the thickness; Faces to Remove: the faces that are opened; Shell outward "
                "adds the walls outside. Multi-thickness Settings: faces with their own thickness."]),
-    "Draft": ("Tapers faces by an angle for mould release.",
+    "Draft": ("Tapers faces by an angle for mold release.",
               ["Type of Draft: Neutral Plane, Parting Line, Step Draft. Draft Angle, the Neutral Plane (the "
                "face or plane that stays) and the Faces to Draft; Reverse Direction flips the taper."]),
     "Rib": ("Adds a thin wall from an open sketch line to the part.",
@@ -261,7 +261,7 @@ MORE = {
     "Replace Face": ("Replaces faces of the part with a surface.",
                      ["Replace Parameters: Target faces for replacement, then the Replacement surface(s)."]),
     "Markup": ("Draws ink and notes over the model view.",
-               ["Draw with the pen, pick a colour and width, erase; the markup is kept with the view."]),
+               ["Draw with the pen, pick a color and width, erase; the markup is kept with the view."]),
     "Insert Component": ("Inserts a part or assembly into the assembly.",
                          ["Part/Assembly to Insert: Browse or pick an open document; click in the view to place it "
                           "(the first component is fixed at the origin). Options: Start command when creating new "

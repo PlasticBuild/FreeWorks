@@ -2,7 +2,12 @@
 
 
 
-LABELS = {"Exit": "MENU_Exit", "Touch Mode": "MENU_TouchMode", "Exit Sketch without Saving Changes": "MENU_ExitSketchNoSave"}
+LABELS = {"Exit": "MENU_Exit", "Touch Mode": "MENU_TouchMode", "Exit Sketch without Saving Changes": "MENU_ExitSketchNoSave",
+          # toolsins-1126: assembly and drawing rows that run no catalog command, the picture of their CommandManager button
+          "Check Active Document": "CheckActiveDocument", "Check Against Existing File": "DesignCheckFile",
+          "Build Checks": "DesignCheckBuild", "Learn Checks Wizard": "DesignCheckLearn",
+          "New Assembly": "NewAssemblyInAssembly", "Coordinate System": "AsmRefCS", "Point": "AsmRefPoint",
+          "Mate Reference": "MateReference", "Ground Plane": "AsmGroundPlane"}
 _by = {}
 
 

@@ -42,6 +42,17 @@ except Exception:   # pragma: no cover
 
 from . import asmcore as ac
 
+
+def _show(box, raw):
+    ""
+    from . import asmpattern
+    asmpattern.show_pick(box, raw)
+
+
+def _raw(box):
+    from . import asmpattern
+    return asmpattern.pick_raw(box)
+
 V = App.Vector
 KIND_PROP = "FwCompPattern"         # linear, circular, driven, sketch, curve, chain, mirror
 DATA_PROP = "FwCompPatternData"     # json: the PM's values, to edit it again
@@ -239,12 +250,16 @@ def add_options(panel):
     if getattr(panel, "sync", None) is not None or not hasattr(panel, "form"):
         return panel
     from . import asmpm
-    box, lay = asmpm._box("Options")
+    lay = getattr(panel, "_options_lay", None)     # asmpkg371: a PM with its own Options group gets the box there
+    box = None
+    if lay is None:
+        box, lay = asmpm._box("Options")
     panel.sync = QtWidgets.QCheckBox(SYNC_TEXT)
     panel.sync.setObjectName("FW_PatternSync")
     panel.sync.setToolTip("Instances of a flexible subassembly move their components as the seed's do")
     lay.addWidget(panel.sync)
-    panel.form = list(panel.form) + [box]
+    if box is not None:
+        panel.form = list(panel.form) + [box]
     values0, load0 = panel.values, getattr(panel, "load", None)
 
     def values():
@@ -689,7 +704,7 @@ if Gui is not None:
         ""
 
         def __init__(self, asm, comps):
-            from . import asmpm
+            from . import asmpm, asmpattern
             self.asm = asm
             self.editing = None
             self.dirs = [None, None]        # (vector, label) picked for Direction 1 and 2
@@ -716,6 +731,7 @@ if Gui is not None:
                 pick.setToolTip("Pattern Direction: pick an edge, axis or flat face")
                 pick.setPlaceholderText("Pattern Direction")
                 pick.installEventFilter(self._focus_filter(n - 1))
+                asmpattern.click_box(self, ("dir", n - 1), pick)
                 axis = QtWidgets.QComboBox()
                 axis.setObjectName("FW_PatternAxis" if n == 1 else "FW_PatternAxis2")
                 axis.addItems([a for a, _v in AXES])
@@ -760,6 +776,7 @@ if Gui is not None:
                 ref.setPlaceholderText("Reference Geometry")
                 ref.setToolTip("Pick the face, plane, edge or vertex the pattern goes up to")
                 ref.installEventFilter(self._focus_filter(n - 1))
+                asmpattern.click_box(self, ("ref", n - 1), ref)
                 offset = QtWidgets.QDoubleSpinBox()
                 offset.setObjectName("FW_PatternOffset%d" % n)
                 offset.setRange(0.0, 1.0e6)
@@ -799,6 +816,7 @@ if Gui is not None:
                 seed_ref.setPlaceholderText("Seed Reference")
                 seed_ref.setToolTip("Pick a face, edge or vertex of the seed the distance is measured from")
                 seed_ref.installEventFilter(self._focus_filter(n - 1))
+                asmpattern.click_box(self, ("seed", n - 1), seed_ref)
                 seed_ref.setVisible(False)
                 ulay.addWidget(QtWidgets.QLabel("Seed reference:"))
                 ulay.addWidget(seed_bb)
@@ -952,22 +970,33 @@ if Gui is not None:
                     d = _direction_of(shape) if shape is not None else None
                     which = self.active
                     f = self.fields[which]
+                    user = asmpattern.user_box(self)
+                    if user == "comps":
+                        self._add(ref[0])       # asmpkg364: Components to Pattern clicked
+                        continue
+                    if user == ("dir", which) and d is not None:
+                        label = "%s@%s" % (ref[1].split(".")[-1], ref[0].Label)
+                        self.dirs[which] = (d, label)
+                        _show(f["pick"], label)
+                        if hasattr(self, "preview"):
+                            self.update_preview()
+                        continue
                     if f["upto"].isChecked() and shape is not None and f["seed_sel"].isChecked() and \
                             ref[0] in self.comps and (f["seed_ref"].hasFocus() or f["seedgeo"] is None):
                         f["seedgeo"] = _seed_point(shape)
-                        f["seed_ref"].setText("%s@%s" % (ref[1].split(".")[-1], ref[0].Label))
+                        _show(f["seed_ref"], "%s@%s" % (ref[1].split(".")[-1], ref[0].Label))
                         self._upto_shown(f)
                         continue
                     if f["upto"].isChecked() and shape is not None and ref[0] not in self.comps and \
                             (self.dirs[which] is not None or d is None or f["ref"].hasFocus()):
                         f["refgeo"] = _ref_geometry(shape)
-                        f["ref"].setText("%s@%s" % (ref[1].split(".")[-1], ref[0].Label))
+                        _show(f["ref"], "%s@%s" % (ref[1].split(".")[-1], ref[0].Label))
                         self._upto_shown(f)
                         continue
                     if d is not None and self.dirs[which] is None:
                         label = "%s@%s" % (ref[1].split(".")[-1], ref[0].Label)
                         self.dirs[which] = (d, label)
-                        self.fields[which]["pick"].setText(label)
+                        _show(self.fields[which]["pick"], label)
                         continue
                     self._add(ref[0])
                 if sel.Object in ac.components(self.asm):
@@ -1042,13 +1071,13 @@ if Gui is not None:
             ups = []
             for f in self.fields:
                 g = f["refgeo"]
-                ups.append({"on": f["upto"].isChecked(), "label": f["ref"].text(),
+                ups.append({"on": f["upto"].isChecked(), "label": _raw(f["ref"]),
                             "point": list(g[0]) if g else None, "normal": list(g[1]) if g and g[1] is not None else None,
                             "offset": f["offset"].value(), "rev": f["off_rev"].isChecked(),
                             "set": "spacing" if f["set_spacing"].isChecked() else "count",
                             "seed": "selected" if f["seed_sel"].isChecked() else "box",
                             "seed_point": list(f["seedgeo"]) if f["seedgeo"] is not None else None,
-                            "seed_label": f["seed_ref"].text()})
+                            "seed_label": _raw(f["seed_ref"])})
             return {"d1": list(self.direction(0)), "s1": f1["spacing"].value(), "n1": f1["count"].value(),
                     "d2": list(self.direction(1)), "s2": f2["spacing"].value(), "n2": f2["count"].value(),
                     "seed_only": self.seed_only.isChecked(),
@@ -1063,18 +1092,18 @@ if Gui is not None:
                 f["axis"].setCurrentIndex((v.get("axes") or [0, 1])[k])
                 lbl = (v.get("labels") or ["", ""])[k]
                 self.dirs[k] = (d, lbl) if lbl else None
-                f["pick"].setText(lbl or "%s-axis" % f["axis"].currentText())
+                _show(f["pick"], lbl or "%s-axis" % f["axis"].currentText())
                 if not lbl:
                     f["reverse"].setChecked(d.dot(AXES[f["axis"].currentIndex()][1]) < 0)
                 f["spacing"].setValue(v.get("s" + n, 25.0))
                 f["count"].setValue(v.get("n" + n, 2 if k == 0 else 1))
             for f, u in zip(self.fields, v.get("upto") or []):
                 f["refgeo"] = (V(*u["point"]), V(*u["normal"]) if u.get("normal") else None) if u.get("point") else None
-                f["ref"].setText(u.get("label", ""))
+                _show(f["ref"], u.get("label", ""))
                 f["offset"].setValue(u.get("offset", 0.0))
                 f["off_rev"].setChecked(bool(u.get("rev")))
                 f["seedgeo"] = V(*u["seed_point"]) if u.get("seed_point") else None
-                f["seed_ref"].setText(u.get("seed_label", ""))
+                _show(f["seed_ref"], u.get("seed_label", ""))
                 f["seed_sel"].setChecked(u.get("seed") == "selected")
                 (f["set_spacing"] if u.get("set", "spacing") == "spacing" else f["set_count"]).setChecked(True)
                 f["upto"].setChecked(bool(u.get("on")))

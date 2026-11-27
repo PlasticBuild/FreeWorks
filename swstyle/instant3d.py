@@ -151,6 +151,63 @@ def depth_handle(feature, face):
     return None
 
 
+class _SketchDatum:
+    ""
+
+    TypeId = "SWStyle::SketchDatum"
+
+    def __init__(self, sketch, index):
+        self.sketch, self.index = sketch, index
+        self.Document, self.Label = sketch.Document, sketch.Label
+        self.Name = "%s.%d" % (sketch.Name, index)
+
+    @property
+    def InList(self):
+        return self.sketch.InList
+
+    @property
+    def Visibility(self):
+        return True
+
+    @property
+    def Value(self):
+        return App.Units.Quantity(float(self.sketch.Constraints[self.index].Value), App.Units.Length)
+
+    @Value.setter
+    def Value(self, value):
+        v = float(getattr(value, "Value", value))
+        if abs(float(self.sketch.Constraints[self.index].Value) - v) > 1e-12:
+            self.sketch.setDatum(self.index, App.Units.Quantity(v, App.Units.Length))
+
+
+def side_handle(feature, face):
+    """A side face of a Pad/Pocket (square to its sketch): the sketch's length dimension that moves
+    it, as (_SketchDatum, direction the face moves for a bigger value, factor) or None."""
+    plane = _sketch_plane(feature)
+    sub = getattr(feature, "AddSubShape", None)
+    fp = _plane_of(face)
+    if plane is None or fp is None or sub is None or sub.isNull():
+        return None
+    origin, normal = plane
+    if abs(fp[1].dot(normal)) > 1e-7 or not any(_same_plane(f, fp) for f in sub.Faces):
+        return None
+    sketch = feature.Profile[0] if isinstance(feature.Profile, tuple) else feature.Profile
+    if sketch is None or sketch.TypeId != "Sketcher::SketchObject":
+        return None
+    rot = sketch.Placement.Rotation
+    local_n = rot.inverted().multVec(fp[1])
+    for i, _name, p, d, factor, _signed in dimension_handles(sketch):
+        c = sketch.Constraints[i]
+        if c.Type not in ("Distance", "DistanceX", "DistanceY") or float(c.Value) <= 0:
+            continue
+        if abs(abs(d.dot(local_n)) - 1) > 1e-7:
+            continue
+        if abs((sketch.Placement.multVec(p) - fp[0]).dot(fp[1])) > 1e-6:
+            continue                 # the dimension's moving end is not on this face
+        return _SketchDatum(sketch, i), rot.multVec(d), factor
+    return None
+
+
 DRESS_TYPES = ("PartDesign::Fillet", "PartDesign::Chamfer", "PartDesign::Revolution", "PartDesign::Groove",
                "PartDesign::Hole", "PartDesign::Thickness")
 
@@ -252,6 +309,69 @@ def _rotary(feat, prop, gpl, base, direction):
     return {"centre": centre, "axis": axis, "arm": arm, "zero": zero, "sign": sign}
 
 
+class _PlaneOffset:
+    ""
+
+    TypeId = "SWStyle::PlaneOffset"
+
+    def __init__(self, plane, sign):
+        self.plane, self.sign = plane, sign
+        self.Document, self.Name, self.Label = plane.Document, plane.Name, plane.Label
+
+    @property
+    def Visibility(self):
+        return self.plane.Visibility
+
+    @property
+    def Offset(self):
+        return App.Units.Quantity(abs(self.plane.AttachmentOffset.Base.z), App.Units.Length)
+
+    @Offset.setter
+    def Offset(self, value):
+        import json
+        v = float(getattr(value, "Value", value))
+        off = App.Placement(self.plane.AttachmentOffset)
+        off.Base = App.Vector(off.Base.x, off.Base.y, self.sign * v)
+        self.plane.AttachmentOffset = off
+        try:
+            data = json.loads(self.plane.Constraints)
+            data["refs"][0]["value"] = v        # Edit Feature opens with the dragged distance
+            self.plane.Constraints = json.dumps(data)
+        except Exception as _fw_err:
+            _fw_log("instant3d.py:plane-constraints", _fw_err)
+
+
+def plane_handle(obj):
+    """For a picked plane made at an Offset distance from one plane or face: (_PlaneOffset, base in
+    body coordinates, unit direction a bigger distance moves it) or None."""
+    import json
+    if getattr(obj, "TypeId", "") != "PartDesign::Plane" or "Constraints" not in obj.PropertiesList:
+        return None
+    try:
+        refs = json.loads(obj.Constraints or "{}").get("refs", [])
+    except Exception:
+        return None
+    if len(refs) != 1 or refs[0].get("constraint") != "Distance" or int(refs[0].get("count", 1)) != 1:
+        return None
+    if obj.MapMode == "Deactivated" or obj.AttachmentOffset.Rotation.Angle > 1e-9 and not refs[0].get("flip_normal"):
+        return None
+    z = obj.AttachmentOffset.Base.z
+    sign = -1.0 if (z < 0 or (abs(z) < 1e-12 and refs[0].get("flip"))) else 1.0
+    frame = obj.Placement.multiply(obj.AttachmentOffset.inverse())     # the reference's own frame
+    direction = frame.Rotation.multVec(App.Vector(0, 0, 1)) * sign
+    origin = App.Vector(obj.Placement.Base)
+    centre = origin
+    body = _body_of(obj)
+    try:
+        shape = body.Shape if body is not None else None
+        if shape is not None and not shape.isNull():
+            c = App.Vector(shape.BoundBox.Center)
+            centre = c - direction * (c - origin).dot(direction)      # over the model, as the plane is drawn
+    except Exception as _fw_err:
+        _fw_log("instant3d.py:plane-centre", _fw_err)
+    return _PlaneOffset(obj, sign), centre, direction
+
+
 def _hole_handle(feature, face):
     """The bottom of a Hole Wizard hole (its flat end or drill point) drags the hole's Depth."""
     if str(getattr(feature, "DepthType", "Dimension")) != "Dimension" or not _new_face(feature, face):
@@ -327,6 +447,14 @@ def feature_for_face(obj, sub):
         handle = depth_handle(feat, face)
         if handle is not None:
             return feat, face, handle
+        try:
+            side = side_handle(feat, face)
+        except Exception as _fw_err:
+            _fw_log("instant3d.py:side", _fw_err)
+            side = None
+        if side is not None:
+            datum, out, factor = side
+            return datum, face, ("Value", out, factor)
     return None
 
 
@@ -679,12 +807,21 @@ class _Instant3D:
         if picked is None or not hasattr(view, "getPoint"):
             self.clear()
             return
-        found = feature_for_face(*picked)
-        sketch = sketch_for(*picked) if found is None else None
-        if found is None and sketch is None:
+        plane = plane_handle(picked[0]) if not picked[1] or picked[1].startswith("Face") else None
+        found = feature_for_face(*picked) if plane is None else None
+        sketch = sketch_for(*picked) if found is None and plane is None else None
+        if found is None and sketch is None and plane is None:
             self.clear()
             return
-        if sketch is not None:
+        if plane is not None:
+
+            feat, base_local, out = plane
+            prop, factor = "Offset", 1.0
+            body = _body_of(feat.plane)
+            gpl = body.getGlobalPlacement() if body is not None else App.Placement()
+            base = gpl.multVec(base_local)
+            value = feat.Offset.Value
+        elif sketch is not None:
             feat, body, face = sketch
             prop, factor = None, 1.0
             out = feat.Placement.Rotation.multVec(App.Vector(0, 0, 1))
@@ -996,6 +1133,9 @@ class _Instant3D:
         if now is None:
             now = self.drag["v0"]
         if abs(v - now) < 1e-6:
+            if (self.drag.get("snapped") == "geometry" and self.drag.get("snap_to") == (info.get("Object"), comp)
+                    and obj is not None and feat is not None and obj is not feat and obj is not _body_of(feat)):
+                return v                     # still on the face it snapped to (a repeat move there)
             return None                      # the moving face itself
         own = obj is not None and feat is not None and (obj is feat or obj is _body_of(feat))
         if own and abs(v - self.drag["v0"]) < 1e-6:

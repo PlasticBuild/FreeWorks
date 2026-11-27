@@ -275,7 +275,7 @@ class SurfaceFilletPanel(filletpm.FilletPanel):
     def _tab(self, index):
         filletpm.FilletPanel._tab(self, index)
         if getattr(self, "surface_mode", False):
-            QtCore.QTimer.singleShot(0, self._surface_page)
+            from . import safe_later as _sl; _sl.later(0, self._surface_page, self, "var_list")
 
 
     def _wanted(self):

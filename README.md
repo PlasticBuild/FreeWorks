@@ -2,17 +2,17 @@
 
 [![Donate on Ko-fi](https://img.shields.io/badge/Donate-Ko--fi-FF5E5B?style=for-the-badge)](https://ko-fi.com/plasticbuild)
 
-**0.3.3-alpha · FreeCAD 1.1.4 · Windows**
+**0.4.0-alpha · FreeCAD 1.1.4 · Windows**
 
 **Like the SOLIDWORKS interface and want to work in FreeCAD?** FreeWorks brings a familiar commercial-CAD workflow to stock FreeCAD 1.1.4, from the first sketch through parts, assemblies, and drawings.
 
 FreeWorks is an independent add-on for FreeCAD. Install it into your existing FreeCAD setup. The application still appears as **FreeCAD**.
 
-[**Download FreeWorks 0.3.3-alpha**](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.3-alpha)
+[**Download FreeWorks 0.4.0-alpha**](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.0-alpha)
 
-0.3.3-alpha fixes CommandManager tabs for workbenches that load after startup, including SubD. See the [release notes](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.3-alpha) for details and known issues.
+See the [0.4.0-alpha release notes](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.0-alpha) for what is new and for known issues.
 
-The icons in this alpha are AI-generated and inspired by SOLIDWORKS icons.
+The add-on draws its own command icons. See [Icons](#icons).
 
 [Download the six-column icon comparison PDF](https://raw.githubusercontent.com/PlasticBuild/FreeWorks/main/docs/FreeWorks-Icon-Comparison.pdf)
 
@@ -37,9 +37,15 @@ Sketching is the best place to start. The walkthrough below takes you from a sna
 ## Requirements and quick install
 
 - Use stock FreeCAD **1.1.4**. Windows has been tested. Other operating systems are untested.
-- Install with FreeCAD's **Addon Manager** from this repository's URL, download **FreeWorks-0.3.3-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.3-alpha), or install from source. The [installation guide](docs/INSTALL.md) covers all three.
+- Install with FreeCAD's **Addon Manager** from this repository's URL, download **FreeWorks-0.4.0-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.0-alpha), run the optional Windows installer from the same release, or install from source. The [installation guide](docs/INSTALL.md) covers each way.
 
 Orca, Bambu, PrusaSlicer, and Diotopo are optional in-app downloads. Each is downloaded separately. The add-on package excludes all four.
+
+## Icons
+
+The add-on ships its own drawn command icons (`swstyle/resources/icons-drawn`). A command with no drawn icon uses FreeCAD's own icon, or a small tile with its initials. No icon pack is downloaded or included.
+
+To use icons of your own, put them in a folder with one subfolder per command (`png/<NAME>/<size>.png`). Then set the `IconRoot` preference (Tools > Edit parameters > Preferences/Mod/FreeWorks) or the `SWSTYLE_ICONS` environment variable to that folder, and restart FreeCAD.
 
 ## Repository layout
 
@@ -56,14 +62,13 @@ The add-on source lives at the root of this repository. The repository root is t
 | `docs/` | Install, feedback, and alpha guides, plus the screenshots on this page. |
 | `.github/workflows/release.yml` | Builds the release zip from the tagged source. |
 
-Releases are only for tagged builds. Pushing a tag such as `v0.3.4-alpha` builds `FreeWorks-0.3.4-alpha.zip` with `git archive` from that tag, so the zip always matches the committed source. The tag must match the version in `package.xml`.
+Releases are only for tagged builds. Pushing a tag such as `v0.4.1-alpha` builds `FreeWorks-0.4.1-alpha.zip` with `git archive` from that tag, so the zip always matches the committed source. The tag must match the version in `package.xml`.
 
 ## Install from source
 
-1. Close FreeCAD.
-2. Clone the repository into your user `Mod` folder as `FreeWorks`. On Windows:
-   `git clone https://github.com/PlasticBuild/FreeWorks.git "%APPDATA%\FreeCAD\Mod\FreeWorks"`
-   On Linux: `git clone https://github.com/PlasticBuild/FreeWorks.git ~/.local/share/FreeCAD/Mod/FreeWorks`
+1. Find your user `Mod` folder. In FreeCAD's Python console, enter `App.getUserAppDataDir()`. The `Mod` folder sits inside that path. On a new FreeCAD 1.1 profile it is `%APPDATA%\FreeCAD\v1-1\Mod` on Windows and `~/.local/share/FreeCAD/v1-1/Mod` on Linux. A profile carried over from an older FreeCAD can still use `%APPDATA%\FreeCAD\Mod`.
+2. Close FreeCAD. Then clone the repository into that folder as `FreeWorks`, for example on Windows:
+   `git clone https://github.com/PlasticBuild/FreeWorks.git "%APPDATA%\FreeCAD\v1-1\Mod\FreeWorks"`
 3. Check that `InitGui.py` sits directly inside `Mod/FreeWorks`, then start FreeCAD.
 4. To update later, close FreeCAD, run `git pull` in that folder, and start FreeCAD again.
 

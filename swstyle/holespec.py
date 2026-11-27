@@ -79,6 +79,8 @@ OPTIONS = {
 }
 OPTION_KEYS = {"Head clearance": "clearance", "Near side countersink": "near",
                "Under head countersink": "under", "Far side countersink": "far"}
+# hwfix-01: the Options state kept per hole type
+OPTION_STATE = ("clearance", "clearance_value", "near", "under", "far", "near_angle", "under_angle", "far_angle")
 YELLOW = "QDoubleSpinBox { background: #fff2a8; color: black; }"
 METRIC = ("ANSI Metric", "ISO", "AS")
 NPT_TAPER = 90.0 - 1.7899          # 1 in 16 on the diameter (NPT, BSPT)
@@ -1053,8 +1055,10 @@ def callout_lines(hole):
     """The Hole Callout of a Hole Wizard hole, from its HoleWizardSpec: "4X ⌀6.60 THRU ALL" and
     "⌴ ⌀11.00 ↧ 6.40" for a counterbore, the tap drill and thread for a tap. None for other holes."""
     spec = stored(hole)
-    if not spec or spec.get("kind") == LEGACY:
+    if not spec:
         return None
+    if spec.get("kind") == LEGACY:
+        return legacy_callout(hole)
     kind = _base(spec["kind"])
     try:
         d = data_dims(spec) if is_data(spec) or is_tap(spec) else {}
@@ -1072,8 +1076,8 @@ def callout_lines(hole):
             d["head_d"] = value("HoleCutDiameter", value("HeadDiameter", d.get("head_d", 0.0)))
             d["head_depth"] = value("HoleCutDepth", value("HeadDepth", d.get("head_depth", 0.0)))
             d["head_angle"] = value("HoleCutCountersinkAngle", value("HeadAngle", d.get("head_angle", 90.0)))
-        if is_tap(spec):
-            d["tap_drill"] = d["hole"]
+        if is_tap(spec) and not (spec["kind"] == "Tapered Tap" and d.get("tap_drill")):
+            d["tap_drill"] = d["hole"]      # hwfix-01: a tapered pipe tap keeps the table's drill (1/4 NPT: 7/16 in)
     d.setdefault("head_d", 0.0)
     d.setdefault("head_depth", 0.0)
     d.setdefault("head_angle", 90.0)
@@ -1090,6 +1094,51 @@ def callout_lines(hole):
     tols = spec.get("tolerances") or {}
     if tols:
         lines = _apply_tolerances(lines, spec, d, depth, tols)
+    lines += option_lines(hole, spec)       # hwfix-01: the near / under head / far side countersinks
+    count = instances(hole)
+    if count > 1:
+        lines[0] = "%dX %s" % (count, lines[0])
+    return lines
+
+
+# hwfix-01: the Options countersinks in the callout, one line each, after the hole's own lines
+OPTION_SIDES = (("near", "NEAR SIDE"), ("under", "UNDER HEAD"), ("far", "FAR SIDE"))
+
+
+def option_lines(hole, spec):
+    out = []
+    try:
+        if holeoptions.existing(hole) is None:
+            return out
+    except Exception:
+        return out
+    for key, words in OPTION_SIDES:
+        dia = float(spec.get(key + "_dia") or 0.0)
+        if spec.get(key) and dia > 0:
+            out.append("\u2335 \u2300%.2f X %g\u00b0, %s" % (dia, float(spec.get(key + "_angle") or 90.0), words))
+    return out
+
+
+def legacy_callout(hole):
+    """A Legacy Hole's callout from its own sizes (they follow its edits)."""
+    def value(prop, fallback=0.0):
+        try:
+            v = getattr(hole, prop)
+            return v.Value if hasattr(v, "Value") else float(v)
+        except Exception:
+            return fallback
+    kind = getattr(hole, "HoleType", "Simple")
+    through = bool(getattr(hole, "ThroughAll", False))
+    tail = " THRU ALL" if through else " \u21a7 %.2f" % value("Depth")
+    lines = ["\u2300%.2f%s" % (value("Diameter"), tail)]
+    if kind == "Tapered":
+        lines[0] += ", %g\u00b0 TAPER" % value("TaperAngle", 5.0)
+    if kind in ("Counterbored", "Counterdrilled"):
+        lines.append("\u2334 \u2300%.2f \u21a7 %.2f" % (value("HeadDiameter"), value("HeadDepth")))
+    if kind == "Countersunk":
+        lines.append("\u2335 \u2300%.2f X %g\u00b0" % (value("HeadDiameter"), value("HeadAngle", 90.0)))
+    if kind == "Counterdrilled":
+        lines.append("\u2335 X %g\u00b0" % value("HeadAngle", 90.0))
     count = instances(hole)
     if count > 1:
         lines[0] = "%dX %s" % (count, lines[0])
@@ -1516,7 +1565,7 @@ class HoleSpecPanel:
         self.legacy_type.addItems(list(holelegacy.TYPES))
         llay.addRow(QtWidgets.QLabel("Type:", self.legacy_box), self.legacy_type)
         self.legacy_fields, self.legacy_labels = {}, {}
-        for key, text, kind in (("legacy_dia", "Hole Diameter", "length"), ("legacy_head_dia", "C-Bore Diameter", "length"),
+        for key, text, kind in (("legacy_dia", "Diameter", "length"), ("legacy_head_dia", "C-Bore Diameter", "length"),
                                 ("legacy_head_depth", "C-Bore Depth", "length"), ("legacy_angle", "C-Sink Angle", "angle"),
                                 ("legacy_taper", "Taper Angle", "angle")):
             if kind == "length":
@@ -1547,8 +1596,11 @@ class HoleSpecPanel:
         self.legacy_table.horizontalHeader().setStretchLastSection(True)
         self.legacy_table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.legacy_table.itemChanged.connect(self._legacy_cell)
+        self.legacy_table.cellDoubleClicked.connect(self._legacy_locked)
+        self.legacy_table.cellClicked.connect(self._legacy_locked_click)
         llay.addRow(self.legacy_table)
         self._legacy_rows = []
+        self._legacy_derived = False
         lay.addWidget(self.legacy_box)
         self.legacy_box.hide()
         self.standard = self._combo(page, lay, "Standard:", PANEL + "Standard")
@@ -1658,7 +1710,7 @@ class HoleSpecPanel:
         self.with_callout.setStyleSheet("margin-left: 18px;")
         self.remove = QtWidgets.QRadioButton("Remove thread", self.options)
         self.remove.setObjectName(PANEL + "RemoveThread")
-        self.remove.setToolTip("The thread modelled in the hole")
+        self.remove.setToolTip("The thread modeled in the hole")
         self.tapdrill = QtWidgets.QRadioButton("Tap drill diameter", self.options)
         self.tapdrill.setObjectName(PANEL + "TapDrill")
         self.tapdrill.setToolTip("The hole at the tap drill size, no thread shown")
@@ -1746,7 +1798,10 @@ class HoleSpecPanel:
     def _fill_legacy(self, ltype, shown, spec):
         """Section Dimensions: one row per size the hole type has, then Depth (blind holes)."""
         rows = [(key, self.legacy_labels[key].text(), self.legacy_fields[key]) for key in shown]
-        if (spec.get("end") or "Blind") == "Blind" and getattr(self, "depth", None) is not None:
+
+        # condition, and a click on it says so instead of editing it
+        self._legacy_derived = (spec.get("end") or "Blind") != "Blind"
+        if getattr(self, "depth", None) is not None:
             rows.insert(1, ("depth", "Depth", self.depth))
         rows = [r for r in rows if r[2] is not None]
         self._legacy_rows = rows
@@ -1758,12 +1813,33 @@ class HoleSpecPanel:
             value = QtWidgets.QTableWidgetItem(("%g" % field.value()) + unit if unit else "%g mm" % field.value())
             name = QtWidgets.QTableWidgetItem(text)
             name.setFlags(name.flags() & ~QtCore.Qt.ItemIsEditable)
+            if key == "depth" and self._legacy_derived:
+                value.setFlags(value.flags() & ~QtCore.Qt.ItemIsEditable)
             t.setItem(i, 0, value)
             t.setItem(i, 1, name)
         t.resizeColumnToContents(0)
         t.setFixedHeight(t.horizontalHeader().height() + sum(t.rowHeight(i) for i in range(len(rows))) + 4)
         t.blockSignals(False)
         self.legacy_picture.setPixmap(section_picture(ltype, {k: f.value() for k, _t, f in rows}))
+
+    LEGACY_LOCKED = "Item is not editable because its value is derived from the end condition of the hole."
+
+    def _legacy_is_locked(self, row, column):
+        return (column == 0 and self._legacy_derived and row < len(self._legacy_rows)
+                and self._legacy_rows[row][0] == "depth")
+
+    def _legacy_locked(self, row, column):
+        ""
+        if self._legacy_is_locked(row, column):
+            QtWidgets.QMessageBox.warning(self.legacy_table.window(), "FreeCAD", self.LEGACY_LOCKED)
+
+    def _legacy_locked_click(self, row, column):
+
+        if self._legacy_is_locked(row, column) and getattr(self, "_legacy_last_cell", None) == (row, column):
+            self._legacy_last_cell = None
+            self._legacy_locked(row, column)
+            return
+        self._legacy_last_cell = (row, column)
 
     def _legacy_cell(self, item):
         """A value typed in Section Dimensions goes to its size (units as typed, mm otherwise)."""
@@ -1777,9 +1853,14 @@ class HoleSpecPanel:
             else:
                 v = App.Units.Quantity(text if any(c.isalpha() for c in text) else text + " mm").getValueAs("mm").Value
         except Exception:
-            QtCore.QTimer.singleShot(0, lambda: self._changed("value"))
+            from . import safe_later as _sl; _sl.later(0, lambda: self._changed("value"), self, "end")
             return
         field.setValue(v)
+
+        unit = " °" if "angle" in key or "taper" in key else " mm"
+        self.legacy_table.blockSignals(True)
+        item.setText(("%g" % field.value()) + unit)
+        self.legacy_table.blockSignals(False)
         QtCore.QTimer.singleShot(0, lambda: self._changed("value"))
 
     def _combo(self, page, lay, text, name):
@@ -2190,7 +2271,10 @@ class HoleSpecPanel:
         self.favorite.activated.connect(lambda i: self._fav_apply())
 
     def _fill_favorites(self):
-        names = sorted(favorites())
+
+        # another type is not shown as the current one (it went stale when the type changed)
+        kind = self.spec.get("kind")
+        names = sorted(n for n, d in favorites().items() if (d or {}).get("kind", kind) == kind)
         chosen = self.spec.get("favorite") if self.spec.get("favorite") in names else NO_FAVORITE
         self._fill(self.favorite, [NO_FAVORITE] + names, chosen)
         self.fav_buttons["Delete"].setVisible(chosen != NO_FAVORITE)     # nothing to delete: no grey button (no dead controls)
@@ -2287,6 +2371,16 @@ class HoleSpecPanel:
     def _set_kind(self, kind):
         if self._busy:
             return
+        # hwfix-01: each hole type keeps its own Options (a countersink ticked on a Hole no longer comes
+        # back on the next Counterbore); the favorite belongs to the type it was made on
+        kept = self.spec.setdefault("kind_options", {})
+        was = self.spec.get("kind")
+        if was:
+            kept[was] = {k: self.spec.get(k) for k in OPTION_STATE if k in self.spec}
+        for k in OPTION_STATE:
+            self.spec.pop(k, None)
+        self.spec.update(kept.get(kind, {}))
+        self.spec.pop("favorite", None)
         self.spec["kind"] = kind
         self.spec["tdepth"] = 0.0
         self.spec["cdia"] = 0.0

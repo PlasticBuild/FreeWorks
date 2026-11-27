@@ -30,6 +30,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -93,7 +94,7 @@ T_SELECTION_TOOLS = "Selection Tools"            # recordings
 T_DELETE = "Delete"                              # 37735
 T_HIDE = "Hide"
 T_OK, T_CANCEL = "OK", "Cancel"                  # 13300, 13301
-CHEVRON = "»"
+CHEVRON = "⌄"
 
 SEP = None
 
@@ -338,6 +339,35 @@ def _flat(items):
             yield it
 
 
+class _More(QtWidgets.QWidgetAction):
+    """The chevron at the foot of a short menu: a centred down chevron the width of the menu. Clicking it, or
+    Enter on it, triggers the action (the menu closes and the long form opens)."""
+
+    def __init__(self, menu):
+        super().__init__(menu)
+        self.setText(CHEVRON)       # (not drawn: the button is) for checks that read action texts
+        button = QtWidgets.QToolButton(menu)
+        button.setObjectName("SWMenuChevron")
+        button.setText(CHEVRON)
+        button.setToolTip("Show all items")
+        button.setAutoRaise(True)
+        button.setFocusPolicy(QtCore.Qt.NoFocus)
+        button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        button.clicked.connect(lambda: self._click(menu))
+        self.setDefaultWidget(button)
+        self.button = button
+
+    def _click(self, menu):
+        top = menu
+        while isinstance(top.parentWidget(), QtWidgets.QMenu):
+            top = top.parentWidget()
+        self.trigger()
+        try:
+            top.close()
+        except RuntimeError as _fw_err:
+            _fw_log("rcmenus.py:chevron close", _fw_err)
+
+
 class MenuHeader(QtWidgets.QLabel):
     ""
 
@@ -349,10 +379,10 @@ class MenuHeader(QtWidgets.QLabel):
         self.setFont(font)
         self.setContentsMargins(8, 3, 8, 1)
         # the theme's dimmed text: palette(mid) is near the menu's own colour in Dark (alpha AE3: unreadable)
-        colour = "palette(mid)"
+        colour = "palette(text)"
         try:
             from . import style
-            colour = style.tokens()["text_disabled"]
+            colour = style.tokens()["text"]
         except Exception as _fw_err:
             _fw_log("rcmenus.py:header-colour", _fw_err)
         self.setStyleSheet("color: %s;" % colour)
@@ -389,10 +419,12 @@ class Builder:
             self.keep.append(label)
         has_more = self._fill(menu, self.items, top=True) or self.chevron
         if has_more and not self.long_form:
-            more = menu.addAction(CHEVRON)
+            more = _More(menu)
             more.setObjectName("SWToolMenu_More")
             more.setToolTip("Show all items")
             more.triggered.connect(lambda: later(self._expand))
+            menu.addAction(more)
+            self.keep.append(more)
         else:
 
             acts = menu.actions()
@@ -491,7 +523,8 @@ class Builder:
     def _expand(self):
         LONG.add(_doc_key())
         pos = self.pos if getattr(self, "pos", None) is not None else QtGui.QCursor.pos()
-        b = Builder(self.name, self.items, long_form=True, row=self.row, readout=self.readout, chevron=self.chevron)
+        b = Builder(self.name, self.items, long_form=True, row=self.row, readout=self.readout, chevron=self.chevron,
+                    line_before_customize=self.line_before_customize)      # rmbparity-1127: the long form keeps the line
         show(b, pos)
 
     def customize(self):
@@ -621,7 +654,7 @@ def editing_sketch():
     """The sketch open for editing, or None."""
     try:
         gd = Gui.ActiveDocument
-        obj = gd.getInEdit().Object if gd is not None and gd.getInEdit() is not None else None
+        obj = editobj.of(gd.getInEdit()) if gd is not None and gd.getInEdit() is not None else None
     except Exception as _fw_err:
         _fw_log("rcmenus.py:605", _fw_err)
         return None
@@ -1067,7 +1100,7 @@ def select_chain(item, sketch, index):
 # --------------------------------------------------------------------------- Select Midpoint
 def _has_midpoint(sketch, index):
     try:
-        return type(sketch.Geometry[index]).__name__ == "LineSegment"
+        return type(sketch.Geometry[index]).__name__ in ("LineSegment", "ArcOfCircle")
     except Exception:
         return False
 
@@ -1084,6 +1117,8 @@ def select_midpoint(item, sketch, index):
     import Part
     import Sketcher
     geo = sketch.Geometry[index]
+    if type(geo).__name__ == "ArcOfCircle":      # arcmid-1127
+        return _select_arc_midpoint(item, sketch, index)
     mid = _midpoint(geo)
     found = None
     for c in sketch.Constraints:
@@ -1115,6 +1150,136 @@ def select_midpoint(item, sketch, index):
         Gui.Selection.addSelection(doc, name, "%sVertex%d" % (prefix, vertex + 1))
     except Exception as _fw_err:
         _fw_log("rcmenus.py:1034", _fw_err)
+    if made:
+        _mid_register(sketch, made, vertex)
+
+
+# --------------------------------------------------------------------------- Select Midpoint on the fly (arcmid-1127)
+
+# Select Midpoint adds a construction helper held at the middle and picks it. The helper is taken out again as soon as it
+# is no longer picked and nothing but its own holding constraints uses it, so nothing is saved unless a relation or a
+
+_MID_TEMP = []      # [{"sketch", "geos", "own", "vertex"}]
+_MID_TIMER = []
+
+
+def _mid_refs(sketch, geos):
+    n = 0
+    for c in sketch.Constraints:
+        if c.First in geos or c.Second in geos or c.Third in geos:
+            n += 1
+    return n
+
+
+def _mid_register(sketch, geos, vertex):
+    _MID_TEMP.append({"sketch": sketch, "geos": set(geos), "own": _mid_refs(sketch, set(geos)), "vertex": vertex,
+                      "undo": T_SELECT_MIDPOINT})
+    if not _MID_TIMER:
+        t = QtCore.QTimer()
+        t.setInterval(800)
+        t.timeout.connect(_mid_tick)
+        _MID_TIMER.append(t)
+    _MID_TIMER[0].start()
+
+
+def _mid_busy():
+    """A sketch tool (Smart Dimension, a relation tool) still working with the pick: wait."""
+    try:
+        from .fwsketch import toolbase
+        if toolbase.active() is not None:
+            return True
+    except Exception as _fw_err:
+        _fw_log("rcmenus.py:midpoint busy", _fw_err)
+    return False
+
+
+def _mid_picked(rec):
+    try:
+        names = [str(_sketch_element(rec["sketch"], p) or "") for p in picks()]
+    except Exception:
+        names = []
+    return ("Vertex%d" % (rec["vertex"] + 1)) in names
+
+
+def _mid_tick(force=False):
+    for rec in list(_MID_TEMP):
+        sketch = rec["sketch"]
+        try:
+            sketch.Name
+        except Exception:
+            _MID_TEMP.remove(rec)
+            continue
+        if not force and (_mid_picked(rec) or _mid_busy()):
+            continue
+        _MID_TEMP.remove(rec)
+        try:
+            if _mid_refs(sketch, rec["geos"]) > rec["own"]:
+                continue            # a relation or a dimension uses the midpoint: it stays
+            doc = sketch.Document
+            names = list(getattr(doc, "UndoNames", []) or [])
+            if names and names[0] == rec["undo"] and max(rec["geos"]) == len(sketch.Geometry) - 1:
+                doc.undo()          # nothing happened since: as if it had never been added
+                try:
+                    doc.clearRedo() if hasattr(doc, "clearRedo") else None
+                except Exception as _fw_err:
+                    _fw_log("rcmenus.py:midpoint redo", _fw_err)
+            else:
+                doc.openTransaction(rec["undo"])
+                sketch.delGeometries(sorted(rec["geos"]))
+                doc.commitTransaction()
+            sketch.solve()
+            sketch.recompute()
+        except Exception as _fw_err:
+            _fw_log("rcmenus.py:midpoint cleanup", _fw_err)
+    if not _MID_TEMP and _MID_TIMER:
+        _MID_TIMER[0].stop()
+
+
+def _arc_mid_helper(sketch, index):
+    """A point an earlier Select Midpoint (or the sketcher) holds at this arc's middle, or None."""
+    from .fwsketch import helpers
+    for c in sketch.Constraints:
+        if c.Type == "PointOnObject" and c.Second == index and c.First >= 0 and int(c.FirstPos) == 1 \
+                and type(sketch.Geometry[c.First]).__name__ == "Point" and helpers.at_arc_midpoint(sketch, c.First, 1, index):
+            return c.First
+    return None
+
+
+def _select_arc_midpoint(item, sketch, index):
+    """An arc's middle: a construction point On the arc, held at its middle by fwsketch's own arc-midpoint lock
+    (helpers.lock_arc_midpoint, the one the sketch tools use)."""
+    import Part
+    import Sketcher
+    from .fwsketch import helpers
+    geo = sketch.Geometry[index]
+    found = _arc_mid_helper(sketch, index)
+    made = []
+    if found is None:
+        mid = _midpoint(geo)
+
+        def body():
+            n = len(sketch.Geometry)
+            g = sketch.addGeometry(Part.Point(mid), True)
+            on = sketch.addConstraint(Sketcher.Constraint("PointOnObject", g, 1, index))
+            if helpers.lock_arc_midpoint(sketch, g, 1, index, on) is None:
+                raise RuntimeError("the arc's middle cannot be held here")
+            made.extend(range(n, len(sketch.Geometry)))
+        _sketch_transaction(sketch, T_SELECT_MIDPOINT, body)
+        if not made:
+            return
+        found = made[0]
+    vertex = _vertex_of(sketch, found, 1)
+    if vertex is None:
+        return
+    doc, name, sub = item[:3]
+    prefix = sub[:len(sub) - len("Edge%d" % (index + 1))]
+    try:
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc, name, "%sVertex%d" % (prefix, vertex + 1))
+    except Exception as _fw_err:
+        _fw_log("rcmenus.py:arc midpoint pick", _fw_err)
+    if made:
+        _mid_register(sketch, made, vertex)
 
 
 
@@ -1673,7 +1838,7 @@ def sketch_items(sketch, item):
             items, name = point_items(sketch, item), "SketchPoint"
         else:
             items, name = entity_items(sketch, item), "SketchEntity"
-    row_element = element if element and not element.startswith("Constraint") else None
+    row_element = element   # skrmb-1127: a radius / diameter dimension gets its Display as Radius / Diameter icons (read 11-19)
     return name, items, sketch_rows(sketch, row_element)
 
 
@@ -1751,7 +1916,8 @@ def view_items(sketch, contour=True):
     items = []
     if contour:
         items.append(action("ContourSelect", T_CONTOUR_SELECT, lambda: contour_select_tool(sketch), more=True))
-    items += [selection_tools_menu(), zoom_menu(), rcextras.set_view_menu(True), _grid_item(sketch), recent_menu(),
+
+    items += [selection_tools_menu(), zoom_menu(), rcextras.set_view_menu(True), _grid_item(sketch), separator(), recent_menu(),
               sketch_entities_menu(), more_dimensions_menu()]
     return items
 
@@ -1762,8 +1928,15 @@ def empty_items(sketch):
     return [i for i in items if i is not None]
 
 
+def _is_circle(sketch, element):
+    try:
+        return str(element).startswith("Edge") and type(sketch.Geometry[int(element[4:]) - 1]).__name__ == "Circle"
+    except Exception:
+        return False
+
+
 def _selected_header(sketch, element, p):
-    if len(p) > 1:
+    if len(p) > 1 or _is_circle(sketch, element):
         return header(T_SELECTED_N, "HeaderSelected")
     return header("%s (%s)" % (T_SELECTED, element_name(sketch, element)), "HeaderSelected")
 
@@ -1775,8 +1948,11 @@ def entity_items(sketch, item):
     items = []
     if element.startswith("Edge"):
         index = int(element[4:]) - 1
-        items.append(action("SelectChain", T_SELECT_CHAIN, lambda: select_chain(item, sketch, index)))
-        if _has_midpoint(sketch, index):
+
+        # circle has none, reads 11-19), and no Select Midpoint once two or more entities are picked
+        if len(chain_of(sketch, index)) > 1:
+            items.append(action("SelectChain", T_SELECT_CHAIN, lambda: select_chain(item, sketch, index)))
+        if _has_midpoint(sketch, index) and sum(1 for e in p if str(e).startswith("Edge")) <= 1:
             items.append(action("SelectMidpoint", T_SELECT_MIDPOINT, lambda: select_midpoint(item, sketch, index)))
     items += view_items(sketch)
     items += relations_head() + [_rs_options()]
@@ -1785,6 +1961,7 @@ def entity_items(sketch, item):
         items.append(action("Delete", T_DELETE, _delete, icon=_std_icon("Std_Delete")))
         items.append(entry("DetachSegmentOnDrag", T_DETACH))
     if element.startswith("Edge"):
+        items += _comb_items(sketch, int(element[4:]) - 1)
         items += _spline_items(sketch, int(element[4:]) - 1)
         items += _freecad_entity_items(sketch, int(element[4:]) - 1)
     items.append(sketch_tools_menu())
@@ -1814,6 +1991,27 @@ SPLINE_ITEMS = (("InsertSplinePoint", "Insert Spline Point"), ("ShowSplineHandle
                 ("ShowMinimumRadius", "Show Minimum Radius of Curvature"), ("SimplifySpline", "Simplify Spline..."),
                 ("FitSpline", "Fit Spline..."), ("ConvertToStyleSpline", "Convert to Style Spline"),
                 ("AddTangencyControl", "Add Tangency Control"), ("AddCurvatureControl", "Add Curvature Control"))
+
+
+def _comb_items(sketch, index):
+    """combs-1127: Show Curvature on an arc or a circle (a spline has it among its own items): the comb, and the
+    Curvature Scale page (combpm.py). With more arcs and circles picked, it switches all of them."""
+    try:
+        from . import combpm
+        if type(sketch.Geometry[index]).__name__ not in combpm.CURVES:
+            return []
+    except Exception:
+        return []
+    geos = [index]
+    for e in picked_elements(sketch):
+        try:
+            g = int(str(e)[4:]) - 1 if str(e).startswith("Edge") else None
+        except ValueError:
+            g = None
+        if g is not None and g not in geos and type(sketch.Geometry[g]).__name__ in combpm.CURVES:
+            geos.append(g)
+    return [action("ShowCurvatureCombs", "Show Curvature", lambda: combpm.toggle(sketch, geos),
+                   icon=_std_icon("Sketcher_BSplineComb"), checked=combpm.shown(sketch, index))]
 
 
 def _spline_items(sketch, index):

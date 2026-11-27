@@ -22,6 +22,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -75,7 +76,7 @@ def last_values():
 def _edited():
     try:
         vp = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument is not None else None
-        return vp.Object if vp is not None else None
+        return editobj.of(vp) if vp is not None else None
     except Exception:
         return None
 
@@ -267,6 +268,48 @@ class FilletRow(QtCore.QObject):
         QtCore.QTimer.singleShot(150, start)
 
 
+class _Tiles(QtCore.QObject):
+    """The type switch behind the tiles of type_box (FilletRow's, without its row)."""
+
+    def __init__(self, parent, feature):
+        super().__init__(parent)
+        self.view = None
+        self.doc = feature.Document.Name
+        self.name = feature.Name
+
+    feature = FilletRow.feature
+    picked_edges = FilletRow.picked_edges
+    switch = FilletRow.switch
+
+
+def type_box(obj):
+    ""
+
+
+    if not _is_fresh(obj):
+        return None
+    current = fillet_type(obj)
+    if current is None:
+        return None
+    from . import filletpm
+    box = filletpm._box("Fillet Type")
+    tiles = _Tiles(box, obj)
+    row = QtWidgets.QHBoxLayout()
+    row.setSpacing(0)
+    for i, (tip, family, _command) in enumerate(filletpm.FILLET_TYPES):
+        text, command = FILLET_TYPES[i][0], FILLET_TYPES[i][3]
+        b = filletpm._icon_button(box, "SWFilletType%d" % i, tip, family)
+        b.setChecked(text == current)
+        if text == current:
+            b.clicked.connect(lambda checked=False, b=b: b.setChecked(True))
+        else:
+            b.clicked.connect(lambda checked=False, c=command, t=text: tiles.switch(c, t))
+        row.addWidget(b)
+    row.addStretch(1)
+    box.layout().addLayout(row)
+    return box
+
+
 def run(command):
     """Start a fillet type the way its ribbon button does."""
     try:
@@ -436,6 +479,8 @@ def install(view):
     name = CHAMFER_ROW if is_chamfer else FILLET_ROW
     if view.findChild(QtWidgets.QWidget, name) is not None:
         return
+    if not is_chamfer and view.findChild(QtWidgets.QWidget, "SWFilletType0") is not None:
+        return              # the page has the Fillet Type tiles (type_box)
     fresh = _is_fresh(feature)
     if not is_chamfer and not fresh:
         return              # an existing fillet keeps its type

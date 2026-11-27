@@ -35,6 +35,10 @@ from . import paths
 
 CACHE = paths.PARAM_PATH + "/OtherWorkbenchTabs"
 SKIP = ("NoneWorkbench", "StartWorkbench", "AssemblyWorkbench")     # Assembly: the add-on's own assembly mode
+# swtabs2-1127 / addintabs2-1127: FrameForge is the Weldments tab's engine (smengine, catalog WE_*). Its own tab
+# (all of FreeCAD's FrameForge commands) stays available but starts hidden like every Addon Manager workbench's tab
+# (_hide_first_time); Add-Ins > More Tabs shows it (Ati 11-27: nothing from FreeCAD unreachable).
+ENGINES = ("FrameForge", "FrameForgeWorkbench")
 _TABS = {}          # workbench name -> tab title
 STOCK_PREFIXES = {"Std", "Part", "PartDesign", "Sketcher", "Draft", "TechDraw", "Assembly", "FEM", "CAM", "Mesh",
                   "Spreadsheet", "Measure", "Materials", "Points", "Surface", "BIM", "Arch", "OpenSCAD"}
@@ -66,7 +70,7 @@ def others():
         _fw_log("otherwbtabs.py:covered", _fw_err)
     out = {}
     for name, wb in Gui.listWorkbenches().items():
-        if name in covered or name in SKIP:
+        if name in covered or name in SKIP:            # addintabs2-1127: ENGINES get their tab again, hidden at first
             continue
         title = str(getattr(wb, "MenuText", "") or name).replace("&", "").strip() or name
         out[name] = title
@@ -151,6 +155,30 @@ def _register(wb, title, toolbars):
     if title not in cmtabs.ORDER:
         cmtabs.ORDER = tuple(cmtabs.ORDER) + (title,)
     _TABS[wb] = title
+    _hide_first_time(title)
+
+
+KNOWN = "KnownOtherTabs"
+
+
+def _hide_first_time(title):
+    """addintabs2-1127 (Ati 11-27): an Addon Manager workbench's tab starts hidden, once, the first time it is seen;
+    Add-Ins > More Tabs (or right-click > Tabs) turns it on, and that choice is kept from then on."""
+    try:
+        from . import cmtabs
+        if title not in cmtabs.DEFAULT_HIDDEN:          # a profile with no tab choice saved yet: hidden by default
+            cmtabs.DEFAULT_HIDDEN = tuple(cmtabs.DEFAULT_HIDDEN) + (title,)
+        p = App.ParamGet(cmtabs.PREFS)
+        known = [t for t in p.GetString(KNOWN, "").split("|") if t]
+        if title in known:
+            return
+        if p.GetBool("Saved", False):                   # a saved tab choice: this new tab joins its hidden list, once
+            off = [t for t in p.GetString("HiddenTabs", "").split("|") if t]
+            if title not in off:
+                p.SetString("HiddenTabs", "|".join(off + [title]))
+        p.SetString(KNOWN, "|".join(known + [title]))
+    except Exception as _fw_err:
+        _fw_log("otherwbtabs.py:hide first", _fw_err)
 
 
 def _refresh_loaded():

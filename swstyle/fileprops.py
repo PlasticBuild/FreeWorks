@@ -183,6 +183,23 @@ def summary(doc):
     return out
 
 
+def saved_with(doc):
+    """fh200: Last Saved With: the FreeCAD that wrote the file (its ProgramVersion, "FreeCAD 1.2.0" for a file a newer
+    FreeCAD saved), not the FreeCAD that shows it; unreadable: this FreeCAD."""
+    import re
+    import zipfile
+    try:
+        with zipfile.ZipFile(doc.FileName) as z:
+            with z.open("Document.xml") as f:
+                head = f.read(2048).decode("utf-8", "replace")
+        m = re.search(r'ProgramVersion="(\d+(?:\.\d+)*)', head)
+        if m:
+            return "FreeCAD " + m.group(1)
+    except Exception as _fw_err:
+        _fw_log("fileprops.py:saved_with", _fw_err)
+    return "FreeCAD " + ".".join(App.Version()[:3])
+
+
 def long_date(text):
     ""
 
@@ -306,7 +323,7 @@ class FilePropertiesDialog(QtWidgets.QDialog):
             elif not saved:
                 text = ""
             elif k == "Last saved with":
-                text = "FreeCAD " + ".".join(App.Version()[:2])
+                text = saved_with(self.doc)
             else:
                 text = long_date(s[k]) if k == "Last saved" else str(s[k] or "")
             label = QtWidgets.QLabel(text)
@@ -503,6 +520,9 @@ _OPEN = []
 def show(doc=None, tab=0):
     box = FilePropertiesDialog(doc, tab=tab)
     _OPEN[:] = [box]
+
+    # document closed or a configuration deleted under the open box left it writing to a deleted document)
+    box.setWindowModality(QtCore.Qt.ApplicationModal)
     box.show()
     return box
 

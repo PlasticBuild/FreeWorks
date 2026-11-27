@@ -181,7 +181,7 @@ class SlicerTab(QtWidgets.QWidget):
         res = Path(__file__).parent / "resources" / "slicer"
         for text, icon, tip, fn in (
                 ("Send Part", "send", "Put the selected part (or every body, or the 3D Slicer panel's plates) on the slicer's plate, "
-                 "with each part's name and colour", self.send_part),
+                 "with each part's name and color", self.send_part),
                 ("Reload Part", "update", "Reload the part from FreeCAD into the slicer, keeping its orientation and settings",
                  self.reload_all),
                 ("Slicer Updates", "update", "Check for a newer " + self.title, self.updates),
@@ -256,7 +256,7 @@ class SlicerTab(QtWidgets.QWidget):
         self._asked.discard(str(paths[0]))
         more = " (%d more plate files beside it: PrusaSlicer opens one plate at a time)" % (len(paths) - 1) \
             if len(paths) > 1 else ""
-        self.status.setText("Sent %s to %s: %d part(s) with their names, colours and plates%s."
+        self.status.setText("Sent %s to %s: %d part(s) with their names, colors and plates%s."
                             % (paths[0].name, self.title, len(data["items"]), more))
         return True
 
@@ -283,7 +283,7 @@ class SlicerTab(QtWidgets.QWidget):
         box.setText("%s changed in FreeCAD. Reload it in %s?" % (Path(path).stem, self.title))
         if (self.sent.get(path) or {}).get("print3d"):
             box.setText("%s changed in FreeCAD. Send the parts to %s again?" % (Path(path).stem, self.title))
-            box.setInformativeText("The parts go again with their names, colours and plates; %s asks what to do "
+            box.setInformativeText("The parts go again with their names, colors and plates; %s asks what to do "
                                    "with the project it has open." % self.title)
         else:
             box.setInformativeText("Its orientation, position and print settings in the slicer are kept. A cut or "

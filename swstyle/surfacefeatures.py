@@ -44,8 +44,21 @@ class SurfaceFeature(sf.Feature):
 
     def execute(self, obj):
         from . import pickwait
+        spec = self.spec(obj)
+        ckey = None
         try:
-            shape, _ = self.spec(obj).compute(obj, None)
+            if spec.cache:
+                # a surface made from a part keys on the part's shape as it uses it (spec.held), so
+                # a change after that point (a Flex preview further down the body) rebuilds nothing
+                from . import fcache
+                held = getattr(spec, "held", None)
+                ckey = fcache.key(obj, held(obj) if held else None, getattr(spec, "cache_skip", ()))
+                hit = fcache.get(ckey)
+                if hit is not None:
+                    pickwait.done(obj)
+                    obj.Shape = hit[0] if hit[0] is not None else Part.Shape()
+                    return
+            shape, _ = spec.compute(obj, None)
         except Exception as error:
             if not pickwait.waits(obj, error):
                 raise
@@ -53,6 +66,9 @@ class SurfaceFeature(sf.Feature):
             return
         pickwait.done(obj)
         obj.Shape = shape if shape is not None else Part.Shape()
+        if ckey is not None and shape is not None:
+            # keyed on the inputs as the build leaves them (a build may set a property)
+            fcache.put(fcache.key(obj, held(obj) if held else None, getattr(spec, "cache_skip", ())), shape)
 
 
 def make(spec, doc=None, picks=None, edit=True, **values):
@@ -341,6 +357,64 @@ def _reach(obj, face, edge):
     return d
 
 
+def _one_plane_face(face, merged):
+    """The coplanar faces of merged (a plane grown by strips and corners) as one face: its free
+    edges make the outline; None when the plane has holes or the outline is not one loop."""
+    try:
+        if len(face.Wires) != 1:
+            return None
+        counts = {}
+        for f in merged.Faces:
+            for e in f.Edges:
+                key = None
+                for k in counts:
+                    if counts[k][0].isSame(e) or (counts[k][0].Length - e.Length < 1e-7 and counts[k][0].CenterOfMass.distanceToPoint(e.CenterOfMass) < 1e-7):
+                        key = k
+                        break
+                if key is None:
+                    counts[len(counts)] = [e, 1]
+                else:
+                    counts[key][1] += 1
+        free = [v[0] for v in counts.values() if v[1] == 1]
+        wires = Part.sortEdges(free)
+        if len(wires) != 1:
+            return None
+        wire = Part.Wire(wires[0])
+        grown = Part.Face(wire)
+        if not grown.isValid() or abs(grown.Area - merged.Area) > 1e-6 * max(1.0, merged.Area):
+            return None
+        if grown.normalAt(0, 0).dot(face.normalAt(0, 0)) < 0:
+            grown.reverse()
+        return grown
+    except Exception as _fw_err:
+        _fw_log("surfacefeatures.one_plane_face", _fw_err)
+        return None
+
+
+def _plane_corners(face, edges, d):
+    """The corner patches where two extended edges of a plane meet, so the plane grows as one face
+    (a rectangle extended on all four edges is a bigger rectangle, corners included)."""
+    out = []
+    for i, e1 in enumerate(edges):
+        for e2 in edges[i + 1:]:
+            shared = [a.Point for a in e1.Vertexes for b in e2.Vertexes if a.Point.distanceToPoint(b.Point) < 1e-7]
+            if not shared or e1.Curve.__class__.__name__ != "Line" or e2.Curve.__class__.__name__ != "Line":
+                continue
+            v = shared[0]
+            o1, o2 = _outward(face, e1), _outward(face, e2)
+            det = 1.0 - o1.dot(o2) ** 2
+            if det < 1e-9:
+                continue
+            # the point p with p.o1 = d and p.o2 = d
+            a = d * (1.0 - o1.dot(o2)) / det
+            p = v + o1 * a + o2 * a
+            try:
+                out.append(Part.Face(Part.makePolygon([v, v + o1 * d, p, v + o2 * d, v])))
+            except Exception as _fw_err:
+                _fw_log("surfacefeatures.plane_corner", _fw_err)
+    return out
+
+
 def _extend(obj, base):
     picked = sf.elements(obj, "Edges")
     if not picked:
@@ -389,9 +463,15 @@ def _extend(obj, base):
         if obj.Type == "Same surface" and isinstance(face.Surface, Part.Plane) and strips:
 
             try:
+                if condition == "Distance":
+                    strips = strips + _plane_corners(face, edges, distance)
                 merged = face.fuse(strips).removeSplitter()
                 if len(merged.Faces) == 1 and merged.Faces[0].isValid():
                     result[index] = merged.Faces[0]
+                    continue
+                one = _one_plane_face(face, merged)
+                if one is not None:
+                    result[index] = one
                     continue
             except Exception as _fw_err:
                 _fw_log("surfacefeatures.extend_plane", _fw_err)
@@ -593,6 +673,16 @@ def plate_face(edges, points=(), owners=None, order="Contact", optimize=False, c
             return face
     except Exception as _fw_err:
         _fw_log("surfacefeatures.py:407", _fw_err)
+    if curves and points:
+        # OpenCascade's plate can refuse a free constraint curve together with points (BRep_API: command not
+
+        # the curve and the points
+        along = [e.valueAt(e.FirstParameter + (e.LastParameter - e.FirstParameter) * i / 12.0)
+                 for e in curves for i in range(13)]
+        try:
+            return plate_face(edges, list(points) + along, owners, order, optimize, (), resolution)
+        except Exception as _fw_err:
+            _fw_log("surfacefeatures.py:plate curve points", _fw_err)
     return Part.makeFilledFace(list(edges) + list(curves))
 
 
@@ -623,7 +713,22 @@ def _filled(obj, base):
     if getattr(obj, "FixUp", True):
         edges = _hole_loops(edges, _source_faces(obj, "Boundary"))
     points = [s.Point for _, s in sf.elements(obj, "Points") if s.ShapeType == "Vertex"]
-    curves = [e for _, s in sf.elements(obj, "Curves") for e in s.Edges]
+    curves = []
+    for source, s in sf.elements(obj, "Curves"):
+        if s.ShapeType != "Vertex" and getattr(source, "TypeId", "") == "Sketcher::SketchObject":
+            # a sketch's own points are not in its shape: read them from its geometry
+            for g in source.Geometry:
+                if type(g).__name__ == "Point":
+                    points.append(source.getGlobalPlacement().multVec(App.Vector(g.X, g.Y, g.Z)))
+        if s.ShapeType == "Vertex":
+            points.append(s.Point)
+        else:
+
+            # is not on any of the sketch's edges
+            curves.extend(s.Edges)
+            for v in s.Vertexes:
+                if not any(e.distToShape(v)[0] < 1e-6 for e in s.Edges):
+                    points.append(v.Point)
     edges = _whole_loop(edges, _source_faces(obj, "Boundary"))
     if getattr(obj, "FixUp", True):
         edges = _close_gaps(edges)
@@ -696,12 +801,16 @@ FILLED = sf.Spec(
      Field("ShowPreview", "bool", "Show preview", True, box="Patch Boundary",
            tip="Show the patch while the PropertyManager is open"),
 
-     Field("Curves", "pick", "Constraint Curves", what=("Edge", ""), many=True, optional=True,
-           box="Constraint Curves", tip="Curves the patch must pass through"),
+
+     # the separate Constraint Points box shows only for a part saved with points in it
+     Field("Curves", "pick", "Constraint Curves", what=("Edge", "Vertex", ""), many=True, optional=True,
+           box="Constraint Curves", tip="Curves or points the patch must pass through (sketched points or splines)"),
      Field("Points", "pick", "Constraint Points", what=("Vertex",), many=True, optional=True,
-           box="Constraint Curves"),
-     Field("FixUp", "bool", "Fix up boundary", True, box="Options"),
-     Field("Merge", "bool", "Merge result", True, box="Options"),
+           box="Constraint Curves", shown=lambda o: bool(getattr(o, "Points", None))),
+
+     # each Filled Surface is its own body until Knit (or Merge result) joins it
+     Field("FixUp", "bool", "Fix up boundary", False, box="Options"),
+     Field("Merge", "bool", "Merge result", False, box="Options"),
      Field("Solid", "bool", "Create solid", False, box="Options"),
      Field("ReverseSurface", "bool", "Reverse direction", False, box="Options"),
      Field("Resolution", "int", "Resolution control", 3, low=1, high=5, legacy=3, box="Resolution Control",

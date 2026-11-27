@@ -57,11 +57,11 @@ PROPS = (
     ("DecalImage", "App::PropertyString", "The original picture"),
     ("DecalMask", "App::PropertyString", "Mask kind"),
     ("DecalMaskFile", "App::PropertyString", "Mask picture"),
-    ("DecalMaskColors", "App::PropertyString", "Colours left out (#rrggbb, comma separated)"),
+    ("DecalMaskColors", "App::PropertyString", "Colors left out (#rrggbb, comma separated)"),
     ("DecalMapping", "App::PropertyString", "Mapping type"),
     ("DecalProjection", "App::PropertyString", "Projection direction"),
-    ("DecalX", "App::PropertyFloat", "Horizontal location from the face centre (mm)"),
-    ("DecalY", "App::PropertyFloat", "Vertical location from the face centre (mm)"),
+    ("DecalX", "App::PropertyFloat", "Horizontal location from the face center (mm)"),
+    ("DecalY", "App::PropertyFloat", "Vertical location from the face center (mm)"),
     ("DecalRotation", "App::PropertyFloat", "Rotation (degrees)"),
     ("DecalFixedAspect", "App::PropertyBool", "Fixed aspect ratio"),
     ("DecalMirrorH", "App::PropertyBool", "Mirror horizontally"),
@@ -348,7 +348,10 @@ class _Watch:
                     d.Visibility = False
                 elif shown and d.DecalHiddenWithPart:
                     d.DecalHiddenWithPart = False
-                    d.Visibility = True
+                    if decals_shown():
+                        d.Visibility = True
+                    else:
+                        _mark_hidden_by_view(d, True)       # View > Hide/Show > Decals is off: it stays hidden
         except Exception as _fw_err:
             _fw_log("decalpm.py:with-part", _fw_err)
 
@@ -357,11 +360,98 @@ class _Watch:
             _drapes.pop(key, None)
 
 
+
+# decals were hidden by hand. A decal hidden by this toggle is marked DecalHiddenByView; turning Decals on shows only those
+
+VIEW_DECALS = "ViewDecals"
+
+
+def decals_shown():
+    try:
+        from . import paths
+        return paths.params().GetBool(VIEW_DECALS, True)
+    except Exception:
+        return True
+
+
+def _mark_hidden_by_view(d, on):
+    if "DecalHiddenByView" not in d.PropertiesList:
+        if not on:
+            return
+        d.addProperty("App::PropertyBool", "DecalHiddenByView", "Decal", "Hidden by View > Hide / Show > Decals")
+        d.setEditorMode("DecalHiddenByView", 2)
+    d.DecalHiddenByView = bool(on)
+
+
+def apply_decals_shown(doc, on):
+    """Hides every shown decal of the document (on False), or shows the ones this toggle hid (on True). Returns how many changed."""
+    n = 0
+    for d in [o for o in doc.Objects if is_decal(o)]:
+        try:
+            if not on and d.Visibility:
+                _mark_hidden_by_view(d, True)
+                d.Visibility = False
+                n += 1
+            elif on and getattr(d, "DecalHiddenByView", False):
+                _mark_hidden_by_view(d, False)
+                part = d.DecalOf
+                if part is not None and not part.Visibility:
+                    if "DecalHiddenWithPart" in d.PropertiesList:
+                        d.DecalHiddenWithPart = True       # it comes back with its part
+                    continue
+                d.Visibility = True
+                n += 1
+        except Exception as _fw_err:
+            _fw_log("decalpm.py:hide-show", _fw_err)
+    return n
+
+
+def set_decals_shown(on):
+    try:
+        from . import paths
+        paths.params().SetBool(VIEW_DECALS, bool(on))
+    except Exception as _fw_err:
+        _fw_log("decalpm.py:hide-show-param", _fw_err)
+    n = 0
+    for doc in App.listDocuments().values():
+        n += apply_decals_shown(doc, on)
+    _sync_tick()
+    return n
+
+
+class _ViewDecals:
+    def GetResources(self):
+        return {"Pixmap": "DISPMGR_DECAL", "MenuText": "Decals", "Checkable": decals_shown(),
+                "ToolTip": "Shows or hides the decals"}
+
+    def IsActive(self):
+        return App.ActiveDocument is not None
+
+    def Activated(self, checked=None):
+        # the setting decides (it may have been changed from elsewhere); the menu's tick follows it
+        set_decals_shown(not decals_shown())
+        _sync_tick()
+
+
+def _sync_tick():
+    try:
+        import FreeCADGui as Gui
+        for a in (Gui.Command.get("SWStyle_ViewDecals").getAction() or ()):
+            if a.isCheckable() and a.isChecked() != decals_shown():
+                a.blockSignals(True)
+                a.setChecked(decals_shown())
+                a.blockSignals(False)
+    except Exception as _fw_err:
+        _fw_log("decalpm.py:view-decals-tick", _fw_err)
+
+
 def redrape(name):
     try:
         doc = App.getDocument(name)
     except Exception:
         return
+    if not decals_shown():
+        apply_decals_shown(doc, False)        # Hide / Show > Decals is off: a file opened now shows none either
     for o in doc.Objects:
         if is_decal(o) and getattr(o, "DecalShown", ""):
             face = face_of(o)
@@ -376,6 +466,12 @@ def install():
     if not _watch:
         _watch.append(_Watch())
         App.addDocumentObserver(_watch[0])
+    try:
+        import FreeCADGui as Gui
+        if "SWStyle_ViewDecals" not in Gui.listCommands():
+            Gui.addCommand("SWStyle_ViewDecals", _ViewDecals())
+    except Exception as _fw_err:
+        _fw_log("decalpm.py:view-decals", _fw_err)
 
 
 def extent(plane, along):
@@ -498,6 +594,8 @@ class _Wrap:
             self.ref = flat.normalize()
             self.side = self.axis.cross(self.ref)
             self.lat0 = math.asin(max(-1.0, min(1.0, r.dot(self.axis))))
+        elif mapping == "Label" and kind not in ("Part::GeomPlane",) and self._chart(face):
+            self.kind = "surface"
         else:
             self.dir = _direction(plane, face) if mapping == "Projection" else self.n0
             self.dir = V(self.dir).normalize()
@@ -507,8 +605,114 @@ class _Wrap:
             self.up = up.normalize()
             self.side = self.up.cross(self.dir)
 
+    # decal-freeform-1126: Label on a freeform face (B-spline, revolved, swept, torus): the picture is laid out by
+
+    # stretch it on the steep parts and leave the far slopes bare.
+    CHART_N = 64
+
+    def _chart(self, face):
+        try:
+            u0, u1, v0, v1 = face.ParameterRange
+            N = self.CHART_N
+            us = [u0 + (u1 - u0) * i / N for i in range(N + 1)]
+            vs = [v0 + (v1 - v0) * j / N for j in range(N + 1)]
+            grid = [[face.valueAt(u, v) for v in vs] for u in us]
+            um, vm = N // 2, N // 2
+            du = grid[um + 1][vm] - grid[um - 1][vm]
+            dv = grid[um][vm + 1] - grid[um][vm - 1]
+            if du.Length < 1e-9 or dv.Length < 1e-9:
+                return False
+            n = du.cross(dv)
+            if n.Length < 1e-12:
+                return False
+            # planar after all (a B-spline plane): leave it to the plain projection
+            flat = max(abs((grid[i][j] - self.mid).dot(self.n0)) for i in range(0, N + 1, 8) for j in range(0, N + 1, 8))
+            if flat < 1e-4 * max(face.BoundBox.DiagonalLength, 1e-3):
+                return False
+            # arc lengths from the middle: rows[j][i] along u in row v_j (from the middle column), cols[i][j] along v in
+            # column u_i (from the middle row). The picture's width is measured along each line, its height along the middle one,
+            # so each row of the picture keeps its true width (a narrow neck takes more of the way round, as a label would)
+            def run(line, m):
+                out = [0.0] * len(line)
+                for k in range(m + 1, len(line)):
+                    out[k] = out[k - 1] + (line[k] - line[k - 1]).Length
+                for k in range(m - 1, -1, -1):
+                    out[k] = out[k + 1] - (line[k + 1] - line[k]).Length
+                return out
+            rows = [run([grid[i][j] for i in range(N + 1)], um) for j in range(N + 1)]
+            cols = [run(grid[i], vm) for i in range(N + 1)]
+            # the picture's up is the face direction nearest the world's up; its right follows the face's outside
+            out = V(self.n0)
+            up_v = abs(dv.normalize().z) >= abs(du.normalize().z)
+            self.swap = not up_v
+            sgn_n = 1.0 if n.dot(out) >= 0 else -1.0
+            up_dir = dv if up_v else du
+            self.flip_t = up_dir.z < -1e-9 or (abs(up_dir.z) <= 1e-9 and up_dir.y < 0)
+            # right = up x out; keep a right-handed picture on the outside
+            right_dir = du if up_v else dv
+            want_right = (up_dir * (-1 if self.flip_t else 1)).cross(out)
+            self.flip_s = right_dir.dot(want_right) < 0
+            self.us, self.vs, self.rows, self.cols, self.um, self.vm = us, vs, rows, cols, um, vm
+            self.periodic = (face.Surface.isUPeriodic() and abs((grid[0][vm] - grid[N][vm]).Length) < 1e-6,
+                             face.Surface.isVPeriodic() and abs((grid[um][0] - grid[um][N]).Length) < 1e-6)
+            self.uv_mid = ((u0 + u1) / 2, (v0 + v1) / 2)
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def _interp(xs, ys, x):
+        import bisect
+        n = len(xs) - 1
+        k = min(n - 1, max(0, bisect.bisect_right(xs, x) - 1))      # xs rise (parameters, or lengths from the middle)
+        a, b = xs[k], xs[k + 1]
+        f = (x - a) / ((b - a) or 1.0)
+        return ys[k] + (ys[k + 1] - ys[k]) * f, k, f
+
+    def _st(self, u, v):
+        """(along the picture's width, along its height) in mm from the face's middle, before mirroring for the outside."""
+        if not self.swap:      # width along u (per row), height along v (middle column)
+            ra, k, f = self._interp(self.vs, list(range(len(self.vs))), v)
+            wa = self._interp(self.us, self.rows[k], u)[0]
+            wb = self._interp(self.us, self.rows[k + 1], u)[0]
+            a, b = wa + (wb - wa) * f, self._interp(self.vs, self.cols[self.um], v)[0]
+        else:                  # width along v (per column), height along u (middle row)
+            ra, k, f = self._interp(self.us, list(range(len(self.us))), u)
+            wa = self._interp(self.vs, self.cols[k], v)[0]
+            wb = self._interp(self.vs, self.cols[k + 1], v)[0]
+            a, b = wa + (wb - wa) * f, self._interp(self.us, self.rows[self.vm], u)[0]
+        return (-a if self.flip_s else a), (-b if self.flip_t else b)
+
+    def _uv_of(self, x, y):
+        """The face parameters where the picture's (x, y) lands: invert the chart (monotone along each line)."""
+        a = -x if self.flip_s else x
+        b = -y if self.flip_t else y
+        if not self.swap:
+            v, k, f = self._interp(self.cols[self.um], self.vs, b)
+            line = [ra + (rb - ra) * f for ra, rb in zip(self.rows[k], self.rows[k + 1])]
+            return self._interp(line, self.us, a)[0], v
+        u, k, f = self._interp(self.rows[self.vm], self.us, b)
+        line = [ca + (cb - ca) * f for ca, cb in zip(self.cols[k], self.cols[k + 1])]
+        return u, self._interp(line, self.vs, a)[0]
+
+    def _seam(self, u, v):
+        """A turn-like value for the drape's seam test: a triangle spanning half a periodic face's range goes round the back."""
+        import math
+        if self.periodic[0]:
+            return 2 * math.pi * (u - self.us[0]) / ((self.us[-1] - self.us[0]) or 1.0)
+        if self.periodic[1]:
+            return 2 * math.pi * (v - self.vs[0]) / ((self.vs[-1] - self.vs[0]) or 1.0)
+        return 0.0
+
     def decal(self, p, n=None):
         import math
+        if self.kind == "surface":
+            try:
+                u, v = self.face.Surface.parameter(p)
+            except Exception:
+                return None
+            a, b = self._st(u, v)
+            return a, b, self._seam(u, v)
         if self.kind == "cylinder":
             r = p - self.c
             h = r.dot(self.axis)
@@ -550,6 +754,22 @@ class _Wrap:
                 right = self.side
             right.normalize()
             return self.c + n * self.radius, n, right, n.cross(right)
+        if self.kind == "surface":
+            u, v = self._uv_of(x, y)
+            p = self.face.valueAt(u, v)
+            n = self.face.normalAt(u, v)
+            if self.swap:
+                pa = self.face.valueAt(u, v + 1e-3 * (self.vs[-1] - self.vs[0]))
+            else:
+                pa = self.face.valueAt(u + 1e-3 * (self.us[-1] - self.us[0]), v)
+            right = pa - p
+            if self.flip_s:
+                right = right * -1
+            right = right - n * right.dot(n)
+            if right.Length < 1e-12:
+                right = n.cross(V(0, 0, 1))
+            right.normalize()
+            return p, n, right, n.cross(right)
         return self.mid + self.side * x + self.up * y, self.dir, self.side, self.up
 
     def spot(self, plane):
@@ -592,6 +812,23 @@ def _padded(src):
     if not os.path.exists(path):
         out.save(path, "PNG")
     return path, pad, image.width(), image.height()
+
+
+def _texture_image(tex, path):
+    """The picture put in the texture as pixels read with Qt (as scenebg does for the scene photo): Coin's own file reading
+    needs simage, which FreeCAD's Windows build may not have, and a texture named by file then draws nothing."""
+    image = QtGui.QImage(path)
+    if image.isNull():
+        tex.filename = path
+        return False
+    from pivy import coin
+    image = image.convertToFormat(QtGui.QImage.Format_RGBA8888).mirrored(False, True)     # Coin: bottom row first
+    w, h = image.width(), image.height()
+    stride = image.bytesPerLine()
+    raw = bytes(image.constBits())[:stride * h]
+    tex.filename = ""
+    tex.image.setValue(coin.SbVec2s(w, h), 4, b"".join(raw[y * stride:y * stride + 4 * w] for y in range(h)))
+    return True
 
 
 def drape_mesh(plane, face):
@@ -707,7 +944,7 @@ def drape(plane, shown):
         off, _hints, tex, tc, co, nn, _b, ifs = [sep.getChild(i) for i in range(8)]
         off.factor = -1.0
         off.units = -1.0
-        tex.filename = texture
+        _texture_image(tex, texture)
         tex.wrapS = coin.SoTexture2.CLAMP
         tex.wrapT = coin.SoTexture2.CLAMP
         tex.model = coin.SoTexture2.MODULATE
@@ -899,7 +1136,49 @@ def library():
 
 
 # --------------------------------------------------------------------------- making one
-def new_decal(obj, sub, image, saved=None, show=True):
+def _facing_point(face):
+    """The point of a curved face that looks most toward the viewer (the middle of its height among equals)."""
+    try:
+        d = Gui.ActiveDocument.ActiveView.getViewDirection()
+    except Exception:
+        return None
+    look = V(-d[0], -d[1], -d[2])
+    u0, u1, v0, v1 = face.ParameterRange
+    best, at, N = None, None, 24
+    for i in range(N + 1):
+        for j in range(N + 1):
+            u, v = u0 + (u1 - u0) * i / N, v0 + (v1 - v0) * j / N
+            try:
+                if not face.isPartOfDomain(u, v):
+                    continue
+                n = face.normalAt(u, v)
+            except Exception:
+                continue
+            score = n.dot(look) - 1e-3 * (abs(i - N / 2.0) + abs(j - N / 2.0)) / N
+            if best is None or score > best:
+                best, at = score, face.valueAt(u, v)
+    return at
+
+
+def start_where_seen(plane, face, at=None):
+    """A new decal on a curved face starts where the user picked it, else where the face looks toward the
+    viewer; the face's own middle can be its back or its edge as seen (a turned cylinder's seam side: the
+    decal came in half hidden round the edge, vd204)."""
+    try:
+        at = at or _facing_point(face)
+        if at is None:
+            return False
+        got = _wrap(plane, face).decal(V(at))
+        if got is None:
+            return False
+        plane.DecalX, plane.DecalY = float(got[0]), float(got[1])
+        return True
+    except Exception as _fw_err:
+        _fw_log("decalpm.py:start-where-seen", _fw_err)
+        return False
+
+
+def new_decal(obj, sub, image, saved=None, show=True, at=None):
     """A decal of the picture on obj's face sub; with show, the Decals PropertyManager opens on it."""
     from . import insertextras
     face = obj.Shape.getElement(sub)
@@ -921,6 +1200,8 @@ def new_decal(obj, sub, image, saved=None, show=True):
             plane.YSize = saved.get("height") or saved["width"]
     else:
         plane.YSize = plane.XSize.Value * aspect(image)
+    if App.GuiUp and curved(face) and not (saved and ("x" in saved or "y" in saved)):
+        start_where_seen(plane, face, at)
     refresh(plane)
     remember_face(plane)
     install()
@@ -1036,8 +1317,15 @@ def apply_from_library(path, hit=None):
     if path.lower().endswith(".fwdecal"):
         saved = load_decal(path)
         path = saved.get("image", "")
+    at = None
+    try:
+        for s in Gui.Selection.getSelectionEx("", 0):
+            if s.PickedPoints:
+                at = V(s.PickedPoints[-1])
+    except Exception as _fw_err:
+        _fw_log("decalpm.py:picked-point", _fw_err)
     Gui.Selection.clearSelection()
-    return new_decal(hit[0], hit[1], path, saved)
+    return new_decal(hit[0], hit[1], path, saved, at=at)
 
 
 # --------------------------------------------------------------------------- the PropertyManager
@@ -1049,6 +1337,190 @@ def _spin(lo, hi, value, suffix, decimals=2):
     s.setValue(value)
     s.setKeyboardTracking(False)
     return s
+
+
+def _redraw_drawings(plane):
+    """The shaded drawing views of the decal's model drawn again, with the decal as it is now."""
+    try:
+        of = getattr(plane, "DecalOf", None)
+        if of is not None:
+            from . import drawshade
+            if drawshade.refresh_for(of):
+                of.Document.recompute()
+    except Exception as _fw_err:
+        _fw_log("decalpm.py:drawings", _fw_err)
+
+
+class DecalHandle:
+    ""
+
+
+
+
+
+    NAME = "SWDecalHandles"
+
+    def __init__(self, panel):
+        from pivy import coin
+        self.panel = panel
+        self.view = Gui.ActiveDocument.ActiveView if Gui.ActiveDocument is not None else None
+        self.root = coin.SoAnnotation()     # drawn last: over the decal's own see-through picture
+        self.root.setName(self.NAME)
+        depth = coin.SoDepthBuffer()
+        depth.test = False
+        self.root.addChild(depth)
+        self.xf = coin.SoTransform()
+        self.root.addChild(self.xf)
+        box = coin.SoSeparator()
+        colour = coin.SoBaseColor()
+        colour.rgb.setValue(0.1, 0.45, 0.95)
+        style = coin.SoDrawStyle()
+        style.lineWidth = 1.5
+        self.box = coin.SoCoordinate3()
+        lines = coin.SoLineSet()
+        lines.numVertices.setValue(7)
+        for n in (colour, style, self.box, lines):
+            box.addChild(n)
+        self.root.addChild(box)
+        self.handles = {}
+        for kind in ("move", "size", "turn"):
+            sep = coin.SoSeparator()
+            at = coin.SoTranslation()
+            scale = coin.SoScale()
+            dragger = coin.SoTranslate2Dragger()
+            for n in (at, scale, dragger):
+                sep.addChild(n)
+            self.root.addChild(sep)
+            dragger.addStartCallback(lambda *_a, k=kind: self._start(k), None)
+            dragger.addMotionCallback(lambda *_a, k=kind: self._moved(k), None)
+            dragger.addFinishCallback(lambda *_a, k=kind: self._done(k), None)
+            self.handles[kind] = (at, scale, dragger)
+        self.k = 1.0
+        self.dragging = None
+        self.start = {}
+        self.timer = QtCore.QTimer()
+        self.timer.setSingleShot(True)
+        self.timer.setInterval(60)
+        self.timer.timeout.connect(self._apply)
+        self.pending = None
+        # the PropertyManager closed some other way (another command took the task pane): handles go too
+        self.watch = QtCore.QTimer()
+        self.watch.setInterval(500)
+        self.watch.timeout.connect(self._still_open)
+        self.watch.start()
+        if self.view is not None:
+            self.view.getSceneGraph().addChild(self.root)
+        self.place()
+
+    def _still_open(self):
+        try:
+            import shiboken6
+            open_ = bool(Gui.Control.activeDialog()) and shiboken6.isValid(self.panel.form)
+            if open_ and self.panel.plane.Document is not None:
+                return
+        except Exception:
+            pass
+        self.remove()
+        if getattr(self.panel, "handles", None) is self:
+            self.panel.handles = None
+
+    def corners(self):
+        """(width, height) of the decal and where each handle sits, in the decal's own plane."""
+        p = self.panel.plane
+        w, h = float(p.XSize.Value), float(p.YSize.Value)
+        return w, h, {"move": (0.0, 0.0), "size": (w / 2, h / 2), "turn": (0.0, h / 2 + max(w, h) * 0.18)}
+
+    def place(self):
+        """Puts the box and the handles on the decal as it is now."""
+        from pivy import coin
+        p = self.panel.plane
+        pl = p.Placement
+        self.xf.translation.setValue(pl.Base.x, pl.Base.y, pl.Base.z)
+        self.xf.rotation.setValue(coin.SbRotation(*pl.Rotation.Q))
+        w, h, at = self.corners()
+        top = at["turn"][1]
+        pts = [(-w / 2, -h / 2, 0), (w / 2, -h / 2, 0), (w / 2, h / 2, 0), (0, h / 2, 0), (0, top, 0),
+               (0, h / 2, 0), (-w / 2, h / 2, 0)]
+        self.box.point.setValues(0, len(pts), pts)
+        self.k = max(w, h) * 0.06
+        for kind, (spot, scale, dragger) in self.handles.items():
+            spot.translation.setValue(at[kind][0], at[kind][1], 0)
+            scale.scaleFactor.setValue(self.k, self.k, self.k)
+            dragger.translation.setValue(0, 0, 0)
+
+    def screen_point(self, kind):
+        """Where a handle is on the screen (view pixels, from the bottom left), for clicks and checks."""
+        _w, _h, at = self.corners()
+        p = self.panel.plane.Placement.multVec(App.Vector(at[kind][0], at[kind][1], 0))
+        return self.view.getPointOnScreen(p) if self.view is not None else None
+
+    def _start(self, kind):
+        p = self.panel.plane
+        self.dragging = kind
+        self.start = {"x": float(p.DecalX), "y": float(p.DecalY), "w": float(p.XSize.Value),
+                      "h": float(p.YSize.Value), "r": float(p.DecalRotation)}
+
+    def _where(self, kind):
+        """The handle's place in the decal's plane, as it was when the drag started."""
+        _a, _s, dragger = self.handles[kind]
+        x, y, _z = dragger.translation.getValue().getValue()
+        w, h = self.start["w"], self.start["h"]
+        base = {"move": (0.0, 0.0), "size": (w / 2, h / 2), "turn": (0.0, h / 2 + max(w, h) * 0.18)}[kind]
+        return base[0] + x * self.k, base[1] + y * self.k
+
+    def _moved(self, kind):
+        import math
+        x, y = self._where(kind)
+        s = self.start
+        if kind == "move":
+            self.pending = {"x": s["x"] + x, "y": s["y"] + y}
+        elif kind == "size":
+            fw, fh = max(abs(x) * 2, 0.01), max(abs(y) * 2, 0.01)
+            if self.panel.fixed.isChecked():
+                f = max(fw / max(s["w"], 1e-9), fh / max(s["h"], 1e-9))
+                fw, fh = s["w"] * f, s["h"] * f
+            self.pending = {"w": fw, "h": fh}
+        else:
+            turn = math.degrees(math.atan2(-x, y))
+            r = s["r"] + turn
+            while r > 360.0:
+                r -= 360.0
+            while r < -360.0:
+                r += 360.0
+            self.pending = {"r": round(r, 2)}
+        if not self.timer.isActive():
+            self.timer.start()
+
+    def _apply(self):
+        """The pending drag put in the PropertyManager's boxes, then the decal made again once."""
+        values, self.pending = self.pending, None
+        if not values:
+            return
+        pm = self.panel
+        pm._busy = True
+        try:
+            for key, spin in (("x", pm.x), ("y", pm.y), ("w", pm.width), ("h", pm.height), ("r", pm.rotation)):
+                if key in values:
+                    spin.setValue(values[key])
+        finally:
+            pm._busy = False
+        pm._changed()
+
+    def _done(self, kind):
+        self.timer.stop()
+        self._apply()
+        self.dragging = None
+        QtCore.QTimer.singleShot(0, self.place)
+
+    def remove(self):
+        self.timer.stop()
+        self.watch.stop()
+        try:
+            if self.view is not None:
+                self.view.getSceneGraph().removeChild(self.root)
+        except Exception as _fw_err:
+            _fw_log("decalpm.py:handles-remove", _fw_err)
+        self.view = None
 
 
 class DecalPanel:
@@ -1071,8 +1543,13 @@ class DecalPanel:
         self.note.setWordWrap(True)
         lay.addWidget(self.note)
         self.form = w
+        self.handles = None
         self._load()
         Gui.Selection.addObserver(self)
+        try:
+            self.handles = DecalHandle(self)
+        except Exception as _fw_err:
+            _fw_log("decalpm.py:handles", _fw_err)
 
     # ---- Image
     def _image_tab(self):
@@ -1084,6 +1561,8 @@ class DecalPanel:
         self.preview.setObjectName("SWDecalPreview")
         self.preview.setAlignment(QtCore.Qt.AlignCenter)
         self.preview.setMinimumHeight(110)
+        # Selective color mask: a click on the preview masks the colour clicked (as well as Add Color...)
+        self.preview.mousePressEvent = self._preview_click
         bl.addWidget(self.preview)
         bl.addWidget(QtWidgets.QLabel("Image file path:"))
         row = QtWidgets.QHBoxLayout()
@@ -1182,9 +1661,8 @@ class DecalPanel:
         fh = QtWidgets.QPushButton("Fit height to selection")
         fh.setObjectName("SWDecalFitHeight")
         fh.clicked.connect(lambda: self.fit("v"))
-        row.addWidget(fw)
-        row.addWidget(fh)
-        form.addRow(row)
+        form.addRow(fw)
+        form.addRow(fh)      # pkg173: one under the other; side by side they made the PM wider than the others
         self.width = _spin(0.01, 1e5, 10.0, " mm")
         self.width.setObjectName("SWDecalWidth")
         self.height = _spin(0.01, 1e5, 10.0, " mm")
@@ -1217,10 +1695,21 @@ class DecalPanel:
     def _light_tab(self):
         page = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(page)
-        self.underlying = QtWidgets.QCheckBox("Use underlying appearance's illumination properties")
+        # pkg173: the long words wrap in a label beside the box: on one line they made the PM wider than the others
+        words = "Use underlying appearance's illumination properties"
+        self.underlying = QtWidgets.QCheckBox()
         self.underlying.setObjectName("SWDecalUnderlying")
+        self.underlying.setAccessibleName(words)
         self.underlying.toggled.connect(self._changed)
-        lay.addWidget(self.underlying)
+        tick = QtWidgets.QHBoxLayout()
+        tick.setContentsMargins(0, 0, 0, 0)
+        tick.addWidget(self.underlying, 0, QtCore.Qt.AlignTop)
+        said = QtWidgets.QLabel(words)
+        said.setObjectName("SWDecalUnderlyingText")
+        said.setWordWrap(True)
+        said.mousePressEvent = lambda _e: self.underlying.toggle()
+        tick.addWidget(said, 1)
+        lay.addLayout(tick)
         self.own_light = QtWidgets.QWidget()
         self.own_light.setObjectName("SWDecalOwnIllumination")
         row = QtWidgets.QHBoxLayout(self.own_light)
@@ -1319,6 +1808,9 @@ class DecalPanel:
         if p.DecalOwnLight:
             _set_transparency(p, self.transparent.value())
         self._show()
+        h = getattr(self, "handles", None)
+        if h is not None and h.dragging is None:
+            h.place()
 
     def _set_image(self, path):
         if not path or path == self.plane.DecalImage:
@@ -1346,6 +1838,38 @@ class DecalPanel:
         if path:
             self.mask_path.setText(path)
             self.masks["Image mask file"].setChecked(True)
+            self._changed()
+
+    def colour_at_preview(self, pos):
+        """The decal picture's own colour under a point of the preview (None off the picture)."""
+        pix = self.preview.pixmap()
+        if pix is None or pix.isNull():
+            return None
+        pw, ph = pix.width() / pix.devicePixelRatio(), pix.height() / pix.devicePixelRatio()
+        x0, y0 = (self.preview.width() - pw) / 2.0, (self.preview.height() - ph) / 2.0
+        fx, fy = (pos.x() - x0) / max(pw, 1.0), (pos.y() - y0) / max(ph, 1.0)
+        if not (0.0 <= fx < 1.0 and 0.0 <= fy < 1.0):
+            return None
+        if self.mirror_h.isChecked():
+            fx = 1.0 - fx
+        if self.mirror_v.isChecked():
+            fy = 1.0 - fy
+        image = QtGui.QImage(self.plane.DecalImage)
+        if image.isNull():
+            return None
+        return QtGui.QColor(image.pixel(min(int(fx * image.width()), image.width() - 1),
+                                        min(int(fy * image.height()), image.height() - 1)))
+
+    def _preview_click(self, event):
+        if not self.masks["Selective color mask"].isChecked():
+            return
+        pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
+        c = self.colour_at_preview(pos)
+        if c is None:
+            return
+        have = [t.strip() for t in self.mask_colours.text().split(",") if t.strip()]
+        if c.name() not in have:
+            self.mask_colours.setText(",".join(have + [c.name()]))
             self._changed()
 
     def add_mask_colour(self):
@@ -1395,7 +1919,7 @@ class DecalPanel:
             obj, sub = refplane.resolve(obj, sub)
         except Exception as _fw_err:
             _fw_log("decalpm.py:855", _fw_err)
-        QtCore.QTimer.singleShot(0, lambda: self.pick(obj, sub))
+        from . import safe_later as _sl; _sl.later(0, lambda: self.pick(obj, sub), self, "note")
 
     def pick(self, obj, sub):
         try:
@@ -1420,6 +1944,9 @@ class DecalPanel:
         return QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
 
     def _drop(self):
+        if getattr(self, "handles", None) is not None:
+            self.handles.remove()
+            self.handles = None
         try:
             Gui.Selection.removeObserver(self)
         except Exception as _fw_err:
@@ -1430,6 +1957,7 @@ class DecalPanel:
         self._changed()
         self.plane.Document.commitTransaction()
         Gui.Control.closeDialog()
+        _redraw_drawings(self.plane)
         return True
 
     def reject(self):

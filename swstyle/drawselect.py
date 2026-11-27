@@ -514,8 +514,7 @@ class DrawingViewPanel:
         s.SectionNormal = -App.Vector(s.SectionNormal)
         if (App.Vector(s.Direction) - want).Length > 1e-9:
             s.Direction = want
-        if getattr(s, "SWSectionKind", "") != "Horizontal" or s.TypeId == "TechDraw::DrawComplexSection":
-            s.XDirection = -App.Vector(s.XDirection)
+        s.XDirection = -App.Vector(s.XDirection)          # seen from the other side, still upright
 
     def _relabel_section(self, s):
         t = self.section_label.text().strip()
@@ -1044,6 +1043,18 @@ class _Watcher:
                     hook_page(page)
                     drawdimpm.open_for(sel[0], sel[1:])
                 return
+            if len(sel) == 1 and getattr(sel[0], "SWAnnotation", "") == "Note" and \
+                    "SWNoteOptions" in sel[0].PropertiesList:
+
+                page = D.active_page()
+                gv = D.page_view(page) if page is not None else None
+                under = QtWidgets.QApplication.widgetAt(QtGui.QCursor.pos())
+                if gv is not None and (under is gv.viewport() or FROM_ANYWHERE[0]) and \
+                        not Gui.Control.activeDialog():
+                    from . import drawannot
+                    hook_page(page)
+                    drawannot.edit_note(sel[0], page)
+                return
             v = picked_view()
             if v is not None:
                 sel = Gui.Selection.getSelectionEx()
@@ -1067,8 +1078,24 @@ class _Watcher:
                 hook_page(page)
             elif D.VIEW_PM and not Gui.Selection.getSelection():
                 close_open()
+            elif not Gui.Selection.getSelection():
+                close_note_edit()
         except Exception as error:
             App.Console.PrintWarning("FreeCAD: Drawing View PM: %s\n" % error)
+
+
+def close_note_edit():
+    ""
+    try:
+        from . import drawannot
+    except Exception:
+        return
+    if not drawannot.NOTE_EDIT:
+        return
+    pn = drawannot.NOTE_EDIT[0]
+    drawannot.NOTE_EDIT[:] = []
+    if D.SHOWN and D.SHOWN[0] is pn and Gui.Control.activeDialog():
+        pn.accept()
 
 
 class _DoubleClick(QtCore.QObject):

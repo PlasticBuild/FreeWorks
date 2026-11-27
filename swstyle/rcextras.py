@@ -281,6 +281,11 @@ def pick_rows(sketch, element, rows):
                 out.append(contextbar.Entry("DisplayAs" + kind, text, _icon(text, icon), _tip(text), run))
                 if c.Type == kind:
                     pressed = set(pressed) | {"DisplayAs" + kind}
+            try:
+                from . import dimdisplay
+                out, pressed = dimdisplay.icon_row(sketch, index, out, pressed, _icon, _tip)
+            except Exception as _fw_err:
+                _fw_log("rcextras.py:dimdisplay row", _fw_err)
             return out + preview, [e for e in second if e.key != "BossExtrude"], pressed
         return rows
     if len(picked) > 1 and sh is not None:
@@ -780,6 +785,11 @@ def display_options_menu(sketch, index, as_kind=None, more=()):
                        checked=display_flag(sketch, index, key)) for key, text in flags]
     if as_kind is not None:
         items.insert(1, as_kind)
+        try:
+            from . import dimdisplay
+            items = dimdisplay.display_options(sketch, index, items)
+        except Exception as _fw_err:
+            _fw_log("rcextras.py:dimdisplay", _fw_err)
     items += [i for i in more if i is not None]
     return rc.submenu("DisplayOptions", T_DISPLAY_OPTIONS, items)
 
@@ -811,7 +821,23 @@ def select_annotation_view(sketch, index):
 
 
 def can_reverse(sketch, index):
-    return sketch.Constraints[index].Type in ("DistanceX", "DistanceY", "Angle")
+    # skrmb-1127: a line-length (aligned) dimension has Reverse Direction too (read 11-19); radius and diameter have none
+    return sketch.Constraints[index].Type in ("DistanceX", "DistanceY", "Angle") or _aligned_ends(sketch, index) is not None
+
+
+def _aligned_ends(sketch, index):
+    """(fixed point, (geo, pos) of the point that moves) of a point-to-point or line-length Distance, else None."""
+    c = sketch.Constraints[index]
+    if c.Type != "Distance":
+        return None
+    try:
+        if c.FirstPos in (1, 2) and c.Second >= 0 and c.SecondPos in (1, 2):
+            return sketch.getPoint(c.First, c.FirstPos), (c.Second, c.SecondPos)
+        if c.FirstPos == 0 and c.Second < 0 and type(sketch.Geometry[c.First]).__name__ == "LineSegment":
+            return sketch.getPoint(c.First, 1), (c.First, 2)
+    except Exception:
+        return None
+    return None
 
 
 def reverse_direction(sketch, index):
@@ -821,7 +847,13 @@ def reverse_direction(sketch, index):
     c = sketch.Constraints[index]
 
     def body():
-        if c.Type == "Angle":
+        ends = _aligned_ends(sketch, index) if c.Type == "Distance" else None
+        if ends is not None:        # skrmb-1127: the moving end goes to the other side of the fixed one
+            fixed, (geo, pos) = ends
+            moving = sketch.getPoint(geo, pos)
+            sketch.moveGeometry(geo, pos, fixed - (moving - fixed), False)
+            sketch.recompute()
+        elif c.Type == "Angle":
             sketch.setDatum(index, App.Units.Quantity(-c.Value, App.Units.Unit(0, 0, 0, 0, 0, 0, 0, 1)))
         else:
             sketch.setDatum(index, App.Units.Quantity(-c.Value, App.Units.Length))

@@ -7,6 +7,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -116,7 +117,8 @@ class FrameHelper(QtCore.QObject):
                     mw.show()
         self.active = True
         from . import events
-        events.register("shell", (QtCore.QEvent.MouseButtonPress,), self.eventFilter)
+        events.register("shell", (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseButtonDblClick,     # titledrag-1127
+                                  QtCore.QEvent.MouseMove, QtCore.QEvent.MouseButtonRelease), self.eventFilter)
         self._poll.start()
         try:
             from . import workarea      # maximized stops at the taskbar (land192)
@@ -209,7 +211,8 @@ class FrameHelper(QtCore.QObject):
             return False
 
     def _fw_filter170(self, obj, event):
-        if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+        t = event.type()
+        if t == QtCore.QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
             # Unbound call: a pane widget keeps the main window in an attribute called window.
             if isinstance(obj, QtWidgets.QWidget) and QtWidgets.QWidget.window(obj) is self.mw:
                 edges = self._edges(event.globalPosition().toPoint())
@@ -217,7 +220,78 @@ class FrameHelper(QtCore.QObject):
                     handle = self.mw.windowHandle()
                     if handle is not None and handle.startSystemResize(edges):
                         return True
+                if self._caption(obj):
+                    return self._caption_press(obj, event)
+        elif t == QtCore.QEvent.MouseButtonDblClick and event.button() == Qt.LeftButton:
+            if self._caption(obj):
+                # titledrag-1127: a double-click on the title row maximizes or restores, as Windows' own title bar
+                self._press = None
+                try:
+                    self.shell.toggle_maximized()
+                except Exception as _fw_err:
+                    _fw_log("shell.py:title-dblclick", _fw_err)
+                return True
+        elif t == QtCore.QEvent.MouseMove and self._press is not None:
+            if not (event.buttons() & Qt.LeftButton):
+                self._press = None
+                return False
+            gp = event.globalPosition().toPoint()
+            if (gp - self._press[0]).manhattanLength() >= QtWidgets.QApplication.startDragDistance():
+                return self._caption_drag(gp)
+            return True
+        elif t == QtCore.QEvent.MouseButtonRelease and self._press is not None:
+            self._press = None
+            return True
         return False
+
+    # ------------------------------------------------------------------ titledrag-1127
+    # Ati 11-27: grabbing a blank spot of the top bar did not move the window (0.3.3 had no move either: the
+
+    # maximizes or restores, and dragging a maximized window down restores it under the pointer.
+    CAPTION = ("QatRow",)
+    _press = None
+
+    def _caption(self, obj):
+        """True for a press on the title row's blank space (its buttons, search box and logo are their own widgets)."""
+        try:
+            return isinstance(obj, QtWidgets.QWidget) and type(obj).__name__ in self.CAPTION and \
+                QtWidgets.QWidget.window(obj) is self.mw and not self.mw.isFullScreen()
+        except Exception:
+            return False
+
+    def _maxed(self):
+        mw = self.mw
+        try:
+            return mw.isMaximized() or self.shell._fills(mw.geometry())
+        except Exception:
+            return mw.isMaximized()
+
+    def _caption_press(self, obj, event):
+        gp = event.globalPosition().toPoint()
+        if self._maxed():
+            self._press = (gp, event.position().toPoint().y())      # moved only once it is dragged (restores first)
+            return True
+        self._press = None
+        handle = self.mw.windowHandle()
+        if handle is not None and handle.startSystemMove():
+            return True
+        self._press = (gp, event.position().toPoint().y())          # no system move: moved by hand
+        return True
+
+    def _caption_drag(self, gp):
+        press, self._press = self._press, None
+        mw = self.mw
+        if self._maxed():
+            full = mw.frameGeometry()
+            ratio = (press[0].x() - full.x()) / float(max(1, full.width()))
+            self.shell.restore_down()
+            normal = mw.frameGeometry()
+            mw.move(int(gp.x() - ratio * normal.width()), max(0, gp.y() - press[1]))
+        handle = mw.windowHandle()
+        if handle is not None and handle.startSystemMove():
+            return True
+        mw.move(mw.pos() + (gp - press[0]))
+        return True
 
 
 # --------------------------------------------------------------------------- search
@@ -703,7 +777,10 @@ class CommandSearch(QtCore.QObject):
 
 # --------------------------------------------------------------------------- shell
 # tools that work only in a 3D sketch (they start one from the part): left out of flyouts in a 2D sketch
-SKETCH3D_ONLY = ("OffsetOnSurface", "SplineOnSurface")
+# cmfly-1126: flyout groups (first flyout key -> {key: group}); a separator where the group changes
+FLYOUT_GROUPS = {"SplitLine": {"SplitLine": 0, "*": 1},
+                 "QuickSnaps": {"QSTangent": 1, "QSHVPoint": 1, "QSGrid": 2, "*": 0}}
+SKETCH3D_ONLY = ("OffsetOnSurface", "SplineOnSurface", "Sketch3D", "Sketch3DOnPlane")   # nodead-1126: 3D Sketch cannot start in a 2D sketch
 
 
 class Shell(QtCore.QObject):
@@ -851,6 +928,8 @@ class Shell(QtCore.QObject):
         for i, act in enumerate(actions):
             try:
                 if act.isChecked():
+                    if i == 0:
+                        i = 6
                     if i == 6:
                         try:
                             from . import hlv
@@ -1084,6 +1163,8 @@ class Shell(QtCore.QObject):
             return
         try:
             self.views.sample(key, view.getCamera(), time.monotonic())
+            docs = App.listDocuments()                  # perf-1126: a closed document's views go
+            self.views.prune({getattr(d, "Uid", "") or d.Name for d in docs.values()})
         except Exception as _fw_err:
             _fw_log("shell.py:940", _fw_err)
 
@@ -1107,6 +1188,16 @@ class Shell(QtCore.QObject):
                 return None
         except Exception as _fw_err:
             _fw_log("shell.py:flyoutpick", _fw_err)
+        if instead is None and not b.enabled:
+            def instead(b=b, key=key):          # nogrey-1126 (rcmenus): live, a click says what to do first
+                b.update_state()
+                if b.enabled:
+                    if on_chosen is not None:
+                        on_chosen(key)
+                    b.run()
+                    return
+                from . import menunotready
+                menunotready.tell(b.cmd.label, menunotready.text_for(getattr(b, "native", None), b.cmd.label))
         act = menu.addAction(b.icon(), b.cmd.label)
         act.setEnabled(b.enabled or instead is not None)
         act.setToolTip(b.tooltip().replace("<br>", "\n").replace("<b>", "").replace("</b>", ""))
@@ -1165,12 +1256,25 @@ class Shell(QtCore.QObject):
                     except Exception as _fw_err:
                         _fw_log("shell.py:flyoutlast", _fw_err)
         in_2d = self.in_sketch()
+        groups = FLYOUT_GROUPS.get(button.flyout_keys[0] if button.flyout_keys else None)    # cmfly-1126
+        last = None
         for key in button.flyout_keys:
+            if key == "QuickSnaps":
+                continue
             if in_2d and key in SKETCH3D_ONLY:
                 continue        # fix230: a 3D-sketch-only tool, greyed in a 2D sketch: left out
             if key == "QSTangent" and not _tangent_snap_tool():
                 continue
-            self._add_binding_action(menu, key, chosen)
+            if button.binding.cmd.key == "SmartDimension" and key != "SmartDimension" and not in_2d:
+                continue
+            if groups:
+                group = groups.get(key, groups["*"])
+                if last is not None and group != last:
+                    menu.addSeparator()
+                last = group
+            act = self._add_binding_action(menu, key, chosen)
+            if act is not None and key == "ProjectedCurve" and button.binding.cmd.key == "Curves":
+                act.setText("Project Curve")
         return menu
 
     def _history_menu(self, menu, which):
@@ -1182,8 +1286,14 @@ class Shell(QtCore.QObject):
             act = menu.addAction("Nothing to %s" % which.lower())
             act.setEnabled(False)
             return menu
+        try:
+            from .undowording import display as _shown
+        except Exception:
+            def _shown(name, *_args):
+                return str(name)
         for i, name in enumerate(names[:20]):
-            act = menu.addAction("%d  %s" % (i + 1, name))
+            # features-480: the list's step that made the body's first solid says "Base Extrude", as Edit > Undo
+            act = menu.addAction("%d  %s" % (i + 1, _shown(name, doc, names if which == "Undo" else None, i)))
             act.triggered.connect(lambda checked=False, n=i + 1: [Gui.runCommand(command, 0) for _ in range(n)])
         return menu
 
@@ -1294,21 +1404,70 @@ class Shell(QtCore.QObject):
         # Windows applies showNormal's own size a moment later: place after it
         QtCore.QTimer.singleShot(60, place)
 
-    def span_height(self):
-        """The window as tall as the screen, keeping its width and left edge; again: back."""
+    def span_rect(self):
+        ""
+
+
         mw = self.window
-        area = self._area()
-        if mw.isMaximized() or self._fills(mw.geometry(), area):
-            self.restore_down(lambda geo: mw.setGeometry(geo.x(), area.top(), geo.width(), area.height()))
+        here = self._area()
+        others = []
+        for scr in QtGui.QGuiApplication.screens():
+            g = scr.availableGeometry()
+            if g != here:
+                others.append(g)
+        if not others:
+            return None
+        def gap(g):        # the display next to this one: touching edges first, then the nearest
+            return min(abs(g.left() - here.right() - 1), abs(here.left() - g.right() - 1),
+                       abs(g.top() - here.bottom() - 1), abs(here.top() - g.bottom() - 1))
+        other = sorted(others, key=gap)[0]
+        side_by_side = other.left() > here.right() - 8 or other.right() < here.left() + 8
+        if side_by_side:
+            top = max(here.top(), other.top())
+            bottom = min(here.bottom(), other.bottom())
+            left = min(here.left(), other.left())
+            right = max(here.right(), other.right())
+        else:
+            left = max(here.left(), other.left())
+            right = min(here.right(), other.right())
+            top = min(here.top(), other.top())
+            bottom = max(here.bottom(), other.bottom())
+        return QtCore.QRect(left, top, right - left + 1, bottom - top + 1)
+
+    def spanned(self):
+        r = self.span_rect()
+        g = self.window.geometry()
+        return r is not None and not self.window.isMaximized() and abs(g.x() - r.x()) <= 8 and abs(g.y() - r.y()) <= 8 \
+            and abs(g.width() - r.width()) <= 16 and abs(g.height() - r.height()) <= 16
+
+    def span_displays(self):
+        ""
+
+        mw = self.window
+        rect = self.span_rect()
+        if rect is None:
+            self.toggle_maximized()
             return
-        geo = mw.geometry()
-        if geo.top() <= area.top() + 2 and geo.height() >= area.height() - 16 and getattr(self, "_before_span", None):
-            mw.setGeometry(self._before_span)
+        if self.spanned():
+            back = getattr(self, "_before_span", None) or self._normal_geometry()
             self._before_span = None
+            mw.setGeometry(back)
+            self.qat_relayout()
             return
-        self._normal_geo = QtCore.QRect(geo)
-        self._before_span = QtCore.QRect(geo)
-        mw.setGeometry(geo.x(), area.top(), geo.width(), area.height())
+        if not mw.isMaximized() and not self._fills(mw.geometry()):
+            self._before_span = QtCore.QRect(mw.geometry())
+        else:
+            self._before_span = None
+        def place():
+            mw.setGeometry(rect)
+            self.qat_relayout()
+        if mw.isMaximized() or mw.isFullScreen():
+            mw.showNormal()
+            QtCore.QTimer.singleShot(60, place)     # Windows applies showNormal's own size a moment later
+        else:
+            place()
+
+    span_height = span_displays     # the old name (ribbon.py connects it)
 
     def toggle_maximized(self):
         mw = self.window
@@ -1324,6 +1483,7 @@ class Shell(QtCore.QObject):
     def qat_relayout(self):
         if alive(getattr(self, "topbar", None)):
             self.topbar.qat.relayout()
+            self.topbar.qat.update_maximize_icon()      # spandisp-1127: Span Displays / Restore tooltip
 
     # ------------------------------------------------------------------ pages
     def _build_pages(self):
@@ -1594,7 +1754,8 @@ class Shell(QtCore.QObject):
         self.left_pane.adopt()
 
         # wide enough for a PropertyManager, so opening a feature does not make it jump.
-        mw.resizeDocks([self.left_dock], [scaled(leftpane.PANE_WIDTH)], Qt.Horizontal)
+        mw.resizeDocks([self.left_dock], [scaled(getattr(leftpane, "start_width", lambda: leftpane.PANE_WIDTH)())], Qt.Horizontal)
+        getattr(leftpane, "watch_width", lambda d: None)(self.left_dock)    # pkg445: pane width kept between sessions
 
         # bottom: model tabs across the full width
         self.bottom_tb = QtWidgets.QToolBar("Model tabs", mw)
@@ -1803,6 +1964,8 @@ class Shell(QtCore.QObject):
                 App.Console.PrintWarning("FreeCAD: %s: %s\n" % (step.__name__, error))
         try:
             style.restore_settings()
+            from . import swkeys        # kbpage-1126: FreeCAD's V, F (fit all) and its other key sequences
+            swkeys.restore_sequences()
         except Exception as error:
             App.Console.PrintWarning("FreeCAD: settings not restored: %s\n" % error)
         if closing:
@@ -2121,6 +2284,8 @@ class Shell(QtCore.QObject):
     def refresh(self):
         if not self.enabled:
             return
+        if _docs_busy():      # busyrefresh-1127: no passes while a document opens or rebuilds
+            return
         self._tick += 1
         page = self.topbar.current_page()
         if page is not None:
@@ -2184,7 +2349,7 @@ class Shell(QtCore.QObject):
         try:
             gdoc = Gui.ActiveDocument
             edit = gdoc.getInEdit() if gdoc is not None else None
-            return edit is not None and edit.Object.TypeId == "Sketcher::SketchObject"
+            return edit is not None and editobj.type_id(edit) == "Sketcher::SketchObject"
         except Exception as _fw_err:
             _fw_log("shell.py:1951", _fw_err)
             return False
@@ -2282,18 +2447,27 @@ class Shell(QtCore.QObject):
                 page.ensure_built()     # look-audit skflow-1120: a tab never shown yet has no buttons to swap
             for b in page.buttons():
                 if b.binding.cmd.key in ("Sketch", "ExitSketch"):
+                    b._fw_page_title = page.title       # skflyout-1127: each tab keeps its own flyout
                     sketch_buttons.append(b)
         for sketch_button in sketch_buttons:
             target = "ExitSketch" if in_sketch else "Sketch"
             if sketch_button.binding.cmd.key != target:
                 self.rebind(sketch_button, target)
                 sketch_button._lines = self.binding(target).cmd.caption.split("\n")
-                sketch_button.flyout_keys = () if in_sketch else ("Sketch", "Sketch3D", "EditSketch")
+                sketch_button.flyout_keys = () if in_sketch else (
+                    ("Sketch", "Sketch3D", "EditSketch") if getattr(sketch_button, "_fw_page_title", "") == "Sketch Ink"
+                    else ("Sketch", "Sketch3D", "Sketch3DOnPlane"))
                 sketch_button.resize(sketch_button.sizeHint())
                 sketch_button.update()
                 self.topbar._layout_pages()
         if not first:
-            self.topbar.select("Sketch" if in_sketch else "Features")
+            if in_sketch:
+                self.topbar.select("Sketch")
+            else:
+                # sketchexit-1126: out of the sketch the row goes back to Features in a part, and to the
+                # document's first tab (Assembly, Drawing) where there is no Features tab
+                titles = [p.title for p in self.topbar.pages]
+                self.topbar.select("Features" if "Features" in titles else (titles[0] if titles else "Features"))
 
     def _style_task_buttons(self):
         page = self.left_pane.pages.get("Tasks") if self.left_pane is not None else None
@@ -2401,9 +2575,32 @@ def set_enabled(on):
         if _shell is None:
             _shell = Shell()
         _shell.enable()
+        try:
+            from . import icons             # icons-refresh-1126: our pictures back after the classic interface
+            icons.freeworks_icons()
+        except Exception as _fw_err:
+            _fw_log("shell.py:icons-on", _fw_err)
     elif _shell is not None:
         _shell.disable()
+        try:
+            from . import icons             # FreeCAD's own pictures back (not on close: disable(closing=True) is not this path)
+            icons.classic_icons()
+        except Exception as _fw_err:
+            _fw_log("shell.py:icons-off", _fw_err)
 
 
 def toggle():
     set_enabled(not (_shell is not None and _shell.enabled))
+
+
+def _docs_busy():
+    """busyrefresh-1127: a document is opening or rebuilding (FreeCAD takes no input then)."""
+    try:
+        if App.isRestoring():
+            return True
+        for d in App.listDocuments().values():
+            if d.Restoring or d.Recomputing:
+                return True
+    except Exception:
+        return False
+    return False

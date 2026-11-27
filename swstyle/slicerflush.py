@@ -151,7 +151,7 @@ class FlushDialog(QtWidgets.QDialog):
         row.addWidget(self.mult)
         row.addStretch(1)
         self.auto_button = QtWidgets.QPushButton("Auto-calculate")
-        self.auto_button.setToolTip("Back to the volumes the slicer works out from the filament colours")
+        self.auto_button.setToolTip("Back to the volumes the slicer works out from the filament colors")
         self.auto_button.clicked.connect(self.reset)
         row.addWidget(self.auto_button)
         lay.addLayout(row)
@@ -188,11 +188,11 @@ class FlushDialog(QtWidgets.QDialog):
         if not self.is_auto():
             self.state.setText("Edited: the slicer uses this table.")
         elif self.from_slice:
-            self.state.setText("Auto: the slicer works these out from the colours when it slices (shown: its own from "
+            self.state.setText("Auto: the slicer works these out from the colors when it slices (shown: its own from "
                                "the last slice).")
         else:
-            self.state.setText("Auto: the slicer works these out from the colours when it slices (shown: an estimate "
-                               "from the colours; the slicer's own show after a slice).")
+            self.state.setText("Auto: the slicer works these out from the colors when it slices (shown: an estimate "
+                               "from the colors; the slicer's own show after a slice).")
 
     def reset(self):
         n = len(self.colours)

@@ -35,6 +35,7 @@ def _fw_log(site, err):
     except Exception:
         return
 
+import html
 import math
 import os
 import time
@@ -220,6 +221,9 @@ def check_entity(objs, strict=False, faces=True, edges=True, short=True, short_l
     return found, info
 
 
+INFO_ROWS = (("min radius", "Minimum radius"), ("edge gap", "Maximum edge gap"), ("vertex gap", "Maximum vertex gap"))
+
+
 class CheckEntityWindow(evaluate.ReportWindow):
     ""
 
@@ -266,6 +270,46 @@ class CheckEntityWindow(evaluate.ReportWindow):
         self.layout_.insertLayout(1, top)
         self.info = {}
 
+        # problems in it (look audit EV-3). Each value still selects its face, edge or vertex.
+        values = QtWidgets.QGridLayout()
+        values.setObjectName("SWCheckEntityValues")
+        self.value_labels = {}
+        for r, (key, text) in enumerate(INFO_ROWS):
+            values.addWidget(QtWidgets.QLabel(text + ":"), r, 0)
+            lab = QtWidgets.QLabel("")
+            lab.setObjectName("SWCheckEntity_" + key.replace(" ", "_"))
+            lab.setTextInteractionFlags(QtCore.Qt.LinksAccessibleByMouse)
+            lab.linkActivated.connect(lambda _l, key=key: self._select_info(key))
+            values.addWidget(lab, r, 1)
+            self.value_labels[key] = lab
+        values.setColumnStretch(2, 1)
+        self.layout_.insertLayout(self.layout_.indexOf(self.table) + 1, values)
+
+    def _select_info(self, key):
+        """A value's link: selects the face, edge or vertex it was found on."""
+        if key not in self.info:
+            return
+        _v, o, ent = self.info[key]
+        try:
+            Gui.Selection.clearSelection()
+            Gui.Selection.addSelection(o.Document.Name, o.Name, ent)
+        except Exception as _fw_err:
+            _fw_log("evalpm.py:check-info", _fw_err)
+
+    def info_lines(self):
+        """The values as "Minimum radius: 8 mm (Body, Face7)" lines (for Copy to Clipboard)."""
+        out = []
+        for key, text in INFO_ROWS:
+            if key in self.info:
+                v, o, ent = self.info[key]
+                out.append("%s: %s (%s, %s)" % (text, evaluate.len_text(v, fmt="%.6g"), o.Label, ent))
+        return out
+
+    def _copy(self):
+        super()._copy()
+        board = QtWidgets.QApplication.clipboard()
+        board.setText(board.text() + "\n" + "\n".join(self.info_lines()))
+
     def targets(self):
         sels = Gui.Selection.getSelectionEx()
         if self.all.isChecked() or not sels:
@@ -290,11 +334,16 @@ class CheckEntityWindow(evaluate.ReportWindow):
                                         self.short.isChecked(), evaluate.mm_of(self.short_len), self.radius.isChecked(),
                                         self.edge_gap.isChecked(), self.vertex_gap.isChecked(), only)
         rows = [((k, o.Label, ent, val), [(o.Document.Name, o.Name, ent)]) for k, o, ent, val in found]
-        for key, text in (("min radius", "Minimum radius"), ("edge gap", "Maximum edge gap"), ("vertex gap", "Maximum vertex gap")):
+        self.set_rows(rows)
+        for key, _text in INFO_ROWS:
+            lab = self.value_labels.get(key)
+            if lab is None:
+                continue
             if key in self.info:
                 v, o, ent = self.info[key]
-                rows.append(((text, o.Label, ent, evaluate.len_text(v, fmt="%.6g")), [(o.Document.Name, o.Name, ent)]))
-        self.set_rows(rows)
+                lab.setText('%s  <a href="pick">%s, %s</a>' % (evaluate.len_text(v, fmt="%.6g"), html.escape(o.Label), ent))
+            else:
+                lab.setText("")
         bad = [f for f in found if f[0].startswith("Invalid")]
         self.summary.setText("%d bodies checked: %s" % (len(objs), "no invalid geometry found." if not bad else
                                                         "%d invalid item(s). Click a row to select it." % len(bad)))
@@ -501,7 +550,7 @@ class GeometryWindow(evaluate.ReportWindow):
         counts = {}
         for f in self.found:
             counts[f[0]] = counts.get(f[0], 0) + 1
-        self.summary.setText("%d bodies analysed. " % len(objs) + (", ".join("%s: %d" % kv for kv in counts.items())
+        self.summary.setText("%d bodies analyzed. " % len(objs) + (", ".join("%s: %d" % kv for kv in counts.items())
                                                                      or "No problem geometry found."))
 
     def save_report(self):

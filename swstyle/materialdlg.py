@@ -581,6 +581,8 @@ class MaterialDialog(QtWidgets.QDialog):
             item = QtWidgets.QTableWidgetItem(label)
             item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
             self.table.setItem(i, 0, item)
+        self.table.resizeColumnToContents(0)       # look-audit SIM-10: "Compressive Strength" was cut
+        self.table.setColumnWidth(0, self.table.columnWidth(0) + 12)
         lay.addWidget(self.table, 1)
         self.units.currentIndexChanged.connect(lambda i: self._show_values())
         self.tabs.addTab(page, "Properties")
@@ -618,7 +620,7 @@ class MaterialDialog(QtWidgets.QDialog):
         self.swatch = QtWidgets.QPushButton("", page)
         self.swatch.setObjectName("SWMaterialColor")
         self.swatch.setFixedSize(120, 40)
-        self.swatch.setToolTip("The material's colour (custom materials: click to change)")
+        self.swatch.setToolTip("The material's color (custom materials: click to change)")
         self.swatch.clicked.connect(self._pick_colour)
         lay.addWidget(self.swatch)
         lay.addStretch(1)
@@ -776,7 +778,7 @@ class MaterialDialog(QtWidgets.QDialog):
         self.note.setText("Materials in the default library can not be edited. Copy the material and Paste it "
                           "into Custom Materials (right-click in the tree) to change it.")
         self.note.setStyleSheet("color: #b00000;")
-        QtCore.QTimer.singleShot(2500, lambda: self.note.setStyleSheet(""))
+        from . import safe_later as _sl; _sl.later(2500, lambda: self.note.setStyleSheet(""), self, "note")
 
     def _fav_buttons(self):
         """Favorites: Add while a material is picked in the tree, Delete / Move Up / Move Down while a

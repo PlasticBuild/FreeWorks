@@ -609,6 +609,9 @@ class _Panel:
         except Exception as _fw_err:
             _fw_log("asmloads.py:542", _fw_err)
         Gui.Control.closeDialog()
+
+        # was not taken: it was still selected)
+        Gui.Selection.clearSelection()
         try:
             from . import asmmotion
             p = asmmotion.pane()
@@ -958,7 +961,7 @@ class ForcePanel(_Panel):
         self._function_shown()
         if self.function.currentText() in BUILDER_FUNCTIONS and not (
                 self.func and self.func.get("kind") == self.function.currentText()):
-            QtCore.QTimer.singleShot(0, lambda: self.edit_function(modal=False))
+            from . import safe_later as _sl; _sl.later(0, lambda: self.edit_function(modal=False), self, "function")
 
     def _default_func(self, kind):
         big = 10.0

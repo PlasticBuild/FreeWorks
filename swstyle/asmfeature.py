@@ -37,7 +37,7 @@ ICONS = {"Extrude": "PartDesign_Pocket", "Revolve": "PartDesign_Groove", "Hole":
          "Wizard": "PartDesign_Hole", "Series": "PartDesign_Hole",
          "Weld": "Part_Sweep", "Belt": "Assembly_CreateJointGears"}
 EXTRA = (   # added to every assembly feature (older files get them when edited)
-    ("App::PropertyVector", "Point", "Hole", "Hole centre on the picked face, in the assembly"),
+    ("App::PropertyVector", "Point", "Hole", "Hole center on the picked face, in the assembly"),
     ("App::PropertyVector", "Normal", "Hole", "The picked face's normal, in the assembly"),
     ("App::PropertyLength", "Diameter", "Hole", "Hole diameter"),
     ("App::PropertyLength", "Radius", "Edges", "Fillet radius or chamfer distance"),
@@ -2272,7 +2272,7 @@ class CutPanel:
         self.list.addItem(comp.Label)
 
     def addSelection(self, doc, obj, sub, pnt):
-        QtCore.QTimer.singleShot(0, self._route)
+        from . import safe_later as _sl; _sl.later(0, self._route, self, "auto")
 
     def removeSelection(self, *args):
         pass
@@ -3524,6 +3524,7 @@ class WeldPanel(_FeaturePanel):
         from . import asmpm
         lst = QtWidgets.QListWidget()
         lst.setObjectName(name)
+        lst.setProperty("swpickbox", True)      # a selection box (Weld From / Weld To / edges): its colour strip
         lst.setFixedHeight(asmpm._rows(lst, 2))
         panel = self
 

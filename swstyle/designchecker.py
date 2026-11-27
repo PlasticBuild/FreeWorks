@@ -489,6 +489,11 @@ EXTRA_RUN = {"dim_font": _check_dim_font, "dim_precision": _check_precision, "ar
 
 def check_folder(std, folder, recursive=False):
     """Design Checker in the Task Scheduler: every model file of a folder checked, one report."""
+    with _KeepActive():
+        return _check_folder(std, folder, recursive)
+
+
+def _check_folder(std, folder, recursive):
     lines, n, failed = [], 0, 0
     for root, _dirs, files in os.walk(folder):
         for f in sorted(files):
@@ -646,17 +651,49 @@ def last_standard():
     return default_standard(), ""
 
 
+class _KeepActive:
+    ""
+
+
+
+    def __enter__(self):
+        self.name = getattr(App.ActiveDocument, "Name", None)
+        self.sub = None
+        try:
+            from PySide import QtWidgets as _W
+            area = Gui.getMainWindow().findChild(_W.QMdiArea) if Gui is not None else None
+            self.area = area
+            self.sub = area.activeSubWindow() if area is not None else None
+        except Exception:
+            self.area = None
+        return self
+
+    def __exit__(self, *_exc):
+        if not self.name or self.name not in App.listDocuments():
+            return False
+        try:
+            App.setActiveDocument(self.name)
+            if Gui is not None:
+                Gui.setActiveDocument(self.name)
+            if self.area is not None and self.sub is not None and self.sub in self.area.subWindowList():
+                self.area.setActiveSubWindow(self.sub)
+        except Exception as _fw_err:
+            _fw_log("designchecker.py:keepactive", _fw_err)
+        return False
+
+
 def learn_from_file(path):
     """Opens a model file hidden, learns its standard, closes it."""
     already = [d for d in App.listDocuments().values() if d.FileName and os.path.samefile(d.FileName, path)] \
         if os.path.exists(path) else []
     if already:
         return learn(already[0])
-    doc = App.openDocument(path, hidden=True)
-    try:
-        return learn(doc)
-    finally:
-        App.closeDocument(doc.Name)
+    with _KeepActive():
+        doc = App.openDocument(path, hidden=True)
+        try:
+            return learn(doc)
+        finally:
+            App.closeDocument(doc.Name)
 
 
 if Gui is not None:
@@ -819,7 +856,16 @@ if Gui is not None:
             self.results = sorted_results(run(self.doc, self.std), self.std)
             for key, title, passed, bad in self.results:
                 item = QtWidgets.QTreeWidgetItem([title, severity(self.std, key), "Pass" if passed else "Fail"])
-                item.setForeground(2, QtCore.Qt.darkGreen if passed else QtCore.Qt.red)
+                try:
+                    from . import style as _style
+                    _dark = _style.dark()
+                except Exception:
+                    _dark = False
+                if _dark:               # dark green / red are unreadable on the dark panel
+                    from PySide import QtGui as _QtGui
+                    item.setForeground(2, _QtGui.QColor("#7fe07f") if passed else _QtGui.QColor("#ff8080"))
+                else:
+                    item.setForeground(2, QtCore.Qt.darkGreen if passed else QtCore.Qt.red)
                 item.setData(1, QtCore.Qt.UserRole, key)
                 for name, why in bad:
                     child = QtWidgets.QTreeWidgetItem([why, "", ""])

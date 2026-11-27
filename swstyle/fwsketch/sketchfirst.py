@@ -4,6 +4,7 @@
 
 
 
+from .. import editobj
 
 _FW_SEEN = set()
 
@@ -59,7 +60,7 @@ def then_command(command, tries=600):
             edit = gdoc.getInEdit() if gdoc is not None else None
         except Exception:
             edit = None
-        if edit is not None and edit.Object.TypeId == SKETCH:
+        if edit is not None and editobj.type_id(edit) == SKETCH:
             Gui.runCommand(command, 0)
             return
         try:

@@ -450,6 +450,8 @@ class LinearPatternPanel:
         self.list.setStyleSheet(asmpm.PICK_STYLE)
         self.list.setFixedHeight(asmpm._rows(self.list, 3))
         lay2.addWidget(self.list)
+        from . import asmpattern
+        asmpattern.mark_active(self.list)        # the box the picks go into at open (PM thread 11-27)
         self.comps = []
         for comp in comps:
             self._add(comp)
@@ -463,7 +465,7 @@ class LinearPatternPanel:
         self.list.addItem(comp.Label)
 
     def addSelection(self, doc, obj, sub, pnt):
-        QtCore.QTimer.singleShot(0, lambda: [self._add(c) for c in _picked_components(self.asm)])
+        from . import safe_later as _sl; _sl.later(0, lambda: [self._add(c) for c in _picked_components(self.asm)], self, "list")
 
     def removeSelection(self, *args):
         pass
@@ -1023,7 +1025,7 @@ class InterferencePanel:
                 return
         self.cancelled = CANCELLED[0]
         if self.cancelled:
-            bar.showMessage("Interference Detection cancelled: %d interference(s) found before it stopped" % len(self.found), 6000)
+            bar.showMessage("Interference Detection canceled: %d interference(s) found before it stopped" % len(self.found), 6000)
         self._list()
 
     def shown_found(self):

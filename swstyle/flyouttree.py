@@ -195,6 +195,8 @@ class FlyoutTree(QtWidgets.QWidget):
                 self._fill_sheet_tree(record["tree"], doc)   # a view was added, renamed or deleted
         elif record is not None and record["root"] and alive(record["tree"]) and not record["tree"].rootIndex().isValid():
             self.collapse()          # its document went away
+        if self.expanded and record is not None and not record.get("own"):
+            self._part_root()       # the overlay's model was rebuilt: its root is reset
         text = doc.Label if doc is not None else ""
         if self.header.text() != text:
             self.header.setText(text)
@@ -291,11 +293,46 @@ class FlyoutTree(QtWidgets.QWidget):
         self.expanded = True
         self.arrow.setArrowType(Qt.DownArrow)
         self.header.setToolTip("Hide the feature tree")
+        self._part_root()
         self.place()
+
+    # pkg428: the FeatureManager layout (fmtree's SWFeatureTree) is laid over the borrowed tree. Its
+
+    # and it has more rows than FreeCAD's tree (History, Sensors, Annotations, the planes)
+    def _overlay(self):
+        tree = (self.borrowed or {}).get("tree")
+        if tree is None or not alive(tree):
+            return None
+        for w in self.findChildren(QtWidgets.QTreeView, "SWFeatureTree"):
+            if alive(w) and getattr(w, "tree", None) is tree:
+                return w
+        return None
+
+    def _part_root(self):
+        """The overlay starts under the part's row while the flyout is open."""
+        view = self._overlay()
+        if view is None:
+            return
+        try:
+            fm = view.fm
+            if fm.part is None:
+                return
+            part = fm.index_of(fm.part)
+            if part.isValid() and view.rootIndex() != part:
+                view.setRootIndex(part)
+                self.borrowed["overlay"] = view
+        except Exception as _fw_err:
+            _fw_log("flyouttree.py:part-root", _fw_err)
 
     def collapse(self):
         """Gives FreeCAD's tree back to its place in the pane."""
         record, self.borrowed = self.borrowed, None
+        view = (record or {}).get("overlay")
+        if view is not None and alive(view):
+            try:
+                view.setRootIndex(QtCore.QModelIndex())
+            except Exception as _fw_err:
+                _fw_log("flyouttree.py:part-root-back", _fw_err)
         if self.expanded:
             self.expanded = False
             self.arrow.setArrowType(Qt.RightArrow)
@@ -444,6 +481,9 @@ class FlyoutTree(QtWidgets.QWidget):
 
     # ---------------------------------------------------------------- placing
     def _rows(self, tree):
+        view = self._overlay()
+        if view is not None and view.isVisible():
+            tree = view         # pkg428: the rows shown are the overlay's
         rows, index = 0, tree.model().index(0, 0, tree.rootIndex())
         while index.isValid() and rows < 500:
             rows += 1
@@ -461,7 +501,9 @@ class FlyoutTree(QtWidgets.QWidget):
         height = header_h
         tree = self.borrowed["tree"] if self.borrowed else None
         if tree is not None and alive(tree):
-            row_h = max(tree.sizeHintForRow(0), tree.fontMetrics().height() + 4)
+            view = self._overlay()
+            shown = view if view is not None and view.isVisible() else tree
+            row_h = max(shown.sizeHintForRow(0), shown.fontMetrics().height() + 4)
             rows = self._rows(tree)
             # tree width: the widest item, its indentation included, and room for the scroll bar
             width = max(width, MIN_WIDTH, tree.sizeHintForColumn(0) + 14 + 24)

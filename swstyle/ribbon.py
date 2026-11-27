@@ -26,7 +26,7 @@ from PySide import QtCore, QtGui, QtWidgets
 
 from . import catalog, customizedlg, icons, style
 from .widgets import (CommandButton, FlatButton, Separator, alive, draw_arrow, glyph_caret_down,
-                      glyph_caret_up, glyph_chevron_right, glyph_close, glyph_ellipsis, glyph_maximize, glyph_span,
+                      glyph_caret_up, glyph_chevron_right, glyph_close, glyph_ellipsis, glyph_help, glyph_maximize, glyph_span,
                       glyph_minimize, glyph_triangle_right, popup_menu, scaled, ui_font, ui_scale)
 
 
@@ -141,6 +141,11 @@ class GroupBox(QtWidgets.QWidget):
             order = [b for _r, _c, b in sorted(self.cells, key=lambda c: (c[0], c[1]))] if self.kind == "grid" \
                 else self.buttons
             for b in order:
+                if getattr(b, "idle", lambda: False)() and self.kind == "grid":
+                    b.hide()            # nodead-1126
+                    continue
+                if self.kind == "grid":
+                    b.show()            # nodead-1126: it comes back once its command can act
                 w = b.sizeHint().width()
                 b.setGeometry(x, s(1), w, s(23))
                 x += w
@@ -149,6 +154,10 @@ class GroupBox(QtWidgets.QWidget):
         if self.kind == "grid":
             ncols = 1 + max(col for _, col, _ in self.cells)
             for r, col, b in self.cells:
+                if getattr(b, "idle", lambda: False)():   # nodead-1126: a cell with nothing to act on is not shown (IDLE_HIDDEN)
+                    b.hide()
+                    continue
+                b.show()
                 b.setGeometry(s(1) + s(33) * col, s(2) + s(23) * r, b.sizeHint().width(), s(23))
             self.resize(s(1) + s(33) * (ncols - 1) + s(24) + s(2), s(70))
             return
@@ -302,6 +311,8 @@ class RibbonPage(QtWidgets.QWidget):
                 for b in w.buttons:
                     b.set_show_mode(small)
                 w.arrange()
+            elif isinstance(w, GroupBox):
+                w.arrange()             # nodead-1126: a grid places its cells again (an idle one drops out)
 
     def _set_compact(self, on):
         """Use Large Buttons with Text off: every button a small icon, the groups side by side in one row
@@ -450,17 +461,41 @@ class NativeActionButton(QtWidgets.QWidget):
         if e.button() == Qt.LeftButton and self._down:
             self._down = False
             self.update()
-            if alive(self.action) and self.action.isEnabled() and self.rect().contains(e.position().toPoint()):
-                if self.action.menu() is not None:
-                    self.action.menu().popup(self.mapToGlobal(QtCore.QPoint(0, self.height())))
-                else:
-                    self.action.trigger()
+            if alive(self.action) and self.rect().contains(e.position().toPoint()):
+                self._nogrey_click()        # nogrey-1126 (rcmenus): NO DEAD CONTROLS on the workbench tabs
+
+    def _nogrey_click(self):
+        """FreeCAD's action when it can act; its submenu through menunotready's live proxy (no greyed row); else
+        the "what to do first" page (menunotready.text_for)."""
+        a = self.action
+        try:
+            from . import menunotready
+        except Exception:
+            menunotready = None
+        if a.menu() is not None:
+            menu = a.menu()
+            if menunotready is not None:
+                try:
+                    menu.aboutToShow.emit()
+                    proxy = QtWidgets.QMenu(self)
+                    proxy.setAttribute(Qt.WA_DeleteOnClose)
+                    menunotready.proxy_actions(proxy, menu.actions())
+                    menu = proxy
+                except Exception as _fw_err:
+                    _fw_log("ribbon.py:nogrey-menu", _fw_err)
+            menu.popup(self.mapToGlobal(QtCore.QPoint(0, self.height())))
+        elif a.isEnabled() or menunotready is None:
+            if a.isEnabled():
+                a.trigger()
+        else:
+            name = a.objectName() or ""
+            menunotready.tell(a.text(), menunotready.text_for(name, a.text()))
 
     def paintEvent(self, e):
         if not alive(self.action):
             return
         p = QtGui.QPainter(self)
-        enabled = self.action.isEnabled()
+        enabled = True      # nogrey-1126 (rcmenus): never drawn grey, a click says what to do first
         from .widgets import T, hairline_pen          # the theme's colours (widgets has no DOWN_FILL... names)
         DOWN_FILL, DOWN_LINE, HOVER_FILL, HOVER_LINE = T.down, T.down_line, T.hover, T.hover_line
         TEXT, TEXT_DISABLED = T.text, T.text_disabled
@@ -483,6 +518,7 @@ class NativeActionButton(QtWidgets.QWidget):
 class TabRow(QtWidgets.QWidget):
     current_changed = QtCore.Signal(int)
     toggle_collapse = QtCore.Signal()
+    reordered = QtCore.Signal(int, int)       # tabdrag-1126: (from tab, to tab) after a tab is dragged along the row
 
     PAD = 6.0
 
@@ -496,6 +532,9 @@ class TabRow(QtWidgets.QWidget):
         self._shown = 0      # how many tabs fit; the rest sit behind the >> at the row's end
         self._order = []     # cmrow-1120: tab indexes in the order drawn (the current tab is always among the shown)
         self._labels = []    # cmtabfit-1120: each tab's text as drawn (shortened with ".." when the row is narrow)
+        self._press = None   # tabdrag-1126: (tab index, x) where a drag along the row may start
+        self._dragging = False
+        self._drop = -1      # the tab slot a dragged tab would go to
         self.setMouseTracking(True)
         self.setFont(ui_font())
         self.k = ui_scale()
@@ -508,6 +547,7 @@ class TabRow(QtWidgets.QWidget):
     def set_titles(self, titles):
         self.titles = list(titles)
         self.current = min(self.current, max(0, len(self.titles) - 1))
+        self._press, self._dragging, self._drop = None, False, -1
         self.update()
 
     def set_current(self, index):
@@ -642,7 +682,27 @@ class TabRow(QtWidgets.QWidget):
                 return self._order[pos] if pos < len(self._order) else pos     # cmrow-1120: the tab's own index
         return -1
 
+    def _slot_at(self, pos):
+        """tabdrag-1126: the tab a dragged tab is over (the nearest one past either end)."""
+        i = self._index_at(pos)
+        if i >= 0 or not self._spans[:self._shown]:
+            return i
+        dpr = self.devicePixelRatioF()
+        xp = pos.x() * dpr
+        spans = self._spans[:self._shown]
+        pos_i = 0 if xp < spans[0][0] else len(spans) - 1
+        return self._order[pos_i] if pos_i < len(self._order) else pos_i
+
     def mouseMoveEvent(self, e):
+        if self._press is not None and e.buttons() & Qt.LeftButton and not self.collapsed:
+            if not self._dragging and abs(e.position().x() - self._press[1]) > 6 * self.k \
+                    and 0 <= e.position().y() <= self.height():
+                self._dragging = True
+                self.setCursor(Qt.SizeHorCursor)
+            if self._dragging:
+                self._drop = self._slot_at(e.position())
+                self.update()
+                return
         i = self._index_at(e.position())
         r = self.more_rect()
         if i < 0 and r is not None and r.contains(e.position().toPoint()):
@@ -664,9 +724,21 @@ class TabRow(QtWidgets.QWidget):
                 return
             i = self._index_at(e.position())
             if i >= 0:
+                self._press = (i, e.position().x())
                 if self.collapsed:
                     self.toggle_collapse.emit()
                 self.set_current(i)
+
+    def mouseReleaseEvent(self, e):
+        press, drop, dragging = self._press, self._drop, self._dragging
+        self._press, self._dragging, self._drop = None, False, -1
+        if dragging:
+            self.unsetCursor()
+            self.update()
+            if press is not None and drop >= 0 and drop != press[0]:
+                self.reordered.emit(press[0], drop)
+            return
+        super().mouseReleaseEvent(e)
 
     def mouseDoubleClickEvent(self, e):
         if self._index_at(e.position()) >= 0:
@@ -697,6 +769,16 @@ class TabRow(QtWidgets.QWidget):
                 p.fillRect(a, body_top, b - a, body_bottom - body_top, T.tab_hover)
             p.fillRect(b, top, 1, body_bottom - top, T.line)
         p.restore()
+        if self._dragging and self._press is not None and self._drop >= 0 and spans:
+            # tabdrag-1126: where the tab will go: a bar at the start of that tab (end of it when moving right)
+            pos_of = {self._order[k]: k for k in range(min(len(spans), len(self._order)))}
+            k = pos_of.get(self._drop)
+            if k is not None:
+                x = spans[k][1] if self._drop > self._press[0] else spans[k][0]
+                p.save()
+                p.scale(1.0 / dpr, 1.0 / dpr)
+                p.fillRect(int(x) - 1, 1, 3, H - 2, T.text)
+                p.restore()
         r = self.more_rect()
         if r is not None:
             if self._hover == -2:
@@ -788,7 +870,44 @@ class MenuStrip(QtWidgets.QWidget):
         self.pin.setCheckable(True)
         self.pin.toggled.connect(self._pin_toggled)
         self._buttons = []
+        self._watched_bar = None
+        self._pending = False
         self.hide()
+
+    # mbletters-1127: the strip follows the menu bar while it shows (pinned, a part opened or closed, a
+
+    def eventFilter(self, obj, event):
+        try:
+            if event.type() in (QtCore.QEvent.ActionChanged, QtCore.QEvent.ActionAdded, QtCore.QEvent.ActionRemoved):
+                self._later()
+        except Exception as _fw_err:
+            _fw_log("ribbon.py:strip_watch", _fw_err)
+        return False
+
+    def _later(self):
+        if not self._pending:
+            self._pending = True
+            QtCore.QTimer.singleShot(0, self._follow_bar)
+
+    def _shown_menus(self):
+        bar = self.shell.native_menubar()
+        return [a.text() for a in (bar.actions() if bar is not None else []) if a.menu() is not None and a.isVisible()]
+
+    def _follow_bar(self):
+        self._pending = False
+        if not alive(self) or not self.isVisible():
+            return
+        if self.any_menu_open():         # never under an open menu: again once it closes
+            QtCore.QTimer.singleShot(300, self._later)
+            return
+        if [b.text() for b in self._buttons if alive(b)] == self._shown_menus():
+            return
+        self.rebuild()
+        for b in self._buttons + [self.pin]:     # added to a shown strip: shown now, so the width counts them
+            b.show()
+        self._layout.activate()
+        self.resize(self.sizeHint().width(), self.height())
+        self.shell.qat_relayout()
 
     def _pin_toggled(self, on):
         self.pinned = on
@@ -798,6 +917,11 @@ class MenuStrip(QtWidgets.QWidget):
             customizedlg._p().SetBool("MenusPinned", bool(on))
         except Exception as _fw_err:
             _fw_log("ribbon.py:pin_save", _fw_err)
+        if not on:
+            try:
+                self.parentWidget()._hide_timer.start()
+            except Exception as _fw_err:
+                _fw_log("ribbon.py:unpin_hide", _fw_err)
         self.shell.qat_relayout()
 
     def rebuild(self):
@@ -807,6 +931,9 @@ class MenuStrip(QtWidgets.QWidget):
         self._buttons = []
         self._layout.removeWidget(self.pin)
         bar = self.shell.native_menubar()
+        if bar is not None and bar is not self._watched_bar:
+            bar.installEventFilter(self)
+            self._watched_bar = bar
         actions = list(bar.actions()) if bar is not None else []
         for action in actions:
             menu = action.menu()
@@ -1069,14 +1196,15 @@ class QatRow(QtWidgets.QWidget):
         self._document_text = ""
         self.search = SearchBox(shell, self)
         win = shell.window
-        self.help = FlatButton(icons.family("MINMAX_HELP"), "Help", (36, 33), 20, self)
+        self.help = FlatButton(icons.family("MINMAX_HELP"), "Help", (36, 33), 20, self,
+                               glyph=glyph_help)       # helpglyph-1127
         self.help.clicked.connect(lambda: shell.show_help_menu(self.help))
         self.minimize = FlatButton(icons.family("MINMAX_MINIMIZE"), "Minimize", (36, 33), 20, self,
                                    glyph=glyph_minimize)
         self.minimize.clicked.connect(win.showMinimized)
-        self.span = FlatButton(icons.family("MINMAX_SPAN_TB"), "Span the screen height", (36, 33), 20, self,
+        self.span = FlatButton(icons.family("MINMAX_SPAN_TB"), "Span Displays", (36, 33), 20, self,
                                glyph=glyph_span)
-        self.span.clicked.connect(shell.span_height)
+        self.span.clicked.connect(shell.span_displays)
         self.maximize = FlatButton(icons.family("MINMAX_MAXIMIZE"), "Maximize", (36, 33), 20, self,
                                    glyph=glyph_maximize)
         self.maximize.clicked.connect(shell.toggle_maximized)
@@ -1115,6 +1243,10 @@ class QatRow(QtWidgets.QWidget):
         maxed = mw.isMaximized() or self.shell._fills(mw.geometry())     # a full-screen "normal" size too
         self.maximize.set_icon(icons.family("MINMAX_RESTORE" if maxed else "MINMAX_MAXIMIZE"))
         self.maximize.setToolTip("Restore Down" if maxed else "Maximize")
+        try:
+            self.span.setToolTip("Restore" if self.shell.spanned() else "Span Displays")
+        except Exception as _fw_err:
+            _fw_log("ribbon.py:span_tip", _fw_err)
 
     def show_menus(self):
         if not self.menus.isVisible():
@@ -1261,6 +1393,7 @@ class TopBar(QtWidgets.QWidget):
         self.stack.setAutoFillBackground(False)
         self.tabs = TabRow(self)
         self.tabs.current_changed.connect(self._tab_changed)
+        self.tabs.reordered.connect(self._reorder)
         self.tabs.toggle_collapse.connect(self.toggle_collapsed)
         self.chevron = FlatButton(glyph=glyph_chevron_right, size=(16, 16), parent=self,
                                   hover_fill="tab_hover", down_fill="down")
@@ -1329,6 +1462,11 @@ class TopBar(QtWidgets.QWidget):
         self.stack.removeWidget(blank)
         blank.deleteLater()
         self.pages = list(pages)
+        try:
+            from . import cmtabs
+            self.pages = cmtabs.ordered(self.pages)     # tabdrag-1126: the order the user made by dragging
+        except Exception as _fw_err:
+            _fw_log("ribbon.py:taborder", _fw_err)
         for page in self.pages:
             self.stack.addWidget(page)
         self.tabs.set_titles([shown_title(p) for p in self.pages])
@@ -1370,6 +1508,27 @@ class TopBar(QtWidgets.QWidget):
         if not self.pages:
             return None
         return self.pages[self.stack.currentIndex()]
+
+    def _reorder(self, src, dst):
+        ""
+
+        if not (0 <= src < len(self.pages) and 0 <= dst < len(self.pages)) or src == dst:
+            return
+        shown = self.pages[self.tabs.current] if 0 <= self.tabs.current < len(self.pages) else None
+        page = self.pages.pop(src)
+        self.pages.insert(dst, page)
+        self.stack.removeWidget(page)
+        self.stack.insertWidget(dst, page)
+        self.tabs.set_titles([shown_title(p) for p in self.pages])
+        self.tabs.current = self.pages.index(shown) if shown in self.pages else 0
+        self.stack.setCurrentIndex(self.tabs.current)
+        self.tabs.update()
+        self._layout_pages()
+        try:
+            from . import cmtabs
+            cmtabs.remember_order([p.title for p in self.pages])
+        except Exception as _fw_err:
+            _fw_log("ribbon.py:remember_order", _fw_err)
 
     def _tab_changed(self, index):
         if 0 <= index < len(self.pages):

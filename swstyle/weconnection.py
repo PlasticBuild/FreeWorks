@@ -79,7 +79,7 @@ NOT_PLANAR = "The primary reference must be a flat face or a plane."
 NO_SIMILAR = "No similar corners found."
 NOT_AT_CORNER = "Select a connection element inserted at a corner."
 OPEN_ELSEWHERE = "The connection element is open in another window. Close it before you insert it."
-NONE_FOUND = "No connection elements in the folder: define one and save it in %s."
+NONE_FOUND = "No connection elements found. Define one first."
 
 
 def _weicon(name, key=None):
@@ -1629,7 +1629,9 @@ class InsertPanel(_Closing):
             self._load_element(keep=True)
             self.tabs.setCurrentIndex(1)
         elif not standards() or not any(types(s) for s in standards()):
-            self.show_error(NONE_FOUND % library())
+
+            self.show_error(NONE_FOUND)
+            self.error.setToolTip("Connection elements are saved in %s" % library())
         self._show()
         Gui.Selection.clearSelection()
         Gui.Selection.addObserver(self)

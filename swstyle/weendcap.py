@@ -107,9 +107,19 @@ def cap_shape(obj, body, end):
         edges = [e for e in solid.Edges if e.Curve.TypeId == "Part::GeomLine"
                  and abs(abs((e.Vertexes[1].Point - e.Vertexes[0].Point).normalize().dot(n)) - 1) < 1e-7
                  and all(f.Surface.TypeId == "Part::GeomPlane" for f in solid.ancestorsOfType(e, Part.Face))]
-        if edges:
-            size = float(obj.CornerSize)
-            solid = solid.makeFillet(size, edges) if obj.CornerType == "Fillet" else solid.makeChamfer(size, edges)
+        size = float(obj.CornerSize)
+        if not edges:
+            # a rounded profile (a tube with its corner radii) has no sharp straight corners: the treatment
+            # then goes on the cap's outer face edge all round, so the option never does nothing
+            far = max(solid.Faces, key=lambda f: f.CenterOfMass.dot(n) if f.normalAt(0, 0).dot(n) > 0.99 else -1e9)
+            edges = list(far.OuterWire.Edges)
+        for make in ((solid.makeFillet if obj.CornerType == "Fillet" else solid.makeChamfer),):
+            try:
+                solid = make(size, edges)
+            except Exception as _fw_err:
+                _fw_log("weendcap.py:corner", _fw_err)
+                raise RuntimeError("End Cap: the %s of %g does not fit this cap; use a smaller size."
+                                   % (obj.CornerType.lower(), size))
     return solid
 
 
@@ -483,7 +493,7 @@ class Panel:
                 _fw_log("weendcap.py:454", _fw_err)
             return
         if sub.startswith("Face"):
-            QtCore.QTimer.singleShot(0, lambda: self._picked(doc, name, sub))
+            from . import safe_later as _sl; _sl.later(0, lambda: self._picked(doc, name, sub), self, "error")
 
     def _picked(self, doc_name, name, sub):
         # The panel can close between addSelection and this queued callback. Recheck before touching

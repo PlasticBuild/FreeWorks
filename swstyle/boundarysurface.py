@@ -1090,8 +1090,8 @@ class Panel:
         QtCore.QTimer.singleShot(0, lambda: self._picked(name, sub))
 
     def _picked(self, name, sub):
-        if self.busy:
-            return
+        if self.busy or getattr(self, "_closed", False):
+            return          # a pick queued before OK / Cancel: the page and its lists are gone
         self.busy = True
         try:
             Gui.Selection.clearSelection()
@@ -1192,6 +1192,7 @@ class Panel:
         self.drag_log = []
 
     def _close(self):
+        self._closed = True
         self._drop_drags()
         _open["panel"] = None
         try:
@@ -1222,6 +1223,7 @@ class Panel:
 
     def reject(self):
         doc = self.obj.Document
+        self._closed = True
         self._drop_drags()
         _open["panel"] = None
         try:

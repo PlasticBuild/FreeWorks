@@ -8,6 +8,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -522,12 +523,59 @@ def open_manager():
 NATIVE_BUTTONS = ("buttonSpineBase", "buttonProfileBase", "buttonRefAdd", "buttonSectionAdd", "buttonProfile")
 
 
+def _open_task_view():
+    """pkg458-v3: the task view now showing, or None."""
+    for w in Gui.getMainWindow().findChildren(QtWidgets.QWidget):
+        try:
+            if w.metaObject().className() == "Gui::TaskView::TaskView" and w.isVisible():
+                return w
+        except RuntimeError:
+            continue
+    return None
+
+
+def _page_widgets(cls, names):
+    ""
+
+
+    view = _open_task_view()
+    if view is None:
+        return []
+    out = []
+    for name in names:
+        found = view.findChildren(cls, name)
+        shown = [w for w in found if w.isVisible()]
+        out += shown or (found if len(found) == 1 else [])
+    # loftcancel-1127: a PartDesign page whose feature Cancel already took out has no view provider left, and
+    # pressing or letting go of its pick buttons then crashed FreeCAD (TaskLoftParameters::setSelectionMode)
+    return [w for w in out if not _feature_gone(w)]
+
+
+def _feature_gone(widget):
+    """loftcancel-1127: widget sits on a PartDesign feature page and the feature in edit is gone."""
+    try:
+        p = widget
+        while p is not None and not p.metaObject().className().startswith("PartDesignGui::Task"):
+            p = p.parentWidget()
+        if p is None:
+            return False
+        gdoc = Gui.ActiveDocument
+        edit = gdoc.getInEdit() if gdoc is not None else None
+        obj = edit.Object if edit is not None else None
+        return not (obj is not None and obj.Document is not None and obj.Document.getObject(obj.Name) is obj
+                    and not getattr(obj, "Removing", False))
+    except Exception:
+        return True
+
+
 def _suspend_native(bar):
     """FreeCAD's own pick buttons (pressed = its selection gate) let go while the bar takes the
     picks; Cancel presses them again."""
     try:
-        for b in Gui.getMainWindow().findChildren(QtWidgets.QAbstractButton):
-            if b.objectName() in NATIVE_BUTTONS and b.isVisible() and b.isChecked():
+        for b in _page_widgets(QtWidgets.QAbstractButton, NATIVE_BUTTONS):
+
+            # open task page still takes the click
+            if b.isChecked():
                 b.setChecked(False)
                 bar.suspended.append(b)
     except Exception as _fw_err:
@@ -541,7 +589,7 @@ def _suspend_native(bar):
 def _resume_native(bar):
     for b in list(getattr(bar, "suspended", ())):
         try:
-            if b.isVisible() and not b.isChecked():
+            if b in _page_widgets(QtWidgets.QAbstractButton, (b.objectName(),)) and not b.isChecked():
                 b.setChecked(True)
         except RuntimeError as _fw_err:
             _fw_log("selman.py:535", _fw_err)
@@ -611,7 +659,7 @@ def commit():
 def _editing():
     try:
         edit = Gui.ActiveDocument.getInEdit()
-        return edit.Object if edit is not None else None
+        return editobj.of(edit) if edit is not None else None
     except Exception:
         return None
 
@@ -630,8 +678,31 @@ def _commit_path(picked):
         _refresh_native("spineBaseEdit", obj, subs)
         QtCore.QTimer.singleShot(200, lambda: _refresh_native("spineBaseEdit", obj, subs))   # after FreeCAD's own update
         return
+    if feature is not None and "Path" in feature.PropertiesList and getattr(feature, "SWStyleKind", ""):
+        # FreeCAD's own Sweep feature (Circular Profile, twists...): the group is the path as picked. One by
+        # one through the page, each click replaced the last and a sketch edge stood for the whole sketch
+        try:
+            from . import loftsweep
+            feature.Path = [(obj, [s]) for s in subs]
+            loftsweep.keep_edges(feature, "Path", obj, subs)
+            feature.Document.recompute()
+            _show_page()
+            return
+        except Exception as error:
+            App.Console.PrintLog("FreeCAD SelectionManager: sweep path: %s\n" % error)
     for o, sub in picked:
         Gui.Selection.addSelection(o.Document.Name, o.Name, sub)
+
+
+def _show_page():
+    """The open FreeCAD page shows the picks it was handed."""
+    try:
+        dialog = Gui.Control.activeTaskDialog() if hasattr(Gui.Control, "activeTaskDialog") else None
+        panel = getattr(dialog, "_show", None) and dialog
+        if panel is not None:
+            panel._show()
+    except Exception as _fw_err:
+        _fw_log("selman.py:show_page", _fw_err)
 
 
 def _commit_profile(picked):
@@ -668,12 +739,12 @@ def _refresh_native(edit_name, obj, subs):
     """FreeCAD's own line edit (which the page's box reads) shows the pick, and its pick button
     lets go, as after a pick of FreeCAD's own."""
     try:
-        for edit in Gui.getMainWindow().findChildren(QtWidgets.QLineEdit, edit_name):
-            if edit.isVisible():
+        for edit in _page_widgets(QtWidgets.QLineEdit, (edit_name,)):     # pkg458-v3: shown or hidden (Loft)
+            if True:
                 edit.setText("%s:%s" % (obj.Label, ",".join(subs)) if subs and subs[0] else obj.Label)
         button = {"spineBaseEdit": "buttonSpineBase", "profileBaseEdit": "buttonProfileBase"}.get(edit_name)
-        for b in Gui.getMainWindow().findChildren(QtWidgets.QAbstractButton, button or "-"):
-            if b.isVisible() and b.isChecked():
+        for b in _page_widgets(QtWidgets.QAbstractButton, (button,) if button else ()):
+            if b.isChecked():
                 b.setChecked(False)
     except Exception as _fw_err:
         _fw_log("selman.py:667", _fw_err)

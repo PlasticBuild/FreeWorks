@@ -639,6 +639,119 @@ def make_independent(asm, comp, path=None):
     return new_doc
 
 
+def _holder(comp):
+    """The subassembly component in the top assembly that shows comp (one of its copies of its parts)."""
+    for o in getattr(comp, "InList", []):
+        if ac.is_subassembly(o) and comp in (getattr(o, "Group", None) or []):
+            return o
+    return None
+
+
+def _next_copy(path):
+    stem, ext = os.path.splitext(path)
+    n = 2
+    while os.path.exists("%s_%d%s" % (stem, n, ext)):
+        n += 1
+    return "%s_%d%s" % (stem, n, ext)
+
+
+def _shown_members(holder, sub_asm):
+    """{name of the subassembly's component: the top assembly's copy of it in holder}."""
+    members = set(ac.components(sub_asm))
+    return {g.LinkedObject.Name: g for g in (holder.Group or [])
+            if getattr(g, "LinkedObject", None) in members}
+
+
+def _holder_refs(asm, holder):
+    """[(mate, property, index of the path in it, the copy's name in the path)] of the top
+    assembly's mates on the parts inside holder."""
+    out = []
+    for m in ac.mates(asm):
+        for prop in ("Reference1", "Reference2"):
+            ref = getattr(m, prop, None)
+            if not ref:
+                continue
+            for k, path in enumerate(ref[1]):
+                parts = path.split(".")
+                if ref[0] is holder and len(parts) > 1:
+                    out.append((m, prop, k, 0))
+                elif ref[0] is asm and len(parts) > 2 and parts[0] == holder.Name:
+                    out.append((m, prop, k, 1))
+    return out
+
+
+def make_nested_independent(comp):
+    ""
+
+
+
+
+
+    from . import asmmenu
+    got = asmmenu.inner_source(comp)
+    holder = _holder(comp)
+    asm = asmmenu.assembly_of(holder) if holder is not None else None
+    if got is None or asm is None:
+        return None
+    sub_asm, src = got
+    sub_doc = sub_asm.Document
+    part_doc = part_document(src)
+    if part_doc is None or not part_doc.FileName or not sub_doc.FileName:
+        _tell("Make Independent", "Save the subassembly and its parts first.")
+        return None
+    for d in (part_doc, sub_doc):
+        if d.isTouched() if hasattr(d, "isTouched") else False:
+            d.save()
+    part_path = _next_copy(part_doc.FileName)
+    sub_path = _next_copy(sub_doc.FileName)
+    shutil.copyfile(part_doc.FileName, part_path)
+    shutil.copyfile(sub_doc.FileName, sub_path)
+    new_part = App.openDocument(part_path, True)
+    new_sub = App.openDocument(sub_path, True)
+    new_asm = new_sub.getObject(sub_asm.Name)
+    new_src = new_sub.getObject(src.Name)
+    target = new_part.getObject(src.LinkedObject.Name) if src.LinkedObject is not None else None
+    if new_asm is None or new_src is None:
+        _tell("Make Independent", "The copy of the subassembly could not be read.")
+        return None
+    new_src.LinkedObject = target or ac.part_object(new_part)
+    if new_part.Label != part_doc.Label:
+        new_src.Label = ac._instance(new_asm, new_part.Label)
+    new_sub.recompute()
+    new_sub.save()
+    # the top assembly: holder shows the new subassembly; its mates on the parts inside follow
+    before = _shown_members(holder, sub_asm)
+    old_names = {g.Name: name for name, g in before.items()}
+    refs = _holder_refs(asm, holder)
+    places = {c.Name: App.Placement(c.Placement) for c in ac.components(asm)}
+    inside = {name: App.Placement(g.Placement) for name, g in before.items()}
+    holder.LinkedObject = new_asm
+    holder.recompute()
+    after = _shown_members(holder, new_asm)
+    if ac.is_flexible(holder):      # a flexible subassembly's parts keep where the top assembly moved them
+        for name, g in after.items():
+            if name in inside:
+                g.Placement = inside[name]
+    for m, prop, k, at in refs:
+        ref = getattr(m, prop)
+        paths = list(ref[1])
+        parts = paths[k].split(".")
+        name = old_names.get(parts[at])
+        if name in after:
+            parts[at] = after[name].Name
+            paths[k] = ".".join(parts)
+            setattr(m, prop, (ref[0], paths))
+    for c in ac.components(asm):
+        if c.Name in places:
+            c.Placement = places[c.Name]
+    if new_sub.Label != sub_doc.Label:
+        holder.Label = ac._instance(asm, new_sub.Label)
+    asm.Document.recompute()
+    ac.solve(asm)
+    _refresh()
+    return new_sub
+
+
 # ----------------------------------------------------------------------------- Component Display
 _display_nodes = {}
 

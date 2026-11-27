@@ -70,8 +70,18 @@ class _Live:
                 text = next((c.label for c in catalog.BY_KEY.values() if self.native in c.natives), "") or text
             except Exception as _fw_err:
                 _fw_log("sketchfirstlive.py:70", _fw_err)
+        tip = info.get("toolTip", "") or ""
+        if not tip or tip == self.native:
+            # the native has no tooltip of its own: the catalog's tip, else the label (never the command name)
+            try:
+                from . import catalog
+                tip = next((c.tip for c in catalog.BY_KEY.values() if self.native in c.natives and c.tip), "")
+            except Exception as _fw_err:
+                _fw_log("sketchfirstlive.py:tip", _fw_err)
+                tip = ""
+            tip = tip or text or ""
         return {"Pixmap": info.get("pixmap", "") or "", "MenuText": text or self.native,
-                "ToolTip": info.get("toolTip", "") or "", "CmdType": "ForEdit"}
+                "ToolTip": tip, "CmdType": "ForEdit"}
 
     def IsActive(self):
         cmd = Gui.Command.get(self.native)

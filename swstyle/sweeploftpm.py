@@ -64,9 +64,32 @@ def _set_items(box, names):
 
 
 def _press(button, on=True):
-    """Put FreeCAD's selection button in the state wanted (it toggles on click)."""
+    """Put FreeCAD's selection button in the state wanted (it toggles on click). Only while a task page is up:
+    after OK or Cancel FreeCAD's task is gone before its widgets, and a click then crashed in
+    TaskLoftParameters::setSelectionMode (a timer firing right after Cancel)."""
+    try:
+        if not Gui.Control.activeDialog():
+            return
+    except Exception:
+        return
+    if not _edit_alive():      # loftcancel-1127: Cancel took the feature out, the page has no view provider left
+        return
     if button is not None and _alive(button) and button.isCheckable() and button.isChecked() != on:
         button.click()
+
+
+def _edit_alive():
+    """loftcancel-1127: the feature whose page is open is still in its document and not on its way out.
+    FreeCAD's Cancel takes a new Loft or Sweep out before its page goes, and a click on the page's pick buttons
+    in between crashed FreeCAD (TaskLoftParameters::setSelectionMode with its view provider gone)."""
+    try:
+        gdoc = Gui.ActiveDocument
+        edit = gdoc.getInEdit() if gdoc is not None else None
+        obj = edit.Object if edit is not None else None
+        return (obj is not None and obj.Document is not None and obj.Document.getObject(obj.Name) is obj
+                and not getattr(obj, "Removing", False))
+    except Exception:
+        return False
 
 
 def _hide_row(widget):
@@ -124,6 +147,15 @@ def _form(panel, name):
     return top.findChild(QtWidgets.QWidget, name)
 
 
+def _native_variants(text):
+    """FreeCAD's text and its translation (a translated FreeCAD names its boxes in its language)."""
+    try:
+        from . import propertymanager
+        return propertymanager.native_variants(text)
+    except Exception:
+        return {text}
+
+
 def _retitle(widget, old, new):
     """Rename the QSint box header holding widget."""
     group = widget
@@ -134,7 +166,7 @@ def _retitle(widget, old, new):
     for header in group.findChildren(QtWidgets.QWidget):
         if header.inherits("QSint::TaskHeader"):
             for l in header.findChildren(QtWidgets.QWidget):
-                if hasattr(l, "text") and callable(l.text) and l.text() == old:
+                if hasattr(l, "text") and callable(l.text) and l.text() in _native_variants(old):
                     l.setText(new)
                     return True
     return False
@@ -267,6 +299,8 @@ class SweepBoxes(QtCore.QObject):
         if not _alive(self.panel) or not _alive(self.profile):
             self.timer.stop()
             return
+        if _page_open(self.feature):
+            whole_sketches(self.feature)
         prof, path = self._text(self.profile_edit), self._text(self.path_edit)
 
         prof = _link_text(getattr(self.feature, "Profile", None)) or prof
@@ -611,10 +645,19 @@ class LoftBoxes(QtCore.QObject):
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.sync)
         self.timer.start(150)
+        # a sketch picked by its edge becomes the whole sketch a moment later, while the page is still open
+        self.whole_timer = QtCore.QTimer(self)
+        self.whole_timer.setSingleShot(True)
+        self.whole_timer.setInterval(200)
+        self.whole_timer.timeout.connect(self._whole)
         panel.destroyed.connect(self.stop)
         QtCore.QTimer.singleShot(0, self.sync)
         # FreeCAD resets its selection mode while the panel finishes opening: press again after
         QtCore.QTimer.singleShot(400, self._kick)
+
+    def _whole(self):
+        if self.active and _alive(self.panel) and _page_open(self.feature):
+            whole_sketches(self.feature)
 
     def _kick(self):
         if not _alive(self.panel) or not self.active:
@@ -624,6 +667,10 @@ class LoftBoxes(QtCore.QObject):
         _press(button, True)
 
     def stop(self, *args):
+        try:
+            self.whole_timer.stop()
+        except Exception as _fw_err:
+            _fw_log("sweeploftpm.py:whole", _fw_err)
         try:
             Gui.Selection.removeObserver(self)
         except Exception as _fw_err:
@@ -699,6 +746,8 @@ class LoftBoxes(QtCore.QObject):
         if obj.TypeId == "Sketcher::SketchObject" and pnt is not None and any(pnt):
 
             QtCore.QTimer.singleShot(250, lambda o=obj, p=App.Vector(*pnt): connector_at_click(o, p))
+        if obj.TypeId == "Sketcher::SketchObject":
+            self.whole_timer.start()
 
     def take_out(self, row):
         """Delete: profile row goes (row 0 is the first profile, the rest the sections, through
@@ -759,7 +808,7 @@ class LoftBoxes(QtCore.QObject):
             self.known = {(x[0] if isinstance(x, (list, tuple)) else x).Name for x in self.feature.Sections}
         except Exception:
             self.known = set()
-        if self.active and not self.removing:
+        if self.active and not self.removing and not _selman_open():
             if self.base_edit is not None and not self.base_edit.text().strip():
                 _press(self.base_button, True)
             else:
@@ -767,6 +816,72 @@ class LoftBoxes(QtCore.QObject):
                 _press(self.add_button, True)
         pmboxes.mark(self.profiles, bool(self.active), need=len(self.names()) < 2)
         extrudepm._hide_native_extras(self.view)
+
+
+def _selman_open():
+    """SelectionManager's bar is up: it takes the picks, FreeCAD's buttons stay let go until its OK."""
+    try:
+        from . import selman
+        return selman.is_open()
+    except Exception:
+        return False
+
+
+def _page_open(feature):
+    """The feature's own page is still up (OK and Cancel close it; Cancel may have taken the feature out)."""
+    try:
+        if feature is None or feature.Document is None or feature.Document.getObject(feature.Name) is not feature:
+            return False
+        if not Gui.Control.activeDialog():
+            return False
+        gdoc = Gui.getDocument(feature.Document.Name)
+        edit = gdoc.getInEdit() if gdoc is not None else None
+        return edit is not None and edit.Object is feature
+    except Exception:
+        return False
+
+
+def _whole(link):
+    ""
+
+
+
+
+    try:
+        obj, subs = link[0], [x for x in (link[1] or []) if x]
+        if obj is None or obj.TypeId != "Sketcher::SketchObject" or not subs:
+            return None
+        if not all(x.startswith(("Edge", "Vertex")) for x in subs) or len(obj.Shape.Wires) != 1 or not obj.Shape.Wires[0].isClosed():
+            return None
+        if any(x.startswith("Vertex") for x in subs) and len(obj.Shape.Vertexes) != len(obj.Shape.Wires[0].Vertexes):
+            return None
+        return (obj, [])
+    except Exception:
+        return None
+
+
+def whole_sketches(feature):
+    """Profile and Sections of a loft or sweep as whole sketches where they were picked by an edge; True when changed."""
+    changed = False
+    try:
+        prof = getattr(feature, "Profile", None)
+        w = _whole(prof) if prof else None
+        if w is not None:
+            feature.Profile = w
+            changed = True
+        if "Sections" in feature.PropertiesList and feature.Sections:
+            out = []
+            for x in feature.Sections:
+                w = _whole(x)
+                out.append((w[0], [""]) if w is not None else x)
+                changed = changed or w is not None
+            if changed:
+                feature.Sections = out
+        if changed:
+            feature.Document.recompute()
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: whole sketch profile: %s\n" % error)
+    return changed
 
 
 def connector_at_click(sketch, point):
@@ -793,6 +908,7 @@ def _loft_options(panel):
     if closed is None or ruled is None:
         return
     closed.setText("Close loft")
+    ruled.setText("Ruled surface")
     closed.setToolTip("Join the last profile back to the first")
     ruled.setToolTip("Straight sides between the profiles instead of a smooth surface")
     title = _title(panel, "Options")

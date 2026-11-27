@@ -44,6 +44,11 @@ NOTCH = 120.0                        # one wheel notch, in Qt's eighths of a deg
 PULL = 0.0
 REACH = 8.0                          # the point zoomed about stays within this many view sizes
 
+# 0.2 gives exp(0.2) = x1.22. With FreeCAD's step at its default the notch is sent a little shorter so
+# one notch is x1.2; a Zoom step the user changed in FreeCAD's preferences is used as it is.
+SW_NOTCH = math.log(1.2)
+FREECAD_STEP = 0.2
+
 
 def reverse():
     return paths.params().GetBool(REVERSE, False)
@@ -73,15 +78,18 @@ def plan(delta, pos, size, invert=True, step=0.2, reversed_=False, centre_only=F
     if not delta or width < 2 or height < 2:
         return None
     zoom_out = (delta > 0) != bool(reversed_)
+    amount = abs(delta)
+    if abs(abs(step) - FREECAD_STEP) < 1e-9:
+        amount = max(1, int(round(amount * SW_NOTCH / FREECAD_STEP)))
     # FreeCAD zooms out for a positive delta, or for a negative one with Invert zoom on
-    sent = abs(delta) if zoom_out != bool(invert) else -abs(delta)
+    sent = amount if zoom_out != bool(invert) else -amount
     # FreeCAD's middle of the view: it divides pixel positions by the size less one
     cx, cy = (width - 1) / 2.0, (height - 1) / 2.0
     if centre_only:
         return sent, (cx, cy)
     if zoom_out:
         return sent, (cx, cy)
-    z = abs(step) * abs(delta) / NOTCH          # FreeCAD zooms by exp(z)
+    z = abs(step) * amount / NOTCH          # FreeCAD zooms by exp(z)
     if z < 1e-9:
         reach = 1.0 + PULL
     else:

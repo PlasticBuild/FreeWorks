@@ -16,7 +16,7 @@ def _fw_log(site, err):
     try:
         if site not in _FW_SEEN:
             _FW_SEEN.add(site)
-            __import__("FreeCAD").Console.PrintLog("FreeWorks %s: %s\n" % (site, err))
+            __import__("FreeCAD").Console.PrintLog("FreeCAD %s: %s\n" % (site, err))
     except Exception:
         return
 

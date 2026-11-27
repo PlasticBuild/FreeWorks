@@ -649,7 +649,8 @@ if Gui is not None:
                 return
             self.n = n = max(2, int(chart.get("ncolours", 10)))
             self.bar = SIZES.get(chart.get("size", "Normal"), 22)
-            self.labels = [fmt(hi - (hi - lo) * k / float(n), chart) for k in range(n + 1)]
+            # the bottom label is lo itself: hi - (hi - lo) read -1.421e-14 under a 0 minimum
+            self.labels = [fmt(lo if k == n else hi - (hi - lo) * k / float(n), chart) for k in range(n + 1)]
 
             # it on the bar with a red arrow when it falls inside the range
             self.yield_ = yield_
@@ -1388,6 +1389,13 @@ if Gui is not None:
         except RuntimeError as _fw_err:
             _fw_log("simplots.py:box", _fw_err)
 
+    def _dark():
+        try:
+            from . import style
+            return bool(style.dark())
+        except Exception:
+            return False
+
     def picture(kind, size=24):
         ""
 
@@ -1417,6 +1425,9 @@ if Gui is not None:
             g.drawRect(R(7, 3, 10, 6))
             g.drawRect(R(6, 13, 12, 8))
         elif kind == "Plot":
+            if _dark():                     # look-audit SIM-9: the axes and line read on Dark's dark button
+                ink, blue = QtGui.QColor("#c8d0da"), QtGui.QColor("#5aa0ff")
+                g.setPen(QtGui.QPen(ink, 1.4))
             g.drawLine(QtCore.QPointF(4 * k, 3 * k), QtCore.QPointF(4 * k, 20 * k))
             g.drawLine(QtCore.QPointF(4 * k, 20 * k), QtCore.QPointF(21 * k, 20 * k))
             g.setPen(QtGui.QPen(blue, 2))
@@ -2194,7 +2205,8 @@ if Gui is not None:
                 res = result(self.a)
                 vals = fos_values(self.a, res, self.values())
                 self.lowest = min(v for _n, v in _on_part(self.a, vals))
-                self.result.setText("Lowest factor of safety: %s" % "{:.6g}".format(self.lowest))
+                self.result.setText("Safety result\nBased on the appropriate criteria:\nMinimum factor of safety: %s"
+                                    % "{:.6g}".format(self.lowest))
             except Exception as e:
                 self.lowest = None
                 self.result.setText(str(e))
@@ -2420,11 +2432,11 @@ if Gui is not None:
             n = node_at_drawn(q) if q is not None else node_on_screen(node[0], ev.getPosition().getValue())
             if n is not None:
                 cb.setHandled()
-                QtCore.QTimer.singleShot(0, lambda: self.add_node(n))
+                from . import safe_later as _sl; _sl.later(0, lambda: self.add_node(n), self, "selected")
 
         def addSelection(self, doc, obj, sub, pnt):
             if self.selected.isChecked() and sub:
-                QtCore.QTimer.singleShot(0, lambda: self.pick(sub.split(".")[-1]))
+                from . import safe_later as _sl; _sl.later(0, lambda: self.pick(sub.split(".")[-1]), self, "picks")
             elif not self.by_node.isChecked():
                 QtCore.QTimer.singleShot(0, lambda: self.add(App.Vector(*pnt)))
 

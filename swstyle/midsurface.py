@@ -485,7 +485,7 @@ class Panel:
     def addSelection(self, doc, name, sub, point):
         if doc != self.obj.Document.Name:
             return
-        QtCore.QTimer.singleShot(0, lambda: self._picked(name, sub))
+        from . import safe_later as _sl; _sl.later(0, lambda: self._picked(name, sub), self, "note")
 
     def _picked(self, name, sub):
         if self.busy:

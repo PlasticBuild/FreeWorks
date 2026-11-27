@@ -28,14 +28,19 @@ SKETCHER = "User parameter:BaseApp/Preferences/Mod/Sketcher"
 _watcher = None
 
 
+COUNT = "sketch entities"
+
+
 def limit():
+    """The entity count over which Automatic Solve and Undo go off, or None when the box is cleared."""
     try:
         from .. import optionspages
-        text = str(optionspages.stored("Sketch", *ROW))
-    except Exception:
-        text = ROW[1]
-    m = re.search(r"\d+", text.replace(",", ""))
-    return int(m.group(0)) if m else 2000
+        if not optionspages.stored("Sketch", ROW[0], True):
+            return None
+        return max(1, int(optionspages.stored("Sketch", COUNT, 2000)))
+    except Exception as _fw_err:
+        _fw_log("fwsketch/bigsketch.py: limit", _fw_err)
+    return 2000
 
 
 def _edited():
@@ -67,7 +72,8 @@ class Watcher(QtCore.QObject):
                 return
             self.restore()
             self.sketch = sk
-            if sk is not None and len(sk.Geometry) > limit():
+            n = limit()
+            if sk is not None and n is not None and len(sk.Geometry) > n:
                 self.turn_off(sk)
         except Exception as error:
             App.Console.PrintLog("FreeCAD big sketch: %s\n" % error)

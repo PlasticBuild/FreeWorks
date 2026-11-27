@@ -88,7 +88,7 @@ def formats(v):
 
 def _store(v, table):
     if "SWEdgeFormats" not in v.PropertiesList:
-        v.addProperty("App::PropertyStringList", "SWEdgeFormats", "FreeCAD", "Line Format: edge style|width|colour")
+        v.addProperty("App::PropertyStringList", "SWEdgeFormats", "FreeCAD", "Line Format: edge style|width|color")
     v.SWEdgeFormats = ["%d|%d|%g|%s" % (i, st, w, ",".join("%g" % x for x in c))
                        for i, (st, w, c) in sorted(table.items())]
 
@@ -338,7 +338,7 @@ def _patch_lineformat():
 # ---------------------------------------------------------------- the toolbar's drawing buttons
 EXTRA = (("LayerProperties", "Layer Properties", "Opens the drawing's layers", "TechDraw_ToggleFrame"),
          ("HideShowEdges", "Hide/Show Edges", "Hides or shows model edges of a drawing view", "TechDraw_ShowAll"),
-         ("ColorDisplayMode", "Color Display Mode", "Shows the line colours set, or every line black",
+         ("ColorDisplayMode", "Color Display Mode", "Shows the line colors set, or every line black",
           "TechDraw_DecorateLine"))
 
 

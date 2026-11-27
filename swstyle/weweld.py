@@ -1181,7 +1181,7 @@ class Panel:
             elif self.stroke is not None:
                 points, self.stroke = self.stroke + [pos], None
                 cb.setHandled()
-                QtCore.QTimer.singleShot(0, lambda: self.smart_stroke(points))
+                from . import safe_later as _sl; _sl.later(0, lambda: self.smart_stroke(points), self, "error")
 
         def motion(cb):
             if self.stroke is not None:

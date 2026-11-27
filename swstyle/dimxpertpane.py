@@ -115,7 +115,11 @@ def features(doc):
                 groups[pk] += groups.pop(k)
     out = []
     counts = {}
-    for key in sorted((k for k in groups if k is not None), key=lambda k: (k[0], k[1])):
+
+    # face is Plane1 (face order gave Plane1 to Datum C after Auto Dimension Scheme)
+    made = {o.Name: n for n, o in enumerate(doc.Objects)}
+    first = {k: min(made.get(o.Name, 0) for o in v) for k, v in groups.items()}
+    for key in sorted((k for k in groups if k is not None), key=lambda k: (first[k], k[0], k[1])):
         obj = doc.getObject(key[0])
         try:
             kind = "Hole Pattern" if len(key[1]) > 1 else _face_kind(obj.Shape, key[1][0])

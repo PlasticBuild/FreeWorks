@@ -754,7 +754,7 @@ class Cleanup(QtWidgets.QDialog):
 
     def showEvent(self, event):
         super().showEvent(event)
-        QtCore.QTimer.singleShot(0, self.fit)
+        from . import safe_later as _sl; _sl.later(0, self.fit, self, "scene")
 
     def _draw(self):
         self.scene.clear()
@@ -770,7 +770,7 @@ class Cleanup(QtWidgets.QDialog):
             item.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable, True)
             item.setData(0, i)
         self._buttons()
-        QtCore.QTimer.singleShot(0, self.fit)
+        from . import safe_later as _sl; _sl.later(0, self.fit, self, "scene")
 
     def fit(self):
         r = self.scene.itemsBoundingRect()

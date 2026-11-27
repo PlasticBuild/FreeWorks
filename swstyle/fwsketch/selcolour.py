@@ -4,6 +4,7 @@
 
 
 
+from .. import editobj
 
 _FW_SEEN = set()
 
@@ -57,16 +58,16 @@ def swap_out():
 class _Watch:
     def slotInEdit(self, vp):
         try:
-            if vp.Object.isDerivedFrom("Sketcher::SketchObject"):
+            if editobj.derived(vp, "Sketcher::SketchObject"):
                 swap_in()
         except Exception as _fw_err:
             _fw_log("fwsketch/selcolour.py:60", _fw_err)
 
     def slotResetEdit(self, vp):
         try:
-            if vp.Object.isDerivedFrom("Sketcher::SketchObject"):
+            if editobj.derived(vp, "Sketcher::SketchObject"):
                 swap_out()
-                doc = vp.Object.Document
+                doc = editobj.of(vp).Document
                 from PySide import QtCore as _qc
                 _qc.QTimer.singleShot(0, lambda: _prune(doc))
         except Exception as _fw_err:
@@ -94,7 +95,7 @@ def start():
     try:
         gdoc = Gui.ActiveDocument
         vp = gdoc.getInEdit() if gdoc else None
-        sketching = vp is not None and vp.Object.isDerivedFrom("Sketcher::SketchObject")
+        sketching = vp is not None and editobj.derived(vp, "Sketcher::SketchObject")
     except Exception:
         sketching = False
     if sketching:

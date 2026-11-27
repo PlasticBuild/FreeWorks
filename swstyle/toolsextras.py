@@ -400,7 +400,7 @@ class FormatPainterPM:
                 o = self.doc.getObject(part)
                 if o is not None:
                     obj = o
-        QtCore.QTimer.singleShot(0, lambda: self._picked(obj, last))
+        from . import safe_later as _sl; _sl.later(0, lambda: self._picked(obj, last), self, "src_list")
 
     def _picked(self, obj, sub):
         if obj is None:
@@ -566,8 +566,19 @@ class MacroStop:
         return True
 
     def Activated(self):
+        import time
+        self._started = time.time()
         QtCore.QTimer.singleShot(0, self._press)
         Gui.runCommand("Std_DlgMacroRecord", 0)
+
+    def _edit(self):
+        try:
+            # BB39 OP-2: Options > General > Automatically edit macro after recording (Stop runs FreeCAD's record
+            # command from here, so the hook on its menu action never fires)
+            from . import optionsextras4
+            optionsextras4._after_record()
+        except Exception as _fw_err:
+            _fw_log("toolsextras.py:macro stop edit", _fw_err)
 
     def _press(self):
         box = QtWidgets.QApplication.activeModalWidget()
@@ -575,10 +586,25 @@ class MacroStop:
         if stop is not None and stop.isEnabled():
             stop.click()
             box.close()
+            self._edit()
             return
         if box is not None:
             box.close()
+        elif _wrote_macro(getattr(self, "_started", 0)):
+            # FreeCAD 1.1 stops a running recording from the record command itself, with no box: the macro is saved
+            self._edit()
+            return
         _mw().statusBar().showMessage("No macro is being recorded.", 5000)
+
+
+def _wrote_macro(since):
+    """True when a macro was saved in the macro folder after since (the record command just stopped a recording)."""
+    try:
+        from . import optionsextras4
+        return optionsextras4._newest_macro(since - 1) is not None
+    except Exception as _fw_err:
+        _fw_log("toolsextras.py:wrote macro", _fw_err)
+        return False
 
 
 # --------------------------------------------------------------------- Save/Restore Settings

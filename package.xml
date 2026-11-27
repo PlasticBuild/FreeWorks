@@ -5,8 +5,8 @@
   <description>A familiar mainstream-CAD front end for stock FreeCAD: command ribbon, property panels,
     feature tree with rollback bar, view selector, sketch tools with inference snapping and automatic
     relations, smart dimensions and relation tools. Pure Python; no FreeCAD patches needed.</description>
-  <version>0.3.3-alpha</version>
-  <date>2026-11-22</date>
+  <version>0.4.0-alpha</version>
+  <date>2026-11-27</date>
   <maintainer email="341840710+PlasticBuild@users.noreply.github.com">PlasticBuild</maintainer>
   <license file="LICENSE">LGPL-2.1-or-later</license>
   <url type="repository" branch="main">https://github.com/PlasticBuild/FreeWorks</url>

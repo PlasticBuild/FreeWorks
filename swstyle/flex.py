@@ -19,6 +19,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -166,7 +167,10 @@ def _polynomial(face, spacing):
 def reshape(shape, f, spacing=SPACING):
     """shape with every point p moved to f(p), as a solid."""
     faces = moved_faces(shape, f, spacing)
-    for tolerance in SEW:
+    # the faces share their moved edges, so a plain sew (0.1 s) usually closes them already; the gap
+    # tolerances below fall back to a fuzzy fuse, which took over 15 minutes on a 35-face plastic part
+    # whose plain sew was closed (plastic real-click run 11-27)
+    for tolerance in (1e-6,) + tuple(SEW):
         from . import sewtol
         sewn = sewtol.sewn(faces, tolerance)
         shells = sewn.Shells
@@ -368,7 +372,7 @@ def previewing(obj):
     try:
         import FreeCADGui as Gui
         gdoc = Gui.getDocument(obj.Document.Name)
-        editing = gdoc is not None and gdoc.getInEdit() is not None and gdoc.getInEdit().Object == obj
+        editing = gdoc is not None and gdoc.getInEdit() is not None and editobj.of(gdoc.getInEdit()) == obj
     except Exception:
         editing = False
     try:
@@ -398,7 +402,7 @@ def _finish_unedited(doc_name, name):
         import FreeCADGui as Gui
         gdoc = Gui.getDocument(doc_name)
         vp = gdoc.getInEdit() if gdoc is not None else None
-        if vp is not None and vp.Object == obj:
+        if vp is not None and editobj.of(vp) == obj:
             return              # its page is open: OK builds it fine
     except Exception as _fw_err:
         _fw_log("flex.py:365", _fw_err)
@@ -567,7 +571,7 @@ class Overlay:
         try:
             import FreeCADGui as Gui
             vp = Gui.getDocument(self.doc).getInEdit()
-            return vp is not None and vp.Object == obj and Gui.Control.activeDialog()
+            return vp is not None and editobj.of(vp) == obj and Gui.Control.activeDialog()
         except Exception:
             return False
 
@@ -1211,7 +1215,7 @@ SPEC = sf.Spec(
      Field("TrimPlane2", "length", "Trim plane 2: trim distance", 0.0,
            tip="How far in from the part's other end the flex stops", box="Trim Plane 2"),
      Field("TriadRef", "pick", "Selection for triad", what=("Vertex", "Edge", "Face"), optional=True,
-           tip="A vertex, or an edge or face whose centre the triad sits on; empty: the part's centre",
+           tip="A vertex, or an edge or face whose center the triad sits on; empty: the part's center",
            box="Triad"),
      Field("TriadX", "distance", "X", 0.0, tip="Moves the triad along X from where it sits", box="Triad"),
      Field("TriadY", "distance", "Y", 0.0, tip="Moves the triad along Y from where it sits", box="Triad"),

@@ -527,7 +527,7 @@ class SpeedPakPanel:
     def addSelection(self, doc, obj, sub, pnt):
         if obj != self.comp.Name and (sub or "").split(".")[0] != self.comp.Name:
             return
-        QtCore.QTimer.singleShot(0, lambda: (self.pick(sub), Gui.Selection.clearSelection()))
+        from . import safe_later as _sl; _sl.later(0, lambda: (self.pick(sub), Gui.Selection.clearSelection()), self, "exclude_mode")
 
     def removeSelection(self, *a):
         pass

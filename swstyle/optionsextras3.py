@@ -8,6 +8,7 @@
 - Display > Projection type for four view viewport: Window > Viewport > Four View lays out the views
   as First Angle (Front, Left / Top, Trimetric) or Third Angle (Top, Trimetric / Front, Right).
 """
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -99,7 +100,7 @@ def _remember():
 
 def _is_sketch(vp):
     try:
-        return vp.Object.isDerivedFrom("Sketcher::SketchObject")
+        return editobj.derived(vp, "Sketcher::SketchObject")
     except Exception:
         return False
 
@@ -186,7 +187,7 @@ class _Observer:
                     QtCore.QTimer.singleShot(delay, lambda d=doc_name, c=camera: _restore(d, c))
         if _kept(SHADED_PLANE):
             gdoc = Gui.getDocument(doc_name)
-            sketch = vp.Object
+            sketch = editobj.of(vp)
             QtCore.QTimer.singleShot(0, lambda: _show_plane(gdoc, sketch))
 
     def slotResetEdit(self, vp):

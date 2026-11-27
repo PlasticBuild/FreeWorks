@@ -128,7 +128,8 @@ def _recomputing():
     except Exception as _fw_err:
         _fw_log("sketchstatus.py:128", _fw_err)
     try:
-        return any("Recomputing" in doc.State for doc in App.listDocuments().values())
+        # FreeCAD 1.1 documents have no State: their Recomputing flag says it
+        return any(getattr(doc, "Recomputing", False) for doc in App.listDocuments().values())
     except Exception:
         return False
 

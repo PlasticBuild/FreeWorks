@@ -103,6 +103,42 @@ def _hold_the_rest(sketch, moving):
     return list(range(n - keep, n))[::-1]
 
 
+def _send(sketch, moving, offset, held, before):
+    """fix288: temporary horizontal and vertical distances from the origin to each moving point's new
+    place, then a solve. A hold or a distance that makes the sketch redundant or conflicting is taken
+    off (holds first: a point the relations already fix, or tie to a moving one, need none) until the
+    sketch solves; FreeCAD's solver moves nothing while any is left (gaps: a 160-constraint sketch).
+    Returns the temporary constraints' indices, holds and distances together."""
+    import Sketcher
+    held = sorted(held)
+    count = len(sketch.Constraints)
+    for g, pos in sorted(moving):
+        try:
+            p = before[(g, pos)] + App.Vector(offset.x, offset.y, 0)
+        except Exception as _fw_err:
+            _fw_log("stretch.py: point", _fw_err)
+            continue
+        for kind, value in (("DistanceX", p.x), ("DistanceY", p.y)):
+            try:
+                sketch.addConstraint(Sketcher.Constraint(kind, -1, 1, g, pos, value))
+            except Exception as _fw_err:
+                _fw_log("stretch.py:send", _fw_err)
+    temp = list(range(count, len(sketch.Constraints)))
+    for _round in range(12):
+        result = sketch.solve()
+        bad = {i - 1 for i in list(sketch.RedundantConstraints) + list(sketch.ConflictingConstraints)}
+        if result == 0 and not bad:
+            break
+        drop = [i for i in held if i in bad] or [i for i in temp if i in bad]
+        if not drop:
+            break
+        for i in sorted(drop, reverse=True):
+            sketch.delConstraint(i)
+            held = [h - (h > i) for h in held if h != i]
+            temp = [t - (t > i) for t in temp if t != i]
+    return sorted(held + temp)
+
+
 def stretch(sketch, entities, points, offset):
     """Moves the points by offset (sketch coordinates) with the relations kept; dimensions that
     the stretch changes take their new values. Returns the points that could not follow."""
@@ -122,7 +158,11 @@ def stretch(sketch, entities, points, offset):
     sketch.solve()
     held = _hold_the_rest(sketch, _with_coincident(sketch, moving))
     sketch.moveGeometries(sorted(moving), App.Vector(offset.x, offset.y, 0), True)
-    for i in held:                       # last first
+    if any((App.Vector(sketch.getPoint(*gp)) - (p + offset)).Length > TOLERANCE for gp, p in before.items()):
+        # fix288: in an open sketch moveGeometries can move nothing once the holds are on (Stretch did
+        # nothing): the points go by temporary distances and a solve instead
+        held = _send(sketch, moving, offset, held, before)
+    for i in sorted(held, reverse=True):
         sketch.delConstraint(i)
     for i in toggled:
         sketch.setDriving(i, True)
@@ -178,7 +218,9 @@ class StretchPage(sketchmove.MovePage):
         if item is None:
             return
         if self.wants_point():
-            self.point_picked(self.sketch.getPoint(item.geo, item.pos if item.pos else START), item)
+            if item.pos in (START, END, MID) or item.geo < 0 or dimtools._kind(self.sketch.Geometry[item.geo]) == "point":
+                self.point_picked(self.sketch.getPoint(item.geo, item.pos if item.pos else START), item)
+            # fix288: a click on a line gives the point under the pointer (as Move), not the line's start
             return
         if item.geo < 0:
             return

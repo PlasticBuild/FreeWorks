@@ -1,0 +1,457 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+"""greyrows-1126: NO DEAD CONTROLS for the menu bar rows.
+
+A menu row whose command cannot act yet used to sit greyed (Edit > Copy with nothing picked, Undo with nothing done, the
+MBD Dimension rows on an empty part...). Greyed is a dead control. swmenus builds every menu again each time it opens: a
+row that can act is added exactly as before (same QAction, same run). A row that cannot act stays live, its status bar
+text says what to do first, and a click opens notready's Message page with that text. If the row can act by the time it
+is clicked, it runs its own command as before. FreeCAD's own menus under Tools > FreeCAD share FreeCAD's QActions:
+an enabled one is still shared as it is; a disabled one shows a stand-in row with the same text that opens the page,
+or triggers FreeCAD's action when that has become enabled."""
+
+_FW_SEEN = set()
+
+
+def _fw_log(site, err):
+    """Log a swallowed error once per place (Log level: invisible in the Report view at normal level)."""
+    try:
+        if site not in _FW_SEEN:
+            _FW_SEEN.add(site)
+            __import__("FreeCAD").Console.PrintLog("FreeCAD %s: %s\n" % (site, err))
+    except Exception:
+        return
+
+
+import FreeCAD as App
+import FreeCADGui as Gui
+from PySide import QtCore, QtGui, QtWidgets
+
+PICK = "Pick a face, feature or sketch entity first."
+PICK_COMP = "Pick one or more components in the assembly first."
+SOLID = "Make a solid first (Extruded Boss/Base), then use it again."
+SKETCH = "Open a sketch first (Edit Sketch)."
+MBD = "Make a solid first, then pick the faces or edges to dimension."
+ROUTE = "Add connection points to the components first (Tools > Routing > Routing Tools > Create Connection Point)."
+
+# by command name (the row's QAction data, FreeCAD's own command names under Tools > FreeCAD)
+BY_COMMAND = {
+    # Edit
+    "Std_Undo": "Nothing to undo yet.",
+    "Std_Redo": "Nothing to redo yet.",
+    "Std_Cut": PICK,
+    "Std_Copy": PICK,
+    "Std_Paste": "Copy something first (Ctrl+C).",
+    "Std_Delete": PICK,
+    "Std_Refresh": "Nothing to rebuild: the model is up to date.",
+    # nogrey-1126
+    "FreeWorks_Sketch3DOnPlane": "Pick a plane or a flat face first (outside a 2D sketch), then use 3D Sketch On Plane again.",
+    "Std_Properties": "Pick a feature in the FeatureManager design tree first.",
+    "Std_SendToPythonConsole": "Pick an object in the FeatureManager design tree first.",
+    "Std_Placement": "Pick a body, part or component first.",
+    "Std_TransformManip": "Pick a body, part or component first.",
+    "Std_Alignment": "Pick two or more components or bodies first.",
+    "Std_Edit": "Pick a feature in the FeatureManager design tree first.",
+    "Std_Measure": "Open or start a document first.",
+    "Std_TaskView": "The Tasks panel stays open while a sketch or PropertyManager is in use. Close that first (OK or Cancel).",
+    "SWStyle_RepeatLastCommand": "No command to repeat yet. Run a command first.",
+    "SWStyle_RollToPrevious": "The rollback bar is at the top already. Drag it down first, or use Rollback.",
+    "SWStyle_RollToEnd": "The rollback bar is at the end already.",
+    "SWStyle_SuppressThis": "Pick a feature to suppress first.",
+    "SWStyle_SuppressAll": "Pick a feature to suppress first.",
+    "SWStyle_SuppressSpecified": "Pick a feature to suppress first.",
+    "SWStyle_UnsuppressThis": "Pick a suppressed feature first.",
+    "SWStyle_UnsuppressAll": "Pick a suppressed feature first.",
+    "SWStyle_UnsuppressSpecified": "Pick a suppressed feature first.",
+    "SWStyle_UnsuppressWithDependentsThis": "Pick a suppressed feature first.",
+    "SWStyle_UnsuppressWithDependentsAll": "Pick a suppressed feature first.",
+    "SWStyle_UnsuppressWithDependentsSpecified": "Pick a suppressed feature first.",
+    "SWStyle_EditSketchPlane": "Pick a sketch in the FeatureManager design tree first.",
+    "SWStyle_ObjectDisplayContent": "Pick an inserted object first (Insert > Object).",
+    "SWStyle_ObjectDisplayIcon": "Pick an inserted object first (Insert > Object).",
+    "SWStyle_ObjectResetSize": "Pick an inserted object first (Insert > Object).",
+    "SWStyle_FlipNormal": "Pick a surface or a face first.",
+    "SWStyle_SketchCurveColor": "Pick a sketch or a curve first.",
+    "SWStyle_CopyAppearance": "Pick a face, body or component whose look to copy first.",
+    "SWStyle_PasteAppearance": "Copy an appearance first (Copy Appearance), then pick where it goes.",
+    "SWStyle_ToggleNotesUpperCase": "Pick a note on a drawing sheet first.",
+    "SWStyle_ToggleRadialDisplay": "Pick a radius or diameter dimension on a drawing sheet first.",
+    "SWStyle_SelectAnnotationView": "Open a part with annotation views first.",
+    "SWStyle_SpeedPakGraphicsCircle": "Works on a SpeedPak configuration. Make one for a subassembly first.",
+    "SWStyle_TakeSnapshot": "Open or start a part or assembly first.",
+    # File
+    "FreeWorks_AutoGenerateDrawing": SOLID,
+    "SWStyle_MakeReadOnly": "Save the document first. A file that is locked already can't be locked again.",
+    "SWStyle_GetWriteAccess": "This file isn't locked. Unlock works on a saved file you locked (Lock).",
+    # Insert
+    "SWStyle_RecognizeFeatures": "Import a solid first (File > Open a STEP or IGES file).",
+    "SWStyle_MateReference": SOLID,
+    "SWStyle_FreeshapeEditMerge": "Merge two freeshape features first.",
+    "SWStyle_FreeshapeSymmetry": "Start a freeshape feature first (Insert > Features > Freeshape).",
+    "SWStyle_FreeshapeExtrudeFace": "Start a freeshape feature first, then pick a face of it.",
+    "SWStyle_FreeshapeSubdivide": "Start a freeshape feature first, then pick it.",
+    "SWStyle_FreeshapeCrease": "Start a freeshape feature first, then pick its edges.",
+    "SWStyle_FreeshapeFillHole": "Start a freeshape feature with a hole first.",
+    "SWStyle_FreeshapeInsertLoop": "Start a freeshape feature first, then pick a face of it.",
+    "SWStyle_FreeshapeDeleteLoops": "Start a freeshape feature first, then pick a loop or face.",
+    "SWStyle_FreeshapeAlign": "Start a freeshape feature first, then pick its points.",
+    "SWStyle_FilletBead": "Make a weldment with two members that meet first.",
+    "SWStyle_DecimateMesh": "Insert a mesh first (Insert > Mesh), then pick it.",
+    "SWStyle_PartExplodedView": "Make a part with two or more bodies first.",
+    "SWStyle_MirrorPart": "Make a solid first, then pick a plane or flat face.",
+    "SWStyle_PartBOM": "Make a part with bodies first (a weldment or multibody part).",
+    "SWStyle_SketchFromDrawing": "Open a drawing of this model first.",
+    # Tools
+    "SWStyle_Sustainability": SOLID,
+    "SWStyle_Costing": SOLID,
+    "SWStyle_ManufacturabilityCheck": SOLID,
+    "SWStyle_SimulationWizard": SOLID,
+    "SWStyle_FloXpress": SOLID,
+    "SWStyle_SelectBodiesBySize": "Make a part with bodies first.",
+    "SWStyle_Simplify": SOLID,
+    "SWStyle_EditLinearPattern": "Open a sketch with a linear sketch pattern first, then pick it.",
+    "SWStyle_EditCircularPattern": "Open a sketch with a circular sketch pattern first, then pick it.",
+    "SWStyle_SketchAreaHatch": "Open a sketch with a closed outline first.",
+    "SWStyle_AlignOrdinate": "Open a sketch with ordinate dimensions first.",
+    "SWStyle_MBDAutoScheme": MBD,
+    "SWStyle_MBDLocation": MBD,
+    "SWStyle_MBDSize": MBD,
+    "SWStyle_MBDAngle": MBD,
+    "SWStyle_MBDBasicLocation": MBD,
+    "SWStyle_MBDBasicSize": MBD,
+    "SWStyle_MBDDatum": "Make a solid first, then pick a face to mark as a datum.",
+    "SWStyle_MBDDatumTarget": "Make a solid first, then pick a face for the target.",
+    "SWStyle_MBDGeometricTolerance": MBD,
+    "SWStyle_MBDPattern": "Make a solid with a pattern of holes or faces first.",
+    "SWStyle_MBDGeneralProfileTolerance": MBD,
+    "SWStyle_MBDToleranceStatus": "Add a datum and dimensions first (Tools > MBD Dimension).",
+    "SWStyle_MBDImportScheme": SOLID,
+    "SWStyle_MBDCopyScheme": "Add dimensions first (Tools > MBD Dimension), then copy them.",
+    "SWStyle_MBDDeleteAllTolerances": "No tolerances to delete yet.",
+    "SWStyle_MBDStackUp": "Add a datum and dimensions first (Tools > MBD Dimension).",
+    # Macro (FreeCAD's own)
+    "Std_DlgMacroExecuteDirect": "Open a macro in the editor first (Tools > Macro > Edit).",
+    "Std_MacroStartDebug": "Open a macro in the editor first (Tools > Macro > Edit).",
+    "Std_MacroStopDebug": "No macro is being debugged. Start one first (Debug Macro).",
+    "Std_MacroStepOver": "No macro is being debugged. Start one first (Debug Macro).",
+    "Std_MacroStepInto": "No macro is being debugged. Start one first (Debug Macro).",
+    "Std_ToggleBreakpoint": "Open a macro in the editor first (Tools > Macro > Edit).",
+    # Sketch and Part Design (FreeCAD's own)
+    "Sketcher_EditSketch": "Pick a sketch in the FeatureManager design tree first.",
+    "Sketcher_MapSketch": "Pick a sketch in the FeatureManager design tree first.",
+    "Sketcher_ReorientSketch": "Pick a sketch in the FeatureManager design tree first.",
+    "Sketcher_ValidateSketch": "Pick a sketch in the FeatureManager design tree first.",
+    "Sketcher_MergeSketches": "Pick two or more sketches first.",
+    "Sketcher_MirrorSketch": "Pick a sketch in the FeatureManager design tree first.",
+    "PartDesign_Clone": "Pick a body in the FeatureManager design tree first.",
+    "Part_CheckGeometry": "Pick a body or solid first.",
+}
+
+# by the row's own text, for rows without a command name (assembly rows, special rows)
+BY_LABEL = {
+    "Rollback": "Make a feature first. Rollback works on the FeatureManager design tree.",
+    "Sketch": "Pick a sketch in the FeatureManager design tree first.",
+    "Exit Sketch without Saving Changes": SKETCH,
+    "Definition": "Pick a feature in the FeatureManager design tree first.",
+    "3D Sketch On Plane": "Pick a plane or flat face first.",
+    "Asset Publisher": SOLID,
+    "Create Connection Point": SOLID,
+    "Derive Component Part": "Pick a component in the assembly first.",
+    "Lightweight": "Pick a resolved component first.",
+    "Resolve": "Pick a lightweight or suppressed component first.",
+    "Part": "Pick a part component in the assembly first.",
+    "Dissolve Assembly": "Pick a subassembly first.",
+    "Edit Table": "Add a design table first (Insert > Tables > Design Table).",
+    "Edit Table in New Window": "Add a design table first (Insert > Tables > Design Table).",
+    "Isolate including suppressed": PICK_COMP,
+    "Component Envelopes": "Insert a component as an envelope first.",
+    "Top Level Envelopes": "Insert a component as an envelope first.",
+    "Insert Part from Block": "Pick a block in a sketch first.",
+    "Assembly from Selected Components": PICK_COMP,
+    "Mate Controller": "Add two or more distance or angle mates first.",
+    "Smart Features": "Insert a Smart Component first.",
+    "Explode Line Sketch": "Make an exploded view first (Insert > Exploded View).",
+    "Envelope Publisher": "Works in an assembly with a subassembly. Insert one first.",
+    "Select Mated To": PICK_COMP,
+    "Select Identical Components": PICK_COMP,
+    "Prefix/Suffix": PICK_COMP,
+    "Reorganize Components": PICK_COMP,
+    "Make Multibody Part": "Insert components with solids first.",
+    "Make Smart Component": "Insert two or more components first.",
+    "Start at Point": ROUTE,
+    "Auto Route": ROUTE,
+    "Edit Wires": "Make an electrical route with wires first (Start at Point).",
+    "Import From-To List": ROUTE,
+    "Flatten Route": "Make an electrical route with wires first (Start at Point).",
+    "Wire List": "Make an electrical route with wires first (Start at Point).",
+    "Edit Route": "Make a route first (Start at Point).",
+    "Temporary Fix/Group": PICK_COMP,
+}
+
+# by the submenu the row is in (the scope rows: This Configuration, Current Display State...)
+BY_PARENT = {
+    "Hide": PICK_COMP,
+    "Show": "Pick one or more hidden components first.",
+    "Show with Dependents": "Pick one or more hidden components first.",
+    "Suppress": "Pick one or more components to suppress first.",
+    "Unsuppress": "Pick one or more suppressed components first.",
+    "Unsuppress with Dependents": "Pick one or more suppressed components first.",
+    "Wireframe": PICK_COMP,
+    "Hidden Lines Visible": PICK_COMP,
+    "Hidden Lines Removed": PICK_COMP,
+    "Shaded With Edges": PICK_COMP,
+    "Shaded": PICK_COMP,
+    "Default Display": PICK_COMP,
+}
+
+
+def _bare(text):
+    return " ".join(text.replace("&", "").split("\t")[0].rstrip(". …").split())
+
+
+def text_for(command, label, parent=""):
+    """What to do first, in a few words."""
+    try:        # notready2-1126: a document, a closed page, a body, a sketch, a mesh, an analysis, a sheet
+        said = waits_for(command, label)
+    except Exception as _fw_err:
+        _fw_log("menunotready.py:waits_for", _fw_err)
+        said = None
+    if said and (not command or command not in BY_COMMAND or said.startswith(("Open a document", "Close the open",
+                                                                             "Exit the sketch"))):
+        return said
+    try:        # drawnotready-1127: on a drawing sheet the row says what it needs on the sheet (Drawings' words)
+        from . import drawnotready
+        drawn = drawnotready.text(command, label)
+    except Exception as _fw_err:
+        _fw_log("menunotready.py:drawnotready", _fw_err)
+        drawn = None
+    if drawn:
+        return drawn
+    if command and command in BY_COMMAND:
+        return BY_COMMAND[command]
+    bare = _bare(label)
+    if bare in BY_LABEL:
+        return BY_LABEL[bare]
+    parent = _bare(parent or "")
+    if parent in BY_PARENT:
+        return BY_PARENT[parent]
+    return "Nothing here is ready for %s yet. Pick what it works on in the FeatureManager design tree or the graphics area first." % bare
+
+
+def _ready(command):
+    try:
+        c = Gui.Command.get(command) if command else None
+        return c is not None and bool(c.isActive())
+    except Exception:
+        return False
+
+
+def tell(title, text):
+    """notready's Message page; the status bar when a PropertyManager is open already."""
+    from . import notready
+    try:
+        if notready.show(title, text=text, title=_bare(title)):
+            return
+    except Exception as _fw_err:
+        _fw_log("menunotready.py:page", _fw_err)
+    try:
+        Gui.getMainWindow().statusBar().showMessage("%s: %s" % (_bare(title), text), 8000)
+    except Exception as _fw_err:
+        _fw_log("menunotready.py:status", _fw_err)
+
+
+def wire(menu, act, item):
+    """Keeps a row that cannot act live. Returns what its click runs: the row's own run when its command can act by
+    then, else the page."""
+    command = getattr(item, "command", None)
+    text = text_for(command, item.label, menu.title() if menu is not None else "")
+    act.setEnabled(True)
+    act.setProperty("swstyle_notready", True)
+    tip = act.statusTip()
+    act.setStatusTip(tip + " " + text if tip and text not in tip else text)
+    run, label = item.run, item.label
+
+    def click():
+        if command and _ready(command):
+            run()
+        else:
+            tell(label, text)
+    return click
+
+
+_SUBS = {}
+
+
+def proxy_actions(proxy, actions, depth=0):
+    """FreeCAD's own entries into proxy: an enabled one shared as it is, a disabled one as a live stand-in row.
+    A FreeCAD submenu shows through a proxy of its own, built again each time it opens."""
+    for old in _SUBS.pop(id(proxy), ()):
+        try:
+            old.deleteLater()
+        except RuntimeError:
+            pass
+    for a in actions:
+        if a.isSeparator() or not a.isVisible() or a.isEnabled():
+            if a.menu() is not None and a.isEnabled() and not a.isSeparator() and depth < 3:
+                sub = _sub_proxy(proxy, a.menu(), depth + 1)
+                _SUBS.setdefault(id(proxy), []).append(sub)
+                proxy.addMenu(sub)
+            else:
+                proxy.addAction(a)
+            continue
+        if a.menu() is not None:
+            proxy.addAction(a)
+            continue
+        proxy.addAction(_stand_in(proxy, a))
+
+
+def _sub_proxy(parent, native, depth):
+    sub = QtWidgets.QMenu(native.title(), parent)
+    sub.setIcon(native.icon())
+    sub.setToolTipsVisible(native.toolTipsVisible())
+
+    def opened(sub=sub, native=native, depth=depth):
+        sub.clear()
+        try:
+            native.aboutToShow.emit()
+            actions = native.actions()
+        except Exception as _fw_err:        # FreeCAD built its menus again (a workbench change)
+            _fw_log("menunotready.py:sub", _fw_err)
+            return
+        proxy_actions(sub, actions, depth)
+    sub.aboutToShow.connect(opened)
+    return sub
+
+
+def _command_of(a):
+    name = a.objectName() or ""
+    if not name:
+        try:
+            data = a.data()
+            name = data if isinstance(data, str) else ""
+        except Exception:
+            name = ""
+    return name
+
+
+# notready2-1126: what a FreeCAD command waits for when it is not a pick, read at the moment the row is used
+_PM_KEEP = ("Std_", "SWStyle_", "FreeWorks_")        # commands the open page does not hold back (or ours: pmlive)
+_NO_PICK = ("PartDesign_Body", "Mesh_Import", "Mesh_BuildRegularSolid", "Mesh_FromPartShape", "FEM_Analysis",
+            "FEM_Examples", "TechDraw_PageDefault", "TechDraw_PageTemplate", "Sketcher_NewSketch")
+
+
+def _doc_has(type_id):
+    try:
+        return any(o.isDerivedFrom(type_id) for o in App.ActiveDocument.Objects)
+    except Exception:
+        return False
+
+
+def _sketch_in_edit():
+    try:
+        vp = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument is not None else None
+        return vp is not None and vp.Object.isDerivedFrom("Sketcher::SketchObject")
+    except Exception:
+        return False
+
+
+def _active_body():
+    try:
+        return Gui.ActiveDocument.ActiveView.getActiveObject("pdbody")
+    except Exception:
+        return None
+
+
+def waits_for(command, label):
+    """The words for command when it waits for something other than a pick (None: a pick, or not known)."""
+    name = command or ""
+    what = _bare(label) or name
+    if App.ActiveDocument is None:
+        return "Open a document or make a new one first (File > New), then use %s again." % what
+    try:
+        panel = bool(Gui.Control.activeDialog())
+    except Exception:
+        panel = False
+    sketching = _sketch_in_edit()
+    if panel and not sketching and name and not name.startswith(_PM_KEEP):
+        return "Close the open PropertyManager first (OK or Cancel), then use %s again." % what
+    if sketching and name and not name.startswith(("Sketcher_", "Std_", "SWStyle_", "FreeWorks_")):
+        return "Exit the sketch first (the confirmation corner, or Edit > Exit Sketch), then use %s again." % what
+    if name.startswith("Sketcher_") and name not in BY_COMMAND and name != "Sketcher_NewSketch" and not sketching:
+        return "Open a sketch first (Edit Sketch, or make one with Sketch), then use %s again." % what
+    if name.startswith("PartDesign_") and name not in _NO_PICK and _active_body() is None:
+        return ("%s works in the active body. Make a body first (Part Design > Body), or double-click a body in the "
+                "FeatureManager design tree to make it active." % what)
+    if name.startswith(("Mesh_", "MeshPart_")) and name not in _NO_PICK:
+        if not _doc_has("Mesh::Feature"):
+            return ("%s works on a mesh. Make one first (Meshes > Create Mesh From Shape) or import an STL or OBJ "
+                    "file, then pick it." % what)
+        return "Pick the mesh first, then use %s again." % what
+    if name.startswith("FEM_") and name not in _NO_PICK:
+        if not _doc_has("Fem::FemAnalysis"):
+            return "%s works in an analysis. Make one first (Model > Analysis Container)." % what
+        try:
+            import FemGui
+            active = FemGui.getActiveAnalysis()
+        except Exception:
+            active = True
+        if not active:
+            return "Make the analysis active first (double-click it in the FeatureManager design tree)."
+        if name.startswith(("FEM_Post", "FEM_Result")):
+            if not _doc_has("Fem::FemResultObject") and not _doc_has("Fem::FemPostPipeline"):
+                return "%s works on results. Run the solver first (Solve > Run Solver)." % what
+            return "Pick the result or pipeline first, then use %s again." % what
+        if name.startswith("FEM_Mesh") and name.endswith("FromShape"):
+            return "Pick the solid to mesh first, then use %s again." % what
+        if name in ("FEM_SolverRun", "FEM_SolverControl"):
+            return "Pick the solver in the analysis first (add one with Solve > Solver CalculiX)."
+        return "Pick the faces, edges or solids it applies to first, then use %s again." % what
+    if name.startswith("TechDraw_") and name not in _NO_PICK:
+        if not _doc_has("TechDraw::DrawPage"):
+            return ("%s works on a drawing sheet. Make one first (File > New > Drawing, or TechDraw > New Page)."
+                    % what)
+        if name in ("TechDraw_View", "TechDraw_BrokenView", "TechDraw_ProjectionGroup", "TechDraw_DraftView",
+                    "TechDraw_ArchView", "TechDraw_SpreadsheetView"):
+            return "Pick the part, body or object to show first, then use %s again." % what
+        return "Pick the drawing view, or its edges and vertices, on the sheet first, then use %s again." % what
+    if name in ("Part_Cut", "Part_Fuse", "Part_Common", "Part_Section", "Mesh_Union", "Mesh_Difference",
+                "Mesh_Intersection"):
+        return "Pick two shapes first (Ctrl+click the second), then use %s again." % what
+    if name.startswith("Draft_") and name not in _NO_PICK:
+        if name == "Draft_AddToLayer" and not _doc_has("App::FeaturePython"):
+            return "Make a layer first (Utilities > Layer), pick the objects, then use Add to Layer."
+        return "Pick the objects first, then use %s again." % what
+    return None
+
+
+def _stand_in(proxy, native):
+    name = _command_of(native)
+    label = native.text()
+    keys = native.shortcut().toString(QtGui.QKeySequence.NativeText)
+    row = QtGui.QAction(native.icon(), label + ("\t" + keys if keys and "\t" not in label else ""), proxy)
+    if native.isCheckable():
+        row.setCheckable(True)
+        row.setChecked(native.isChecked())
+    row.setToolTip(native.toolTip())
+    text = text_for(name, label)
+    row.setStatusTip(text)
+    row.setProperty("swstyle_notready", True)
+    if name:
+        row.setData(name)
+
+    def click(native=native, name=name, label=label, text=text):
+        try:
+            alive = native is not None and native.isEnabled()
+        except RuntimeError:
+            alive = False
+        if alive:
+            native.trigger()        # FreeCAD's own entry, as it always ran
+        elif name and _ready(name):
+            Gui.runCommand(name, 0)
+        else:
+            tell(label, text_for(name, label) or text)     # notready2-1126: read now
+
+    def later(checked=False, click=click):
+        from . import keys
+        keys._run_later(click)
+    row.triggered.connect(later)
+    return row

@@ -261,6 +261,25 @@ def band_image(prof, height, lo, hi, path, size=512):
     return path
 
 
+def load_texture(tex, path):
+    """slicertex-1127: the picture into the SoTexture2 node, read with Qt. Coin's own reader (tex.filename) needs
+    simage, which FreeCAD 1.1.4 on Windows does not ship: the band drew blank (same as vdp200 / appeartex).
+    True when the node got the picture."""
+    from PySide import QtGui
+    from pivy import coin
+    image = QtGui.QImage(path) if path else QtGui.QImage()
+    if image.isNull():
+        tex.image.setValue(coin.SbVec2s(0, 0), 0, b"")
+        return False
+    image = image.convertToFormat(QtGui.QImage.Format_RGB888).mirrored(False, True)     # Coin: bottom row first
+    w, h = image.width(), image.height()
+    stride = image.bytesPerLine()
+    raw = bytes(image.constBits())[:stride * h]
+    data = b"".join(raw[y * stride:y * stride + 3 * w] for y in range(h))
+    tex.image.setValue(coin.SbVec2s(w, h), 3, data)
+    return True
+
+
 def show_band(bed, item, prof, lo, hi, old=None):
     """The object coloured by its layer height (the Variable layer height tool's band), over the plate's object.
     Returns the node (old one taken away)."""
@@ -293,7 +312,7 @@ def show_band(bed, item, prof, lo, hi, old=None):
     mat.diffuseColor.setValue(1.0, 1.0, 1.0)
     sep.addChild(mat)
     tex = coin.SoTexture2()
-    tex.filename = path
+    load_texture(tex, path)      # slicertex-1127: pixels through Qt (tex.filename drew blank on the PC: no simage)
     tex.model = coin.SoTexture2.MODULATE
     tex.wrapS = coin.SoTexture2.CLAMP
     tex.wrapT = coin.SoTexture2.CLAMP

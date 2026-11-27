@@ -29,12 +29,20 @@ from . import pmboxes
 from .widgets import ui_font
 
 
+SW_LABELS = {"Composite Curve": "CompCurve", "Curve": "Curve"}
+
+
 def _add_feature(name, proxy_cls, label):
     doc = App.ActiveDocument
     obj = doc.addObject("Part::FeaturePython", name)
     proxy_cls(obj)
     if App.GuiUp:
         _CurveView(obj.ViewObject)
+
+    prefix = SW_LABELS.get(label)
+    if prefix is not None:
+        from . import naming
+        label = naming.next_label(doc, prefix)
     obj.Label = label
     # a PartDesign Body only takes PartDesign features, so the curve sits next to the body in the
     # tree (it still follows the edges and points it was made from)
@@ -804,6 +812,8 @@ class _CurveView:
 
     def setEdit(self, vobj, mode=0):
         kind = type(getattr(vobj.Object, "Proxy", None)).__name__
+        if kind == "CenterOfMass":
+            return False
         if mode == 0 and kind in EDITORS:
             QtCore.QTimer.singleShot(0, lambda o=vobj.Object: EDITORS[kind](o))
             return False
@@ -827,6 +837,8 @@ class _CurveView:
 
     def doubleClicked(self, vobj):
         kind = type(getattr(vobj.Object, "Proxy", None)).__name__
+        if kind == "CenterOfMass":
+            return True
         if kind in EDITORS:
             EDITORS[kind](vobj.Object)
             return True
@@ -1369,7 +1381,21 @@ def center_of_mass():
     doc = App.ActiveDocument
     old = [o for o in doc.Objects if getattr(o, "Proxy", None).__class__.__name__ == "CenterOfMass"]
     if old:
+
+        # the click picks the one there is and the status line says why (rgcom-01; it did nothing before)
+        if App.GuiUp:
+            Gui.Selection.clearSelection()
+            Gui.Selection.addSelection(doc.Name, old[0].Name)
+            Gui.getMainWindow().statusBar().showMessage(
+                "The part has its Center of Mass already (one per part); it is selected.", 8000)
         return old[0]
+    if App.GuiUp and not _has_solid(doc):
+
+        # point at the origin that measured nothing)
+        from . import notready
+        notready.show("CenterOfMass", text="Center of Mass needs a solid body. Make a base feature first "
+                      "(Extruded Boss/Base, Revolved Boss/Base...), then use Center of Mass again.")
+        return None
     doc.openTransaction("Center of Mass")
     try:
         obj = _add_feature("CenterOfMass", CenterOfMass, "Center of Mass")
@@ -1386,6 +1412,18 @@ def center_of_mass():
         raise
     doc.commitTransaction()
     return obj
+
+
+def _has_solid(doc):
+    """A solid to measure: a shown body (or an assembly's shown component) with a solid."""
+    try:
+        from .evaluate import visible_bodies
+        asm = assembly_of(doc)
+        items = assembly_components(asm, hidden=False) if asm is not None else visible_bodies(doc)
+        return any(getattr(getattr(b, "Shape", None), "Solids", None) for b in items)
+    except Exception as _fw_err:
+        _fw_log("curves.py:_has_solid", _fw_err)
+        return True
 
 
 def existing_bounding_box(doc):
@@ -1431,7 +1469,7 @@ COMMANDS = {
     "SWStyle_CurveThroughXYZPoints": ("Curve Through XYZ Points", "Makes a curve through points typed in or read from a file.", curve_through_xyz_points),
     "SWStyle_CurveThroughReferencePoints": ("Curve Through Reference Points", "Makes a curve through the selected vertices and points.", curve_through_reference_points),
     "SWStyle_OffsetOnSurface": ("Offset On Surface", "Offsets edges and faces across their faces, staying on them, in a 3D sketch.", offset_on_surface),
-    "SWStyle_CenterOfMass": ("Center of Mass", "Adds a point at the part's centre of mass that follows the part.", center_of_mass),
+    "SWStyle_CenterOfMass": ("Center of Mass", "Adds a point at the part's center of mass that follows the part.", center_of_mass),
     "SWStyle_BoundingBox": ("Bounding Box", "Adds the box round the part, with its length, width and height.", bounding_box),
 }
 

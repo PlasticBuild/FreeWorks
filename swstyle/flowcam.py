@@ -577,11 +577,11 @@ if Gui is not None:
         "SWStyle_FlowNew": _Cmd("New", KEYS[1][3], flow_new, lambda: App.ActiveDocument is not None and _no_dialog(),
                                 "FEM_Analysis"),
         "SWStyle_FlowGeneral": _Cmd("General Settings", KEYS[2][3], flow_general, _has_flow, "FEM_EquationFlow"),
-        "SWStyle_FlowDomain": _Cmd("Computational Domain", KEYS[3][3], flow_domain, _has_flow, "Part_Box"),
+        "SWStyle_FlowDomain": _Cmd("Computational Domain", KEYS[3][3], flow_domain, _has_flow, "FW_BoundingBox"),     # camicons-1126: drawn (Part_Box is only there once Part loads)
         "SWStyle_CAMMachine": _Cmd("Define Machine", KEYS[6][3], cam_machine,
-                                   lambda: App.ActiveDocument is not None and _no_dialog(), "CAM_Job"),
+                                   lambda: App.ActiveDocument is not None and _no_dialog(), "FW_CAM_Setup"),     # camicons-1126
         "SWStyle_CAMSort": _Cmd("Sort Operations", KEYS[7][3], cam_sort,
-                                lambda: bool(_jobs(App.ActiveDocument)) and _no_dialog(), "CAM_OpActiveToggle"),
+                                lambda: bool(_jobs(App.ActiveDocument)) and _no_dialog(), "FW_CAM_Active"),     # camicons-1126
     }
 
 

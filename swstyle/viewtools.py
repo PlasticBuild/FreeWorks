@@ -160,12 +160,32 @@ def _make(kind):
                     return
                 _push()
                 dpr = widget.devicePixelRatioF()
-                h = widget.height()
-                # boxZoom takes viewport pixels with y up from the bottom
+                # boxZoom takes device pixels with y DOWN from the top, as Qt counts them (measured, vd195: with
+                # y counted from the bottom a box above the middle zoomed in below it)
                 x0, x1 = r.left() * dpr, r.right() * dpr
-                y0, y1 = (h - r.bottom()) * dpr, (h - r.top()) * dpr
+                y0, y1 = r.top() * dpr, r.bottom() * dpr
+                box = (int(x0), int(y0), int(x1), int(y1))
+
+                def change(v):
+                    # FreeCAD's own boxZoom animation zoomed without the pan (the box's middle stayed off to the
+
+                    grp = App.ParamGet("User parameter:BaseApp/Preferences/View")
+                    was = grp.GetBool("UseNavigationAnimations", True)
+                    try:
+                        grp.SetBool("UseNavigationAnimations", False)
+                        v.boxZoom(*box)
+                    finally:
+                        grp.SetBool("UseNavigationAnimations", was)
+                    return True
+
                 try:
-                    view.boxZoom(int(x0), int(y0), int(x1), int(y1))
+                    from . import camanim
+                    if camanim.animate_change(change, view):
+                        return
+                except Exception as _fw_err:
+                    _fw_log("viewtools.py:area-anim", _fw_err)
+                try:
+                    change(view)
                 except Exception as error:
                     App.Console.PrintLog("FreeCAD: zoom to area: %s\n" % error)
 

@@ -149,7 +149,7 @@ def set_transparency(picture, mode, value=0, colour=None, tolerance=10.0):
         shown = keyed_image(src, tuple(colour), tolerance, value)
         _set(picture, KeyTolerance=float(tolerance), KeyTransparency=float(value))
         if "SWKeyColour" not in picture.PropertiesList:
-            picture.addProperty("App::PropertyString", "SWKeyColour", "Sketch Picture", "User defined colour")
+            picture.addProperty("App::PropertyString", "SWKeyColour", "Sketch Picture", "User defined color")
         picture.SWKeyColour = "%d,%d,%d" % tuple(colour)
     if os.path.basename(picture.ImageFile) != os.path.basename(shown) or mode != "From file":
         picture.ImageFile = shown
@@ -199,8 +199,23 @@ def trace_image(path):
     return img.convertToFormat(QtGui.QImage.Format_ARGB32)
 
 
-def colour_mask(img, colour, tolerance, box=None):
-    """{(x, y)} of the pixels within tolerance of colour (and inside box (x0, y0, x1, y1))."""
+def inside_polygon(x, y, poly):
+    """The point (x, y) lies inside the polygon [(u, v), ...] (even-odd rule)."""
+    inside = False
+    n = len(poly)
+    for i in range(n):
+        (a, b), (c, d) = poly[i], poly[(i + 1) % n]
+        if (b > y) != (d > y) and x < a + (y - b) * (c - a) / (d - b):
+            inside = not inside
+    return inside
+
+
+def colour_mask(img, colour, tolerance, box=None, polygon=None):
+    ""
+
+    if polygon:
+        box = (min(p[0] for p in polygon), min(p[1] for p in polygon),
+               max(p[0] for p in polygon), max(p[1] for p in polygon))
     x0, y0, x1, y1 = box or (0, 0, img.width(), img.height())
     x0, y0 = max(0, int(x0)), max(0, int(y0))
     x1, y1 = min(img.width(), int(math.ceil(x1))), min(img.height(), int(math.ceil(y1)))
@@ -209,6 +224,8 @@ def colour_mask(img, colour, tolerance, box=None):
         for x in range(x0, x1):
             c = img.pixel(x, y)
             if (c >> 24) & 255 > 20 and colour_distance(_rgb(c), colour) <= tolerance:
+                if polygon and not inside_polygon(x + 0.5, y + 0.5, polygon):
+                    continue
                 out.add((x, y))
     return out
 
@@ -294,12 +311,12 @@ def _area(loop):
     return abs(sum(loop[i][0] * loop[i - 1][1] - loop[i - 1][0] * loop[i][1] for i in range(len(loop)))) / 2.0
 
 
-def trace(picture, colour, tolerance=10.0, identification=1.5, smallest=4.0, box=None):
+def trace(picture, colour, tolerance=10.0, identification=1.5, smallest=4.0, box=None, polygon=None):
     """Autotrace: the outlines of the picture's areas of colour, as loops of sketch points.
     identification: how far (pixels) the lines may stray from the outline; smallest: areas under
     this many pixels are left out. box: (x0, y0, x1, y1) pixels to trace inside."""
     img = trace_image(source_file(picture))
-    mask = colour_mask(img, colour, tolerance, box)
+    mask = colour_mask(img, colour, tolerance, box, polygon)
     w, h = img.width(), img.height()
     out = []
     for loop in outlines(mask):
@@ -766,8 +783,8 @@ class AutotracePage(sketchtoolpm.ToolPage):
 
     def build(self):
         g = self.group("Message")
-        label = QtWidgets.QLabel("Select Color and click the picture on the colour to trace, or type it. "
-                                 "Select Rectangle to trace inside an area. Then Begin Trace.", g.body)
+        label = QtWidgets.QLabel("Select Color and click the picture on the color to trace, or type it. "
+                                 "Select Rectangle or Select Polygon to trace inside an area. Then Begin Trace.", g.body)
         label.setWordWrap(True)
         g.content.addWidget(label)
         g = self.group("Selection Tools")
@@ -775,9 +792,15 @@ class AutotracePage(sketchtoolpm.ToolPage):
         self.pick_colour.setObjectName("SWAutotraceSelectColor")
         self.pick_rect = QtWidgets.QRadioButton("Select Rectangle", g.body)
         self.pick_rect.setObjectName("SWAutotraceSelectRectangle")
+        self.pick_poly = QtWidgets.QRadioButton("Select Polygon", g.body)
+        self.pick_poly.setObjectName("SWAutotraceSelectPolygon")
+        self.pick_poly.setToolTip("Click the corners of the area; click the first corner again to close it")
         self.pick_colour.setChecked(True)
-        g.content.addWidget(self.pick_colour)
         g.content.addWidget(self.pick_rect)
+        g.content.addWidget(self.pick_poly)
+        g.content.addWidget(self.pick_colour)
+        self.polygon = None
+        self.poly_points = []
         self.colour_button = QtWidgets.QPushButton("Color...", g.body)
         self.colour_button.setObjectName("SWAutotraceColor")
         self.colour_button.clicked.connect(self._choose_colour)
@@ -865,6 +888,19 @@ class AutotracePage(sketchtoolpm.ToolPage):
             self._show_colour()
             self.show_note("Color picked. Begin Trace traces its outlines.")
             return
+        if self.pick_poly.isChecked():
+            pts = self.poly_points
+            close = 4.0 + 0.01 * max(w, h)
+            if len(pts) >= 3 and abs(u - pts[0][0]) <= close and abs(v - pts[0][1]) <= close:
+                self.polygon, self.box, self.poly_points = list(pts), None, []
+                self.box_label.setText("Area: polygon, %d corners" % len(self.polygon))
+                self.show_note("Area set. Begin Trace traces inside it.")
+            else:
+                pts.append((u, v))
+                self.show_note("Click the next corner, or the first corner to close the area." if len(pts) < 3 else
+                               "Click the next corner, or the first corner again to close the area.")
+            return
+        self.polygon = None
         self.rect_points.append((u, v))
         if len(self.rect_points) == 2:
             (a, b), (c, d) = self.rect_points
@@ -917,7 +953,7 @@ class AutotracePage(sketchtoolpm.ToolPage):
         self.clear()
         try:
             loops = trace(self.picture, self.colour, self.tolerance.value(), self.identification.value(),
-                          self.gap.value(), self.box)
+                          self.gap.value(), self.box, getattr(self, "polygon", None))
         except Exception as error:
             self.show_note(str(error), True)
             return []

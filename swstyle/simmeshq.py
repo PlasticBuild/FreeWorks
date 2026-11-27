@@ -650,7 +650,7 @@ if Gui is not None:
     COMMANDS = {
         "SWStyle_SimMeshControl": _Cmd("Apply Mesh Control", "A finer mesh on chosen faces, edges or vertices, growing "
                                        "by a ratio to the global size.", lambda: open_control(), False),
-        "SWStyle_SimMeshQuality": _Cmd("Create Mesh Quality Plot", "The mesh coloured by element aspect ratio or "
+        "SWStyle_SimMeshQuality": _Cmd("Create Mesh Quality Plot", "The mesh colored by element aspect ratio or "
                                        "Jacobian.", lambda: open_quality(), True),
     }
 

@@ -202,7 +202,8 @@ def trim(sketch, gid, picked, construction=False, skip_construction=False):
 
 
 def _bounded(sketch, gid, bounds_ids, picked):
-    """(lo, hi) on gid between its crossings with the two bounding entities, nearest the pick."""
+    """(lo, hi, bound at lo, bound at hi) on gid between its crossings with the two bounding
+    entities, nearest the pick."""
     g = sketch.Geometry[gid]
     u = param(g, picked)
     sides = []
@@ -210,9 +211,32 @@ def _bounded(sketch, gid, bounds_ids, picked):
         us = [c for c, _j in meets(sketch, gid, [b])]
         if not us:
             return None
-        sides.append(min(us, key=lambda c: abs(c - u)))
-    lo, hi = sorted(sides)
-    return (lo, hi) if hi - lo > TOL else None
+        sides.append((min(us, key=lambda c: abs(c - u)), b))
+    sides.sort()
+    (lo, b_lo), (hi, b_hi) = sides
+    return (lo, hi, b_lo, b_hi) if hi - lo > TOL else None
+
+
+def _tie(sketch, gid, at, bound):
+    ""
+
+
+    g = sketch.Geometry[gid]
+    if not hasattr(g, "StartPoint") or closed(g):
+        return
+    if (g.StartPoint - at).Length < 1e-6:
+        pos = 1
+    elif (g.EndPoint - at).Length < 1e-6:
+        pos = 2
+    else:
+        return
+    b = sketch.Geometry[bound]
+    if hasattr(b, "StartPoint") and not closed(b):
+        for bpos, bp in ((1, b.StartPoint), (2, b.EndPoint)):
+            if (bp - at).Length < 1e-6:
+                sketch.addConstraint(Sketcher.Constraint("Coincident", gid, pos, bound, bpos))
+                return
+    sketch.addConstraint(Sketcher.Constraint("PointOnObject", gid, pos, bound))   # trimmodes-ties-1127
 
 
 def trim_inside(sketch, gid, bounds_ids, picked, construction=False):
@@ -224,8 +248,14 @@ def trim_inside(sketch, gid, bounds_ids, picked, construction=False):
     if span is None:
         raise ValueError("The entity must cross both bounding entities")
 
+    lo, hi, b_lo, b_hi = span
+
     def change():
-        p, _rest = isolate(sketch, gid, *span)
+        at_lo, at_hi = point(g, lo), point(g, hi)
+        p, rest = isolate(sketch, gid, lo, hi)
+        for r in rest:                              # the pieces that stay end on the bounding entities
+            for at, b in ((at_lo, b_lo), (at_hi, b_hi)):
+                _tie(sketch, r, at, b)
         return _drop(sketch, [p], construction)
     return _undo(sketch, "Trim", change)
 
@@ -239,8 +269,13 @@ def trim_outside(sketch, gid, bounds_ids, picked, construction=False):
     if span is None:
         raise ValueError("The entity must cross both bounding entities")
 
+    lo, hi, b_lo, b_hi = span
+
     def change():
-        _p, rest = isolate(sketch, gid, *span)
+        at_lo, at_hi = point(g, lo), point(g, hi)
+        p, rest = isolate(sketch, gid, lo, hi)
+        _tie(sketch, p, at_lo, b_lo)                # the piece that stays ends on the bounding entities
+        _tie(sketch, p, at_hi, b_hi)
         return _drop(sketch, rest, construction)
     return _undo(sketch, "Trim", change)
 

@@ -82,7 +82,10 @@ def mass_of(obj, material_name=None):
     mat = getattr(obj, "ShapeMaterial", None)
     try:
         if mat is not None and getattr(mat, "Name", "").lower() != "default":
-            density = float(App.Units.Quantity(mat.getPhysicalValue("Density")).getValueAs("kg/mm^3")) or None
+            # pkg448: read the dict; getPhysicalValue on a material without a Density (a profile's "Steel")
+            # turned the member black (FreeCAD 1.1 rewrote its ShapeAppearance)
+            text = (getattr(mat, "PhysicalProperties", None) or {}).get("Density")
+            density = (float(App.Units.Quantity(text).getValueAs("kg/mm^3")) or None) if text else None
     except Exception as _fw_err:
         _fw_log("wecutlist.py:79", _fw_err)
     density = density or _density_named(material_name) or DENSITY

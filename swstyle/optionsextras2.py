@@ -226,6 +226,9 @@ def check_imported(doc, before):
         except Exception as _fw_err:
             _fw_log("optionsextras2.py:89", _fw_err)
     if faulty and _kept("Import", "Automatically run Import Diagnostics - healing", True):
+
+        faulty = [o for o in faulty if not _auto_heal(o)]
+    if faulty:
         log.append(("diagnostics", faulty[0].Label))
         if App.GuiUp and not os.environ.get("FREEWORKS_QUIET"):
             QtCore.QTimer.singleShot(300, lambda o=faulty[0]: _ask_diagnostics(o))
@@ -351,6 +354,24 @@ def _file_name(obj):
     return obj.Label
 
 
+def _auto_heal(obj):
+    """Import Diagnostics' Heal All on an imported body; True when nothing faulty is left."""
+    try:
+        from . import importdiag
+        before = importdiag.problems(obj.Shape)
+        healed = importdiag.heal_all(obj.Shape)
+        left = importdiag.problems(healed)
+        if left < before and not healed.isNull():
+            obj.Shape = healed
+            log.append(("healed", obj.Label))
+            App.Console.PrintMessage("Import Diagnostics: %s had %d faulty faces or gaps, %d left.\n"
+                                     % (obj.Label, before, left))
+        return left == 0
+    except Exception as _fw_err:
+        _fw_log("optionsextras2.py:_auto_heal", _fw_err)
+        return False
+
+
 def _ask_diagnostics(obj):
     try:
         from . import importdiag
@@ -360,7 +381,7 @@ def _ask_diagnostics(obj):
         return
     answer = QtWidgets.QMessageBox.question(
         Gui.getMainWindow(), "Import Diagnostics",
-        "%s has faulty faces or gaps. Do you want to run Import Diagnostics?" % _file_name(obj),
+        "%s has faulty faces or gaps. Do you want to run Import Diagnostics on the part?" % _file_name(obj),
         QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
     if answer == QtWidgets.QMessageBox.Yes:
         from . import importdiag
@@ -497,6 +518,9 @@ class ReadOnlyWatch(QtCore.QObject):
     def check(self):
         if not self.active():
             return []
+        from . import recovery
+        if recovery.busy():
+            return []           # fh259: asked on a later check: a Reload while a file opens or rebuilds ended FreeCAD
         found = self.changed()
         for doc in found:
             self.asked.add(doc.FileName)
@@ -511,6 +535,10 @@ class ReadOnlyWatch(QtCore.QObject):
             Gui.getMainWindow(), "Modified by another user",
             "%s was changed by another user since you opened it.\nReload it now?" % os.path.basename(path),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        from . import recovery
+        if answer == QtWidgets.QMessageBox.Yes and recovery.busy():
+            self.asked.discard(path)    # fh259: a file opens or rebuilds now: asked again on the next check
+            return
         if answer == QtWidgets.QMessageBox.Yes:
             App.closeDocument(doc.Name)
             App.openDocument(path)
@@ -538,14 +566,30 @@ def backups_of(path):
     return out
 
 
+def _backup_folder_of(path):
+    """fh230: the Backup folder path's backups go to (Backup/Recover > Backup folder), or None while they stay beside it."""
+    try:
+        if _kept("Fixed", "Save backup files in the same location as the original", True):
+            return None
+        from . import optionsextras4
+        return optionsextras4.backup_folder()
+    except Exception as _fw_err:
+        _fw_log("optionsextras2.py:backup_folder", _fw_err)
+        return None
+
+
 def remove_old_backups(path, days=BACKUP_DAYS, now=None):
-    """Deletes path's backups older than days. The removed paths."""
+    """Deletes path's backups older than days, beside it and in the Backup folder. The removed paths."""
     import time
     if not _kept("Backup/Recover", "Remove backups older than 7 days", False):
         return []
     now = now or time.time()
     gone = []
-    for b in backups_of(path):
+    found = backups_of(path)
+    folder = _backup_folder_of(path)
+    if folder and os.path.normcase(os.path.normpath(folder)) != os.path.normcase(os.path.normpath(os.path.dirname(path))):
+        found += backups_of(os.path.join(folder, os.path.basename(path)))
+    for b in found:
         try:
             if now - os.path.getmtime(b) > days * 86400:
                 os.remove(b)
@@ -681,6 +725,17 @@ def multiuser_menus():
         bool(_kept("Collaboration", "Add shortcut menu items for multi-user environment", False))
 
 
+def _session_read_only(doc, on):
+    """fh230: the open document follows its file, as a file opened read-only does (refs129): Save says so and
+    Save As saves it under a new name, instead of Save writing over the read-only file (or failing on Windows)."""
+    try:
+        from . import filecmds
+        if filecmds.is_read_only(doc) != on:
+            filecmds.set_read_only(doc, on)
+    except Exception as _fw_err:
+        _fw_log("optionsextras2.py:session_read_only", _fw_err)
+
+
 def make_read_only(doc=None, ask=True):
     import stat
     doc = doc or App.ActiveDocument
@@ -695,6 +750,7 @@ def make_read_only(doc=None, ask=True):
         doc.save()
     mode = os.stat(doc.FileName).st_mode
     os.chmod(doc.FileName, mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
+    _session_read_only(doc, True)
     log.append(("readonly", doc.Label))
     if App.GuiUp:
         try:        # Lock / Make Read-Only says so, as Get Write Access does
@@ -710,6 +766,7 @@ def get_write_access(doc=None):
     if doc is None or not doc.FileName or not os.path.exists(doc.FileName):
         return False
     os.chmod(doc.FileName, os.stat(doc.FileName).st_mode | stat.S_IWUSR)
+    _session_read_only(doc, False)
     log.append(("writable", doc.Label))
     if App.GuiUp:
         try:
@@ -727,12 +784,49 @@ class _FileCmd:
         return {"MenuText": self.text, "ToolTip": self.tip, "CmdType": "ForEdit"}
 
     def IsActive(self):
+        return True             # fh231: NO DEAD CONTROLS; a click that cannot act says what to do first
+
+    def ready(self):
         doc = App.ActiveDocument
         return bool(doc is not None and doc.FileName and os.path.exists(doc.FileName)
                     and read_only(doc.FileName) == self.want_ro)
 
     def Activated(self):
-        self.run()
+        if self.ready():
+            self.run()
+            return
+        not_ready(self.text)
+
+
+NOT_READY = {
+    "nodoc": "%s works on a document saved in a file, and nothing here is ready for it yet. Open the document, or save "
+             "it with File > Save, then use %s again.",
+    "Make Read-Only": "Make Read-Only gives up write access to the file of the active document. %s is read-only "
+                      "already. Use File > Get Write Access to change it again.",
+    "Get Write Access": "Get Write Access takes write access to the file of the active document. %s can be changed "
+                        "already. Use File > Make Read-Only to give up write access.",
+}
+
+
+def not_ready(text):
+    """fh231: the "what to do first" Message page (notready.py) for Make Read-Only / Get Write Access."""
+    doc = App.ActiveDocument
+    if doc is None or not doc.FileName or not os.path.exists(doc.FileName):
+        message = NOT_READY["nodoc"] % (text, text)
+    else:
+        message = NOT_READY[text] % os.path.basename(doc.FileName)
+    try:
+        from . import notready
+        notready.TEXTS[text] = message
+        if notready.show(text):
+            return message
+    except Exception as _fw_err:
+        _fw_log("optionsextras2.py:not_ready", _fw_err)
+    try:
+        Gui.getMainWindow().statusBar().showMessage(message, 8000)
+    except Exception as _fw_err:
+        _fw_log("optionsextras2.py:not_ready-bar", _fw_err)
+    return message
 
 
 def register():
@@ -747,14 +841,28 @@ def register():
 
 
 # --------------------------------------------------------------------------- auto-dismiss
-DISMISS_WORDS = ("reference", "update", "updating", "out of date", "out-of-date")
+# fh197: which boxes are reference and update messages is decided by the box, not by English words in its text (in an
+
+# a box named here, or one its caller marks with the "fw_dismissable" property
+DISMISS_NAMES = ("FW_ReferenceMessage", "FW_UpdateMessage")
+
+
+def mark_dismissable(box):
+    """For a caller: this one-button box is a reference or update message (Options > Messages may close it)."""
+    try:
+        box.setProperty("fw_dismissable", True)
+    except Exception as _fw_err:
+        _fw_log("optionsextras2.py:mark_dismissable", _fw_err)
+    return box
 
 
 def dismissable(box):
     if not isinstance(box, QtWidgets.QMessageBox) or len(box.buttons()) > 1:
         return False
-    text = (box.text() + " " + box.informativeText()).lower()
-    return any(w in text for w in DISMISS_WORDS)
+    try:
+        return box.objectName() in DISMISS_NAMES or box.property("fw_dismissable") is True
+    except Exception:
+        return False
 
 
 def _close_if_shown(box):
@@ -787,6 +895,25 @@ def recover_folder():
     return text if text and os.path.isdir(text) else ""
 
 
+SESSION_FILE = "fw_session.txt"
+
+
+def drop_recovery_copy(doc_name, folder=None):
+    """fh230: a document closed normally leaves no copy in the Auto-recover folder (no false recovery next start)."""
+    import shutil
+    folder = folder or recover_folder()
+    dst = os.path.join(folder, doc_name) if folder else ""
+    if not dst or not os.path.isfile(os.path.join(dst, SESSION_FILE)):
+        return False
+    try:
+        if open(os.path.join(dst, SESSION_FILE)).read().strip() != str(os.getpid()):
+            return False
+    except OSError:
+        return False
+    shutil.rmtree(dst, ignore_errors=True)
+    return not os.path.exists(dst)
+
+
 def copy_recovery(folder=None):
     """Each open document's auto-recover data copied to folder/<document>/. The documents copied."""
     import shutil
@@ -804,6 +931,9 @@ def copy_recovery(folder=None):
             continue
         dst = os.path.join(folder, doc.Name)
         os.makedirs(dst, exist_ok=True)
+        # fh230: whose copy it is, so Document Recovery offers it only once that session is gone
+        with open(os.path.join(dst, SESSION_FILE), "w") as f:
+            f.write(str(os.getpid()))
         for f in files:
             p = os.path.join(src, f)
             if os.path.isdir(p):
@@ -939,6 +1069,17 @@ def _tick_docs():
     return out
 
 
+def _busy():
+    """fh261: a document is being opened or rebuilt (recovery.busy, fh259); False when fh259 is not in."""
+    try:
+        from . import recovery
+        busy = getattr(recovery, "busy", None)
+        return bool(busy()) if busy is not None else False
+    except Exception as _fw_err:
+        _fw_log("optionsextras2.py:busy", _fw_err)
+        return True
+
+
 def _body_like(obj):
     ""
 
@@ -951,6 +1092,19 @@ def _body_like(obj):
         return shape is None or bool(shape.Faces)
     except Exception:
         return True
+
+
+def _all_faces_through(vo):
+    ""
+
+
+    try:
+        mats = list(vo.ShapeAppearance)
+    except Exception:
+        return True
+    if len(mats) <= 1:
+        return True
+    return all(m.Transparency * 100.0 >= THROUGH - 0.01 for m in mats)
 
 
 def apply_through(doc=None, tick=False):
@@ -968,7 +1122,11 @@ def apply_through(doc=None, tick=False):
     for d in docs:
         for obj in d.Objects:
             vo = getattr(obj, "ViewObject", None)
-            if vo is None or "Transparency" not in vo.PropertiesList or "Selectable" not in vo.PropertiesList:
+            if vo is None:
+                continue
+            try:
+                vo.Transparency, vo.Selectable      # fh261: read once, not two PropertiesList lists per object a pass
+            except AttributeError:
                 continue
             key = (d.Name, obj.Name)
             if key in PICKABLE:
@@ -976,7 +1134,7 @@ def apply_through(doc=None, tick=False):
                     vo.Selectable = True
                     _through.discard(key)
                 continue
-            want = on and vo.Visibility and vo.Transparency >= THROUGH and _body_like(obj)
+            want = on and vo.Visibility and vo.Transparency >= THROUGH and _body_like(obj) and _all_faces_through(vo)
             if want and vo.Selectable and key not in _through:
                 vo.Selectable = False
                 _through.add(key)
@@ -1016,6 +1174,8 @@ class _ShiftWatch(QtCore.QObject):
 
 
 def _safe_through(tick=False):
+    if tick and _busy():
+        return              # fh261: the 1.5 s pass waits while a file opens or rebuilds (it walked every object then)
     try:
         apply_through(tick=tick)
     except Exception as error:

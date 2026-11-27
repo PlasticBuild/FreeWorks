@@ -347,7 +347,7 @@ class ModifyConfigurations(QtWidgets.QDialog):
 
     def eventFilter(self, obj, event):
         if event.type() == QtCore.QEvent.MouseButtonDblClick and self.isVisible():
-            QtCore.QTimer.singleShot(150, lambda: self.add_item(self.picked_component()))
+            from . import safe_later as _sl; _sl.later(150, lambda: self.add_item(self.picked_component()), self, "grid")
         return False
 
     def _cell(self, r, c, name):

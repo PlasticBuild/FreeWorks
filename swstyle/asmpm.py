@@ -120,12 +120,53 @@ def mate_icon(kind):
     return drawn_mate_icon(kind) or QtGui.QIcon(":/icons/%s.svg" % native)
 
 
+# asmpkg371: a PM header's family the icon pack lacks -> the picture of its command (the drawn FW_<key> set),
+# so the page title never shows the initials tile (Chain Pattern, Pattern Driven, Mate Controller, Replace ...)
+PM_ICON_DRAWN = {"ASSEMBLIES_CHAIN_PATTERN": "FW_ChainComponentPattern",
+                 "ASSEMBLIES_PATTERN_DRIVEN_PATTERN": "FW_PatternDrivenComponentPattern",
+                 "ASSEMBLIES_CIRCULAR_PATTERN": "FW_CircularComponentPattern",
+                 "ASSEMBLIES_CURVE_DRIVEN_PATTERN": "FW_CurveComponentPattern",
+                 "ASSEMBLIES_LINEAR_PATTERN": "FW_LinearComponentPattern",
+                 "ASSEMBLIES_SKETCH_DRIVEN_PATTERN": "FW_SketchComponentPattern",
+                 "ASSEMBLIES_MIRROR_COMPONENTS": "FW_MirrorComponents", "ASSEMBLIES_MATE": "FW_Mate",
+                 "ASSEMBLIES_COPY_WITH_MATES": "FW_CopyWithMates", "ASSEMBLIES_BELT_CHAIN": "FW_AsmBeltChain",
+                 "WELDMENTS_WELD_BEAD": "WE_WELD_BEAD", "ASSEMBLIES_EXPLODE_LINE_SKETCH": "FW_ExplodeLineSketch",
+                 "ASSEMBLIES_MATE_CONTROLLER": "FW_MateController",
+                 "ASSEMBLIES_REPLACE_COMPONENTS": "FW_ReplaceComponents",
+                 "MOTION_SPRING": "FW_MotionSpring", "MOTION_DAMPER": "FW_MotionDamper",
+                 "MOTION_FORCE": "FW_MotionForce", "MOTION_CONTACT": "FW_MotionContact"}
+
+
+def pm_icon(family):
+    """The icon name a PM header shows for family: the pack's family, else the drawn picture of its command,
+    else the Motion drawings (simicons), else family as it is."""
+    if not family:
+        return ""
+    try:
+        from . import icons
+        if icons.paints(icons.family(family)):
+            return family
+        alt = PM_ICON_DRAWN.get(family)
+        if alt and icons.paints(icons.family(alt)):
+            return alt
+        drawn = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "icons-drawn", "%s.svg" % alt) if alt else ""
+        if drawn and os.path.isfile(drawn):
+            return drawn        # (no icon pack: family() gives nothing, the drawn file is loaded as it is)
+        from . import simicons
+        path = simicons.svg(family)
+        if path:
+            return path
+    except Exception as _fw_err:
+        _fw_log("asmpm.pm_icon", _fw_err)
+    return family
+
+
 def _box(title, pm_title=None, icon=None):
     box = QtWidgets.QWidget()
     box.setWindowTitle(title)
     if pm_title:
         box.setProperty("swstyle_pm_title", pm_title)
-        box.setProperty("swstyle_pm_icon", icon or "")
+        box.setProperty("swstyle_pm_icon", pm_icon(icon) or "")
     lay = QtWidgets.QVBoxLayout(box)
     lay.setContentsMargins(4, 4, 4, 4)
     lay.setSpacing(4)
@@ -335,6 +376,23 @@ def config_text(doc, name):
     except Exception:
         desc = ""
     return "%s (%s)" % (name, desc) if desc and desc != name else name
+
+
+def _tree_rows_again():
+    ""
+
+
+
+
+    try:
+        for view in Gui.getMainWindow().findChildren(QtWidgets.QAbstractItemView, "SWFeatureTree"):
+            model = view.model()
+            while model is not None and not hasattr(model, "rebuild") and hasattr(model, "sourceModel"):
+                model = model.sourceModel()
+            if model is not None and hasattr(model, "soon"):
+                model.soon()
+    except Exception as _fw_err:
+        _fw_log("asmpm.py:tree rows again", _fw_err)
 
 
 class InsertComponentPanel:
@@ -787,6 +845,7 @@ class InsertComponentPanel:
     def _keep(self):
         doc = self.asm.Document
         ac.PREVIEWS.discard((doc.Name, self.preview.Name))
+        _tree_rows_again()      # asmpkg365: the placed component gets its FeatureManager row
         self.placed.append(self.preview)
         self._options(self.preview)
         self.preview = None
@@ -889,6 +948,8 @@ POPUP_ORDER = ("Coincident", "Parallel", "Perpendicular", "Tangent", "Concentric
 POPUP_MORE = ("Profile Center", "Symmetric", "Width", "Path Mate", "Linear/Linear Coupler", "Distance Range",
               "Angle Range", "Cam", "Slot", "Hinge", "Gear", "Rack Pinion", "Screw", "Universal Joint")
 POPUP_OPEN = [False]
+
+ANALYSIS_MESSAGE = "Select a mate on the Mates tab to add Motion Analysis properties."
 
 
 def _tokens():
@@ -1056,12 +1117,22 @@ def reverse_button(name):
     return b
 
 
+
+
+SHOWN = {"Distance Range": "Distance", "Angle Range": "Angle"}
+
+
+def shown(kind):
+    """The name the user sees for a mate kind."""
+    return SHOWN.get(kind, kind)
+
+
 def _square(kind, name=None, tip=None, size=22):
     b = QtWidgets.QToolButton()
     b.setIcon(sw_icon(kind))
     b.setIconSize(QtCore.QSize(_px(size - 4), _px(size - 4)))
     b.setCheckable(True)
-    b.setToolTip(tip or kind)
+    b.setToolTip(tip or shown(kind))
     b.setStyleSheet(_square_qss(size))
     if name:
         b.setObjectName(name)
@@ -1078,6 +1149,16 @@ class _Label(QtWidgets.QLabel):
     def mousePressEvent(self, event):
         if self.button.isEnabled():
             self.button.click()
+
+    # asmpkg348: a mate's name stays a word ("Angle" beside the limit Angle button): the PropertyManager's
+    # field-glyph pass (pmlayout) turns a lone "Angle" label into the angle glyph
+    def setPixmap(self, pixmap):
+        if not self.property("fw_text_only"):
+            super().setPixmap(pixmap)
+
+    def setText(self, text):
+        if text or not self.property("fw_text_only"):
+            super().setText(text)
 
 
 class MatePopup(QtWidgets.QFrame):
@@ -1418,6 +1499,19 @@ class _TabBlock(QtWidgets.QWidget):
             self.lay.removeWidget(active[0])
             self.lay.addWidget(active[0])
 
+def _mark_active(box, on=True):
+    """pmboxes' active-box mark on a pick box that keeps its own colours (PICK_STYLE): while it is empty the
+    page waits for a pick, so Enter, Esc and typed keys stay with the 3D view (asmpkg362)."""
+    try:
+        from . import pmboxes
+        own = box.styleSheet()
+        pmboxes.mark(box, on)
+        if own and box.styleSheet() != own:
+            box.setStyleSheet(own)
+    except Exception as _fw_err:
+        App.Console.PrintLog("FreeCAD asmpm._mark_active: %s\n" % _fw_err)
+
+
 class MatePanel:
     def __init__(self, asm, joint=None):
         _track(self)
@@ -1465,6 +1559,10 @@ class MatePanel:
             lambda pos: self._sel_menu(pos).popup(self.list.viewport().mapToGlobal(pos)))
         row.addWidget(self.list, 1)
         lay.addLayout(row)
+        # asmpkg362: Entities to Mate is the box the picks go into (pmboxes' active mark, own colours kept), so a
+
+        # the Distance field took the keys with "1.00" selected, and a typed key went into it)
+        _mark_active(self.list)
         # Multiple mate mode: one common reference, many component references, a mate each
         self.multi = False
         self.common = None
@@ -1661,7 +1759,10 @@ class MatePanel:
                     b = _square(name, "FW_Mate_%s" % name.replace(" ", ""))
                     b.clicked.connect(lambda _=False, k=name: self.choose(k))
                     group.addButton(b)
-                    label = _Label(name, b)
+                    label = _Label(shown(name), b)
+                    if name in SHOWN:
+                        label.setProperty("fw_text_only", True)
+                        label.setProperty("swlayout", shown(name))     # pmlayout.DONE: its row is left as laid out
                     _row(box_lay, b, label)
                     self.type_buttons[name] = b
                     self.type_labels[name] = label
@@ -1737,7 +1838,7 @@ class MatePanel:
                 self.type_tabs.setTabToolTip(i, "%s Mates" % self.type_tabs.tabText(i))
         self.type_tabs.setCurrentIndex(0)    # a mate edited from Advanced or Mechanical: _open_box picks its tab
         self.type_tabs.currentChanged.connect(self._type_tab)
-        QtCore.QTimer.singleShot(0, lambda: self._tab(0))
+        from . import safe_later as _sl; _sl.later(0, lambda: self._tab(0), self, "type_tabs")
         for wait in (0, 300, 1000):     # the PropertyManager's header row comes once the panel shows
             QtCore.QTimer.singleShot(wait, self._header)
         self._enable(())
@@ -1834,12 +1935,7 @@ class MatePanel:
             w.valueChanged.connect(lambda *_a, k=kind: self._limit_changed(k))
             form.addRow(label, w)
             fields[end] = w
-        note = QtWidgets.QLabel("Holds while a component is dragged (FreeCAD limits the mate that "
-                                "lets the two move).")
-        note.setWordWrap(True)
-        note.setEnabled(False)
-        note.setProperty("fw_keep_grey", True)     # a grey note, not a control (pmnogrey keeps it)
-        form.addRow(note)
+
         lay.addWidget(box)
         box.hide()
         self.limits[kind] = {"box": box, "max": fields["Max"], "min": fields["Min"], "value": value, "flip": flip,
@@ -2994,6 +3090,15 @@ class MatePanel:
 
         from . import asmphysics as ph
         out = []
+
+
+        mb, lay = _box("Message")
+        self.analysis_message = QtWidgets.QLabel(ANALYSIS_MESSAGE)
+        self.analysis_message.setObjectName("FW_MateAnalysisMessage")
+        self.analysis_message.setWordWrap(True)
+        lay.addWidget(self.analysis_message)
+        out.append(mb)
+        self.analysis_note_box = mb
         lb, lay = _box("Load Bearing Faces")
         self.load_faces = QtWidgets.QListWidget()
         self.load_faces.setObjectName("FW_MateLoadFaces")
@@ -3124,22 +3229,27 @@ class MatePanel:
             show = not self.analysis_tab and (current is None or w not in self.type_boxes or w is current)
             if w is getattr(self, "tabs_box", None):
                 show = True               # the four-tab block stays on the Analysis tab too
-            (group if group is not None else w).setVisible(show)
             # pkg312: the title bars too (Mate Selections, Mates, Options showed as empty folded boxes
 
             box = self._task_box(w)
             if box is not None:
                 boxes[box] = boxes.get(box, False) or show
+            else:       # asmpkg358: a group's rows alone are hidden only without a title bar (a fold to the PM's fold memory)
+                (group if group is not None else w).setVisible(show)
         for box, show in boxes.items():
             box.setVisible(show)
         if not self.analysis_tab and current is not None:
             QtCore.QTimer.singleShot(0, self._type_headers)
+        has_mate = (self.pending or self.editing) is not None
         for w in self.analysis_boxes:
+            note = w is getattr(self, "analysis_note_box", None)
+            on = self.analysis_tab and (note != has_mate)    # asmpkg348: the Message alone until there is a mate
             group = w.parentWidget()
-            (group if group is not None else w).setVisible(self.analysis_tab)
             box = self._task_box(w)     # its title bar too: Friction / Bushing showed on the Mates tab
             if box is not None:
-                box.setVisible(self.analysis_tab)
+                box.setVisible(on)
+            else:
+                (group if group is not None else w).setVisible(on)
         if self.analysis_tab:
             self._analysis_load(self.pending or self.editing)
 
@@ -3250,7 +3360,7 @@ class MatePanel:
         self.doc.Name      # its document closed: this raises here and selguard drops the observer
         if sub and not sub.endswith(".") and (obj, sub) not in getattr(self, "_held", ()):
             self._last_added = (obj, sub)   # the element a following whole-component re-click is on
-        QtCore.QTimer.singleShot(0, lambda: selguard.quiet(lambda: self._pick(self.doc.getObject(obj), sub)))
+        from . import safe_later as _sl; _sl.later(0, lambda: selguard.quiet(lambda: self._pick(self.doc.getObject(obj), sub)), self, "uj_define")
 
     def removeSelection(self, doc, obj, sub):
         if doc != self.doc.Name or getattr(self, "_unpicking", False) or self._gone():
@@ -3404,6 +3514,11 @@ class MatePanel:
             self._path_pick(ref)
             return
         if self.kind == asmcoupler.KIND and self.pending is not None and ac.mate_type(self.pending) == asmcoupler.KIND:
+            if any(r == ref for r in self.refs):
+                # asmpkg364: one of the two mate entities selected again (the page keeps its picks lit): not a
+                # Reference component. It filled Reference component 1 with the first slider itself, so the
+                # coupler measured that slider against itself and the other one never followed.
+                return
             self._linear_pick(ref)
             return
         if self.kind == "Symmetric" and self.pending is None:
@@ -3462,6 +3577,8 @@ class MatePanel:
         self.multi_box.setVisible(self.multi)
         self.list.setVisible(not self.multi)
         self._multi_clear()
+        _mark_active(self.list, not self.multi)
+        _mark_active(self.multi_common, self.multi)
 
     def _multi_clear(self):
         self.common = None
@@ -3784,7 +3901,8 @@ class MatePanel:
         miss = None
         if later is not None and later not in kinds:
             miss, later = later, None
-        self.kind = first if first in kinds and first not in ac.LIMITS else ac.first_choice(s1, s2)
+        # Cam, Slot, Linear/Linear Coupler pressed first: the default mate first, then made into it below (asmpkg355)
+        self.kind = first if first in kinds and first not in ac.LIMITS and first in ac.JOINT else ac.first_choice(s1, s2)
         if self.kind in getattr(self, "couplers", {}):
             self._coupler_defaults(self.kind)   # pressed before the picks: its value from them (1 mm per turn)
         elif self.kind == "Gear":
@@ -3980,7 +4098,7 @@ class MatePanel:
         allowed = getattr(self, "allowed_kinds", None)
         if allowed is not None and joint is not None and kind not in allowed and kind not in ("Width", "Path Mate", "Symmetric"):
 
-            self._error_text("%s cannot be made from these selections." % kind)
+            self._error_text("%s cannot be made from these selections." % shown(kind))
             b = self.type_buttons.get(self.kind)
             if b is not None:
                 b.setChecked(True)
@@ -5001,7 +5119,7 @@ class MoveComponentPanel:
         self._modes()
         self.comps = []
         Gui.Selection.addObserver(self, 0)
-        QtCore.QTimer.singleShot(0, self._from_selection)
+        from . import safe_later as _sl; _sl.later(0, self._from_selection, self, "list")
         QtCore.QTimer.singleShot(0, self._option_changed)     # the groups' boxes exist once shown
 
     def option(self):
@@ -5125,6 +5243,7 @@ class MoveComponentPanel:
         comp.Placement = turn.multiply(last)
         if ac.mates(self.asm):
             try:
+                ac.follow_cross(self.asm, comp)           # a Universal Joint's other shaft turns with it
                 ac.solve(self.asm)
                 # the solver laid it back on its mates and let its centre slide: back under the pointer's
                 # turn as far as the mates allow (a second solve keeps only what they let it keep)
@@ -5132,6 +5251,7 @@ class MoveComponentPanel:
                 if slip.Length > 1e-6:
                     comp.Placement = App.Placement(comp.Placement.Base + slip, comp.Placement.Rotation)
                     ac.solve(self.asm)
+                ac.follow_mesh(self.asm, comp, last)      # a Gear / Rack Pinion partner turns as far as it turned
             except Exception as _fw_err:
                 _fw_log("asmpm.py:free turn", _fw_err)
         st[1] = App.Vector(d)
@@ -5239,6 +5359,12 @@ class MoveComponentPanel:
             self._xyz_now()
 
     def _from_selection(self):
+        try:
+            import shiboken6
+            if not shiboken6.isValid(self.list):
+                return          # the panel is closed: this call was queued before it (lifetime2-1126)
+        except Exception:
+            pass
         comps = []
         points = {}
         taken = {e[1] for e in self.entity.values() if e is not None}
@@ -5298,15 +5424,15 @@ class MoveComponentPanel:
                 return
             field = self._entity_field()
             if field is not None and self.take_entity(field, root, sub):
-                QtCore.QTimer.singleShot(0, self._from_selection)
+                from . import safe_later as _sl; _sl.later(0, self._from_selection, self, "list")
                 return
-        QtCore.QTimer.singleShot(0, self._from_selection)
+        from . import safe_later as _sl; _sl.later(0, self._from_selection, self, "list")
 
     def removeSelection(self, *args):
-        QtCore.QTimer.singleShot(0, self._from_selection)
+        from . import safe_later as _sl; _sl.later(0, self._from_selection, self, "list")
 
     def clearSelection(self, *args):
-        QtCore.QTimer.singleShot(0, self._from_selection)
+        from . import safe_later as _sl; _sl.later(0, self._from_selection, self, "list")
 
     def _movable(self):
         fixed = ac.grounded(self.asm)
@@ -5320,14 +5446,19 @@ class MoveComponentPanel:
         self.doc.openTransaction("Move Component")
         try:
             self.watch.snapshot()
+            was = []
             for comp in comps:
                 plc = App.Placement(comp.Placement)
                 if self.move_mode.currentText() == "To XYZ Position":
                     plc.Base = self._to_base(comp, d)
                 else:
                     plc.Base = plc.Base + d
+                was.append((comp, App.Placement(comp.Placement)))
                 comp.Placement = plc
+                ac.follow_cross(self.asm, comp)           # a Universal Joint's other shaft turns with it
             ac.solve(self.asm)
+            for comp, before in was:
+                ac.follow_mesh(self.asm, comp, before)    # a rack moved as far as its mates let it: its pinion turns
             if self.watch.tick() and self.option() == "Collision Detection" and self.stop_at.isChecked():
                 self._stop_at_touch(comps, d)
             self.doc.recompute()
@@ -5371,12 +5502,17 @@ class MoveComponentPanel:
         try:
             self.watch.snapshot()
             turn = App.Rotation(rz, ry, rx)
+            was = []
             for comp in comps:
                 plc = App.Placement(comp.Placement)
                 centre = comp.Shape.BoundBox.Center if comp.Shape.BoundBox.isValid() else plc.Base
                 # about the component's own centre, along the assembly's axes
                 comp.Placement = App.Placement(App.Vector(), turn, centre) * plc
+                was.append((comp, plc))
+                ac.follow_cross(self.asm, comp)           # a Universal Joint's other shaft turns with it
             ac.solve(self.asm)
+            for comp, before in was:
+                ac.follow_mesh(self.asm, comp, before)    # a Gear / Rack Pinion partner turns as far as it turned
             self.watch.tick()
             self.doc.recompute()
         except BaseException:

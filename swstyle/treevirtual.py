@@ -278,9 +278,9 @@ def _annotation_tail(doc, view):
     add(("ShowAllViews", tick(allv, "Show All Views in Dynamic View Mode"),
          lambda: (_set_flag(doc, ALL_VIEWS, not allv), (not allv) and _gui("SWStyle_MBD3DViews")), ok))
     add(("-", None, None, False))
-    add(("InsertAnnotationView", "Insert Annotation View", lambda: _gui("SWStyle_MBDCapture3DView"), ok))
+    add(("InsertAnnotationView", "Insert Annotation View", lambda: fmmenu._later(lambda: insert_annotation_view(doc)), ok))
     auto = ok and _flag(doc, AUTO_PLACE, True)
-    add(("AutoPlace", tick(auto, "Automatically Place into Annotation Views"), lambda: _set_flag(doc, AUTO_PLACE, not auto), ok))
+    add(("AutoPlace", tick(auto, "Automatically Place into Annotation Views"), lambda: set_auto_place(doc, not auto), ok))
     vis = ok and _flag(doc, VIEW_VISIBILITY, False)
     add(("ViewVisibility", tick(vis, "Enable Annotation View Visibility"), lambda: _set_flag(doc, VIEW_VISIBILITY, not vis), ok))
     add(("-", None, None, False))
@@ -326,3 +326,221 @@ def entries(kind, doc, view=None):
     add(("Collapse", "Collapse Items", lambda: fmmenu.collapse(view), True))
     add(("Customize", "Customize Menu", None, True))
     return out
+
+
+
+NOTES_AREA = "Notes Area"
+UNASSIGNED_ITEMS = "Unassigned Items"
+# the standard annotation views and the face normal each one looks at (FreeCAD's Front looks along +Y)
+STANDARD_VIEWS = (("*Front", (0, -1, 0)), ("*Top", (0, 0, 1)), ("*Right", (1, 0, 0)),
+                  ("*Back", (0, 1, 0)), ("*Bottom", (0, 0, -1)), ("*Left", (-1, 0, 0)))
+VIEW_ORDER = (NOTES_AREA,) + tuple(n for n, _d in STANDARD_VIEWS) + (UNASSIGNED_ITEMS,)
+VIEW_PROP = "SWAnnotationView"          # on an annotation: the view it was put in
+VIEWS_PROP = "SWAnnotationViews"        # on the Annotations group: the views inserted (shown when empty too)
+
+
+def _std_view(normal):
+    """The standard view looking at a face with this normal, or None (not square to the model)."""
+    try:
+        n = App.Vector(normal)
+        if n.Length < 1e-9:
+            return None
+        n.normalize()
+        for name, d in STANDARD_VIEWS:
+            if n.dot(App.Vector(*d)) >= 0.999:
+                return name
+    except Exception as _fw_err:
+        _fw_log("treevirtual.py:std-view", _fw_err)
+    return None
+
+
+def _face_normal(obj):
+    for ref in list(getattr(obj, "References", []) or []):
+        try:
+            src, subs = ref
+            for sub in (subs if isinstance(subs, (list, tuple)) else [subs]):
+                if not str(sub).startswith("Face"):
+                    continue
+                face = src.Shape.getElement(str(sub))
+                if face.Surface.TypeId == "Part::GeomPlane":
+                    u0, u1, v0, v1 = face.ParameterRange
+                    return face.normalAt((u0 + u1) / 2, (v0 + v1) / 2)
+        except Exception as _fw_err:
+            _fw_log("treevirtual.py:face-normal", _fw_err)
+    return None
+
+
+def view_of(obj):
+    ""
+
+
+
+    if obj is None or not hasattr(obj, "Kind") or "References" not in getattr(obj, "PropertiesList", []):
+        return None
+    put = str(getattr(obj, VIEW_PROP, "") or "")
+    if put:
+        return put
+    if not _flag(obj.Document, AUTO_PLACE, True):
+        return UNASSIGNED_ITEMS
+    if obj.Kind == "Note" and not list(obj.References or []):
+        return NOTES_AREA
+    n = _face_normal(obj)
+    if n is None:
+        made = getattr(obj, "CreatedView", None)
+        n = -App.Vector(made) if made is not None and App.Vector(made).Length > 1e-9 else None
+    return (_std_view(n) if n is not None else None) or UNASSIGNED_ITEMS
+
+
+def set_auto_place(doc, on):
+    ""
+
+    if not on and doc is not None:
+        for o in list(doc.Objects):
+            name = view_of(o)
+            if name not in (None, UNASSIGNED_ITEMS) and not str(getattr(o, VIEW_PROP, "") or ""):
+                if VIEW_PROP not in o.PropertiesList:
+                    o.addProperty("App::PropertyString", VIEW_PROP, "PMI", "The annotation view it is in")
+                    try:
+                        o.setEditorMode(VIEW_PROP, 2)
+                    except Exception as _fw_err:
+                        _fw_log("treevirtual.py:auto-hide", _fw_err)
+                setattr(o, VIEW_PROP, name)
+    _set_flag(doc, AUTO_PLACE, on)
+    _trees_soon()
+
+
+def _views_folder(doc, make=False):
+    """The part's Annotations group (mbd.py's), which keeps the inserted views."""
+    if doc is None:
+        return None
+    for o in doc.Objects:
+        if o.TypeId == "App::DocumentObjectGroup" and o.Label == "Annotations":
+            return o
+    if make:
+        from . import mbd
+        return mbd._folder(doc)
+    return None
+
+
+def inserted_views(doc):
+    g = _views_folder(doc)
+    return [str(v) for v in (getattr(g, VIEWS_PROP, []) or [])] if g is not None else []
+
+
+def view_key(name):
+    return VIEW_ORDER.index(name) if name in VIEW_ORDER else len(VIEW_ORDER) - 1
+
+
+def _trees_soon():
+    try:
+        from PySide import QtWidgets as _W
+        for tree in Gui.getMainWindow().findChildren(_W.QTreeView, "SWFeatureTree"):
+            m = tree.model()
+            if hasattr(m, "soon"):
+                m.soon()
+    except Exception as _fw_err:
+        _fw_log("treevirtual.py:trees-soon", _fw_err)
+
+
+def put_in_view(doc, name, annotations):
+    """Insert Annotation View's OK: the view is kept in the Annotations folder, the picked annotations move in."""
+    g = _views_folder(doc, make=True)
+    if VIEWS_PROP not in g.PropertiesList:
+        g.addProperty("App::PropertyStringList", VIEWS_PROP, "Annotations", "Annotation views inserted in the part")
+        try:
+            g.setEditorMode(VIEWS_PROP, 2)
+        except Exception as _fw_err:
+            _fw_log("treevirtual.py:views-hide", _fw_err)
+    have = inserted_views(doc)
+    if name not in have:
+        g.SWAnnotationViews = have + [name]
+    for a in annotations:
+        if VIEW_PROP not in a.PropertiesList:
+            a.addProperty("App::PropertyString", VIEW_PROP, "PMI", "The annotation view it is in")
+            try:
+                a.setEditorMode(VIEW_PROP, 2)
+            except Exception as _fw_err:
+                _fw_log("treevirtual.py:view-hide", _fw_err)
+        setattr(a, VIEW_PROP, name)
+    _trees_soon()
+
+
+class AnnotationViewPanel:
+    ""
+
+
+    def __init__(self, doc):
+        from PySide import QtCore, QtWidgets as W
+        self.doc = doc
+        box = W.QWidget()
+        box.setWindowTitle("Orientation")
+        box.setObjectName("SWAnnotationViewOrientation")
+        box.setProperty("swstyle_pm_title", "Annotation View")
+        lay = W.QVBoxLayout(box)
+        self.std = W.QRadioButton("Standard views")
+        self.std.setChecked(True)
+        lay.addWidget(self.std)
+        self.views = W.QListWidget()
+        self.views.setObjectName("SWAnnotationViewList")
+        self.views.addItems([n for n, _d in STANDARD_VIEWS])
+        self.views.setCurrentRow(0)
+        self.views.setMaximumHeight(120)
+        lay.addWidget(self.views)
+        pick = W.QWidget()
+        pick.setWindowTitle("Annotations")
+        pick.setObjectName("SWAnnotationViewAnnotations")
+        lay2 = W.QVBoxLayout(pick)
+        lay2.addWidget(W.QLabel("Annotations to move into the view"))
+        self.picked = W.QListWidget()
+        self.picked.setObjectName("SWAnnotationViewPicked")
+        self.picked.setProperty("swpickbox", True)
+        self.picked.setMaximumHeight(90)
+        lay2.addWidget(self.picked)
+        self.form = [box, pick]
+        self.items = []
+        for o in Gui.Selection.getSelection(doc.Name):
+            self._add(o)
+        Gui.Selection.addObserver(self)
+
+    def _add(self, o):
+        if view_of(o) is not None and o not in self.items:
+            self.items.append(o)
+            self.picked.addItem(o.Label)
+
+    def addSelection(self, doc, name, sub, pnt):
+        if doc == self.doc.Name:
+            self._add(self.doc.getObject(name))
+
+    def getStandardButtons(self):
+        from PySide import QtWidgets as W
+        return W.QDialogButtonBox.Ok | W.QDialogButtonBox.Cancel
+
+    def _close(self):
+        try:
+            Gui.Selection.removeObserver(self)
+        except Exception as _fw_err:
+            _fw_log("treevirtual.py:view-panel-close", _fw_err)
+        Gui.Control.closeDialog()
+
+    def accept(self):
+        item = self.views.currentItem()
+        name = item.text() if item is not None else STANDARD_VIEWS[0][0]
+        self.doc.openTransaction("Annotation View")
+        try:
+            put_in_view(self.doc, name, self.items)
+        finally:
+            self.doc.commitTransaction()
+        self._close()
+        return True
+
+    def reject(self):
+        self._close()
+        return True
+
+
+def insert_annotation_view(doc):
+    if doc is None:
+        return None
+    panel = AnnotationViewPanel(doc)
+    Gui.Control.showDialog(panel)
+    return panel

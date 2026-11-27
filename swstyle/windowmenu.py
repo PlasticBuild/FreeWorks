@@ -121,6 +121,7 @@ def _layout(area, subs, kind):
     n = len(subs)
     for i, sub in enumerate(subs):
         sub.showNormal()
+        _fits(sub)                          # tilewin-1127
         if kind == "four":
             w, h = rect.width() // 2, rect.height() // 2
             sub.setGeometry(rect.x() + (i % 2) * w, rect.y() + (i // 2) * h, w, h)
@@ -211,6 +212,73 @@ def _shown(area):
     return [s for s in area.subWindowList() if s.isVisible() and not s.isMinimized()]
 
 
+def _doc_of_title(title):
+    """The document a 3D window's title names ("Draw1 : 1[*]" -> Draw1's document)."""
+    label = title.replace("[*]", "").split(" : ")[0].strip()
+    for doc in App.listDocuments().values():
+        if doc.Label == label or doc.Name == label:
+            return doc
+    return None
+
+
+def _drawing_model_windows(area, subs):
+    ""
+
+
+    out = {}
+    sheets = []
+    for sub in subs:
+        try:
+            cls = sub.widget().metaObject().className() if sub.widget() is not None else ""
+        except Exception:
+            cls = ""
+        if "MDIViewPage" in cls:
+            sheets.append(sub)
+    if not sheets:
+        return out
+    for sub in subs:
+        try:
+            if sub.widget() is None or "View3DInventor" not in sub.widget().metaObject().className():
+                continue
+            doc = _doc_of_title(sub.windowTitle())
+            if doc is None or any(o.isDerivedFrom("Part::Feature") for o in doc.Objects):
+                continue
+            pages = [o.Label for o in doc.Objects if o.isDerivedFrom("TechDraw::DrawPage")]
+            sheet = [w for w in sheets if w.windowTitle().replace("[*]", "").strip() in pages]
+            if sheet:
+                out[sub] = sheet[0]
+        except Exception as _fw_err:
+            _fw_log("windowmenu.py:drawing_model", _fw_err)
+    return out
+
+
+def _arranged(area):
+    """The windows Tile and Cascade lay out, and the drawings' 3D windows they leave out."""
+    subs = _shown(area)
+    left_out = _drawing_model_windows(area, subs)
+    return [s for s in subs if s not in left_out], left_out
+
+
+def _behind_sheets(left_out):
+    """Each left-out 3D window sits exactly behind its drawing's sheet, out of sight."""
+    for sub, sheet in left_out.items():
+        try:
+            sub.showNormal()
+            sub.setGeometry(sheet.geometry())
+            sub.stackUnder(sheet)
+        except Exception as _fw_err:
+            _fw_log("windowmenu.py:behind", _fw_err)
+
+
+def _overlay_follow():
+    """The Task Pane goes to the window area's right edge while windows are tiled (activewin.py)."""
+    try:
+        from . import activewin
+        QtCore.QTimer.singleShot(0, activewin.refresh)
+    except Exception as _fw_err:
+        _fw_log("windowmenu.py:overlay", _fw_err)
+
+
 def cascade():
     ""
 
@@ -219,10 +287,12 @@ def cascade():
     if area is None:
         return
     _as_windows(area)
-    subs = _shown(area)
+    subs, left_out = _arranged(area)        # tilewin-1127
     if not subs:
         return
     active = area.activeSubWindow()
+    if active in left_out:
+        active = left_out[active]
     if active in subs:                      # the active window last, so it ends in front
         subs.remove(active)
         subs.append(active)
@@ -243,8 +313,10 @@ def cascade():
         y = min(i * step, room_y) if room_y else 0
         sub.setGeometry(rect.x() + x, rect.y() + y, w, h)
         sub.raise_()
+    _behind_sheets(left_out)
     if active is not None:
         area.setActiveSubWindow(active)
+    _overlay_follow()
 
 
 ACROSS = "TileAcrossMonitors"
@@ -354,10 +426,27 @@ def _chunks(items, k):
     return out
 
 
+SMALLEST = (160, 120)       # tilewin-1127: a tiled window may get this small
+
+
+def _fits(sub):
+    ""
+
+
+    try:
+        w = sub.widget()
+        if w is not None:
+            w.setMinimumSize(*SMALLEST)
+        sub.setMinimumSize(*SMALLEST)
+    except Exception as _fw_err:
+        _fw_log("windowmenu.py:fits", _fw_err)
+
+
 def _tile_in_area(area, subs, horizontally):
     rect = _room(area)                      # darktitle-1121
     for sub, cell in zip(subs, _cells(rect, len(subs), horizontally)):
         sub.showNormal()
+        _fits(sub)                          # tilewin-1127
         sub.setGeometry(cell)
 
 
@@ -370,12 +459,16 @@ def tile(horizontally):
     if area is None:
         return
     _as_windows(area)
-    subs = _shown(area)
+    subs, left_out = _arranged(area)        # tilewin-1127
+    if area.activeSubWindow() in left_out:
+        area.setActiveSubWindow(left_out[area.activeSubWindow()])
     floating = _floating()
     screens = _screens() if paths.params().GetBool(ACROSS, True) else []
     if len(screens) < 2:
         if subs:
             _tile_in_area(area, subs, horizontally)
+        _behind_sheets(left_out)
+        _overlay_follow()
         return
     windows = subs + floating
     if not windows:
@@ -399,6 +492,8 @@ def tile(horizontally):
                 tops.append(top)
         for top, cell in zip(tops, _cells(rect, len(tops), horizontally)):
             _place(top, cell)
+    _behind_sheets(left_out)
+    _overlay_follow()
 
 
 def _place(top, cell):
@@ -442,25 +537,87 @@ def document_of(sub):
     return None
 
 
+def _sheet_name(sub, title):
+    ""
+    try:
+        w = sub.widget()
+        if w is None or not any(v.metaObject().className() == "TechDrawGui::QGVPage"
+                                for v in w.findChildren(QtWidgets.QGraphicsView)):
+            return None
+        import os
+        for doc in App.listDocuments().values():
+            for o in doc.Objects:
+                if o.TypeId == "TechDraw::DrawPage" and o.Label == title:
+                    name = (os.path.basename(doc.FileName) if doc.FileName else doc.Label) + " - " + o.Label
+                    if Gui.getDocument(doc.Name).Modified:
+                        name += " *"
+                    return name
+    except Exception as _fw_err:
+        _fw_log("windowmenu.py:sheet-name", _fw_err)
+    return None
+
+
 def window_name(sub, subs=None):
     ""
 
     title = sub.windowTitle().replace("[*]", "").strip()
     doc = document_of(sub)
     if doc is None:
-        return title.replace(" : 1", "")
+        return _sheet_name(sub, title) or title.replace(" : 1", "")      # mbar-1126
     import os
     name = os.path.basename(doc.FileName) if doc.FileName else doc.Label
     subs = subs if subs is not None else _windows()
     same = [s for s in subs if document_of(s) is doc]
     if len(same) > 1:
         name += ":%d" % (same.index(sub) + 1)
+    name += read_only_mark(doc)       # winhelp-1126
     try:
         if Gui.getDocument(doc.Name).Modified:
             name += " *"
     except Exception as _fw_err:
         _fw_log("windowmenu.py:name", _fw_err)
     return name
+
+
+
+READ_ONLY = " [Read-Only]"
+SPAN_TEXT = "Connect a second monitor first. Span Displays stretches the window across all of them."
+LINK_TEXT = "Split the view first (Window > Viewport > Two View or Four View)."
+
+
+def read_only_mark(doc):
+    try:
+        from . import filecmds
+        return READ_ONLY if doc is not None and filecmds.is_read_only(doc) else ""
+    except Exception as _fw_err:
+        _fw_log("windowmenu.py:read-only", _fw_err)
+        return ""
+
+
+def _live_row(act, title, text):
+    """NO DEAD CONTROLS: a row that cannot act yet stays live, its status text and its click say what it needs."""
+    act.setEnabled(True)
+    act.setStatusTip(text)
+    try:
+        act.triggered.disconnect()
+    except Exception:
+        pass
+    if act.isCheckable():
+        act.triggered.connect(lambda checked=False, a=act: a.setChecked(not checked))   # nothing turned on
+    act.triggered.connect(lambda checked=False: _tell(title, text))
+
+
+def _tell(title, text):
+    try:
+        from . import menunotready
+        menunotready.tell(title, text)
+        return
+    except Exception as _fw_err:
+        _fw_log("windowmenu.py:tell", _fw_err)
+    try:
+        Gui.getMainWindow().statusBar().showMessage(text, 8000)
+    except Exception as _fw_err:
+        _fw_log("windowmenu.py:tell-status", _fw_err)
 
 
 def _run(command):
@@ -479,9 +636,8 @@ def fill(menu):
         from . import uiextras
         span = uiextras.add_span_action(menu)
         if span is not None and not span.isEnabled():
-            menu.removeAction(span)                 # one monitor: nothing to span, so not shown
-        else:
-            menu.addSeparator()
+            _live_row(span, "Span Displays", SPAN_TEXT)     # winhelp-1126: one monitor: live, says what it needs
+        menu.addSeparator()
     except Exception as error:
         App.Console.PrintLog("FreeCAD: Span Displays not added: %s\n" % error)
     ports = QtWidgets.QMenu("Viewport", menu)    # parented, so Python does not delete it
@@ -497,11 +653,13 @@ def fill(menu):
         act = ports.addAction(text)
         act.setEnabled(has_doc)
         act.triggered.connect(lambda checked=False, k=kind: viewport(k))
-    if LINK.on or _split_viewers() is not None:     # only with two or four views to link
-        act = ports.addAction("Link Views")
-        act.setCheckable(True)
-        act.setChecked(LINK.on)
+    act = ports.addAction("Link Views")
+    act.setCheckable(True)
+    act.setChecked(LINK.on)
+    if LINK.on or _split_viewers() is not None:     # two or four views to link
         act.triggered.connect(lambda checked=False: LINK.toggle())
+    else:
+        _live_row(act, "Link Views", LINK_TEXT)
     if has_doc:
         act = menu.addAction("New Window")
         act.triggered.connect(lambda: _run("Std_ViewCreate"))

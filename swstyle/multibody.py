@@ -19,6 +19,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -206,7 +207,7 @@ class _Lazy:
     """A solid's print made only when needed: the bound box first (cheap), the centre of mass (12 ms on
     a big solid) only when two bound boxes already match. Same answer as _same_print on _print: a solid
     known again has the same bound box too."""
-    __slots__ = ("solid", "_quick", "_full", "_faces")
+    __slots__ = ("solid", "_quick", "_full", "_faces", "_box")
 
     def __init__(self, solid):
         self.solid, self._quick, self._full = solid, None, None
@@ -222,14 +223,28 @@ class _Lazy:
             if got is None:
                 bb = self.solid.BoundBox
                 got = (bb.XLength * bb.YLength * bb.ZLength, bb.Center.x, bb.Center.y, bb.Center.z,
-                       self.solid.countElement("Face"))     # extapps/69: no face objects made (40x faster)
+                       self.solid.countElement("Face"),     # extapps/69: no face objects made (40x faster)
+                       bb.XLength, bb.YLength, bb.ZLength)
                 if h is not None:
                     if len(_QUICK) > 500:        # extapps/63: each entry holds a whole solid
                         _QUICK.clear()
                     _QUICK[h] = (self.solid, got)     # the solid held: its hash is not reused by another
             self._quick = got[:4]
             self._faces = got[4]
+            self._box = got[1:4] + got[5:8]
         return self._quick
+
+    def meets(self, other):
+        """The two bound boxes overlap. A bound box is only sure to hold its solid: a spline solid's box
+        (a sweep along a helix) can be twice as big in one copy as in another, so the same spring rebuilt
+        by a later feature failed the box print and became a new body (Split Line1[2] for Sweep1,
+        Refgeom usage run 11-27). Boxes that do not even overlap are surely different solids."""
+        try:
+            self.quick(), other.quick()
+            a, b = self._box, other._box
+            return all(abs(a[i] - b[i]) <= (a[i + 3] + b[i + 3]) / 2.0 + 1e-6 for i in range(3))
+        except Exception:
+            return True
 
     def faces(self):
         try:
@@ -272,8 +287,8 @@ class _Lazy:
             # it matches: a 300-feature part spent 49 s opening on bound boxes of solids a hole had changed
             if self.faces() != other.faces():
                 return False      # a fillet, a hole, a boss inside the box: not the same solid (no mass sums)
-            if not _same_print(self.quick(), other.quick()):
-                return False
+            if not _same_print(self.quick(), other.quick()) and not self.meets(other):
+                return False      # far apart; boxes that overlap are settled by the centre of mass below
         except Exception as _fw_err:
             _fw_log("multibody.py:234", _fw_err)
         return _same_print(self.full(), other.full())
@@ -963,7 +978,7 @@ def install_pm(view):
     try:
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
-        feature = edit.Object if edit is not None else None
+        feature = editobj.of(edit) if edit is not None else None
     except Exception:
         feature = None
     if feature is None or body_of(feature) is None:
@@ -1445,7 +1460,7 @@ class SolidBodyRow:
         if "Colour" not in props:
             obj.addProperty("App::PropertyColor", "Colour", "Solid Body", "Body colour (with UseColour)")
         if "UseColour" not in props:
-            obj.addProperty("App::PropertyBool", "UseColour", "Solid Body", "Draw the body in Colour")
+            obj.addProperty("App::PropertyBool", "UseColour", "Solid Body", "Draw the body in Color")
         for p in ("Body", "SolidName", "Index"):
             obj.setEditorMode(p, 1)
 
@@ -1612,6 +1627,8 @@ def insert_rows_into_new_part(rows):
 
 def isolate(doc, rows):
     """Only the picked bodies show, until Exit Isolate (the Solid Bodies rows' menu)."""
+    if doc.Name in _ISOLATED:
+        exit_isolate(doc)       # a second Isolate starts from the look before the first one
     keep = {r.Name for r in rows}
     before = {}
     for row in _rows_of(doc):
@@ -1622,9 +1639,11 @@ def isolate(doc, rows):
             _fw_log("multibody.py:1441", _fw_err)
     _ISOLATED[doc.Name] = before
     refresh(doc)
+    _isolate_bar(doc)
 
 
 def exit_isolate(doc):
+    _drop_isolate_bar(doc)
     before = _ISOLATED.pop(doc.Name, None) or {}
     for name, shown in before.items():
         row = doc.getObject(name)
@@ -1634,6 +1653,91 @@ def exit_isolate(doc):
             except Exception as _fw_err:
                 _fw_log("multibody.py:1454", _fw_err)
     refresh(doc)
+
+
+_ISO_BARS = {}          # doc name -> the Isolate bar shown for its isolated bodies
+
+
+def _isolate_bar(doc):
+    ""
+
+
+    _drop_isolate_bar(doc)
+    try:
+        mw = Gui.getMainWindow()
+        gl = [w for w in mw.findChildren(QtWidgets.QWidget) if w.inherits("QOpenGLWidget") and w.isVisible()]
+        view = max(gl, key=lambda w: w.width() * w.height()) if gl else None
+        bar = QtWidgets.QFrame(view.parentWidget() if view is not None else mw)
+        bar.setObjectName("SWIsolateBar")
+        bar.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        lay = QtWidgets.QHBoxLayout(bar)
+        lay.setContentsMargins(8, 4, 4, 4)
+        lay.addWidget(QtWidgets.QLabel("Isolate"))
+        name = doc.Name
+        save = QtWidgets.QPushButton("Save as Display State")
+        save.setObjectName("SWIsolateSaveDisplayState")
+        save.clicked.connect(lambda _c=False, n=name: _save_isolated(n))
+        lay.addWidget(save)
+        out = QtWidgets.QPushButton("Exit Isolate")
+        out.setObjectName("SWExitIsolate")
+        out.clicked.connect(lambda _c=False, n=name: n in App.listDocuments() and exit_isolate(App.getDocument(n)))
+        lay.addWidget(out)
+        bar.adjustSize()
+        bar.move(12, 48)
+        bar.show()
+        bar.raise_()
+        _ISO_BARS[name] = bar
+    except Exception as _fw_err:
+        _fw_log("multibody.py:isolate-bar", _fw_err)
+
+
+def _drop_isolate_bar(doc):
+    bar = _ISO_BARS.pop(getattr(doc, "Name", doc), None)
+    if bar is None:
+        return
+    try:
+        bar.hide()
+        bar.deleteLater()
+    except Exception as _fw_err:
+        _fw_log("multibody.py:isolate-bar-drop", _fw_err)
+
+
+def _save_isolated(doc_name):
+    """Save as Display State: the isolated look becomes a new display state; the one shown before stays
+    the active one (Exit Isolate goes back to it), as asmisolate does for components."""
+    if doc_name not in App.listDocuments():
+        return None
+    doc = App.getDocument(doc_name)
+    from . import displaystates as ds
+    try:
+        if not ds.names(doc):
+            # the look from before Isolate is Display State 1, the isolated look the next one
+            now = {r.Name: bool(r.ViewObject.Visibility) for r in _rows_of(doc)}
+            for name, shown in (_ISOLATED.get(doc.Name) or {}).items():
+                row = doc.getObject(name)
+                if row is not None:
+                    row.ViewObject.Visibility = shown
+            refresh(doc)
+            ds.ensure_default(doc)
+            for name, shown in now.items():
+                doc.getObject(name).ViewObject.Visibility = shown
+            refresh(doc)
+        data = ds._data(doc)
+        data.setdefault("order", [])
+        data.setdefault("states", {})
+        name = ds._next_name(doc)
+        data["states"][name] = ds.capture(doc)
+        data["order"].append(name)
+        data.setdefault("cfg", {})[name] = ds._config(doc)
+        ds._save(doc, data)
+        try:
+            ds.refresh_panes()
+        except Exception as _fw_err:
+            _fw_log("multibody.py:isolate-panes", _fw_err)
+        return name
+    except Exception as error:
+        App.Console.PrintWarning("FreeCAD: Save as Display State: %s\n" % error)
+        return None
 
 
 def _rows_of(doc):
@@ -1825,7 +1929,7 @@ def _editing_sketch():
     try:
         gdoc = Gui.ActiveDocument if App.GuiUp else None
         edit = gdoc.getInEdit() if gdoc is not None else None
-        return edit is not None and edit.Object.TypeId == "Sketcher::SketchObject"
+        return edit is not None and editobj.type_id(edit) == "Sketcher::SketchObject"
     except Exception as _fw_err:
         _fw_log("multibody.py:1668", _fw_err)
         return None
@@ -1863,10 +1967,31 @@ def later(doc):
         except Exception as _fw_err:
             _fw_log("multibody.py:1681", _fw_err)
         try:
-            sync(d)
+            _keeping_units(d, lambda: sync(d))
         except Exception as error:
             App.Console.PrintLog("FreeCAD: Solid Bodies not updated: %s\n" % error)
     QtCore.QTimer.singleShot(0, run)
+
+
+def _keeping_units(doc, work):
+    """Stock FreeCAD 1.1: adding objects to a document that is not the active one switches the
+    ACTIVE document's unit system to that document's (File handling, 11-26). The deferred sync can
+    run after the user switched documents, so the active document's units are put back after it."""
+    active = App.ActiveDocument
+    keep = None
+    if active is not None and active is not doc and "UnitSystem" in active.PropertiesList:
+        keep = (active.UnitSystem, App.Units.getSchema())
+    try:
+        work()
+    finally:
+        if keep is not None:
+            try:
+                if active.UnitSystem != keep[0]:
+                    active.UnitSystem = keep[0]
+                if App.Units.getSchema() != keep[1]:
+                    App.Units.setSchema(keep[1])
+            except Exception as _fw_err:
+                _fw_log("multibody.py:keep_units", _fw_err)
 
 
 def refresh(doc):
@@ -2515,9 +2640,14 @@ class BodyOpPanel:
         self.list = QtWidgets.QListWidget()
         self.list.setObjectName("SWStyle_BodiesList")
         self.list.setMinimumHeight(70)
+        self.list.setMaximumHeight(90)   # pkg447: a selection box, not the rest of the page (190 px before); the dot drags it taller
         self.list.installEventFilter(_Focus(self, "Bodies", self.list))
         from . import pmboxes
         pmboxes.bind(self.list, _weak(self._remove_body), _weak(self._clear_bodies))
+        if self.kind in ("SWStyle::DeleteKeep", "SWStyle::MoveCopy"):
+
+            self.list.setProperty("swNeed", True)
+            self.list.setToolTip("Bodies to delete or keep" if self.kind == "SWStyle::DeleteKeep" else "Bodies to move or copy")
         layout.addWidget(self.list)
         if self.kind == "SWStyle::DeleteKeep":
 
@@ -2547,6 +2677,8 @@ class BodyOpPanel:
             self.copy.setChecked(obj.Copy)
             self.copies = QtWidgets.QSpinBox()
             self.copies.setRange(1, 1000)
+            self.copies.setObjectName("SWStyle_Copies")
+            self.copies.setToolTip("Number of Copies")
             self.copies.setValue(obj.Copies)
             self.copies.setEnabled(obj.Copy)
             self.copy.toggled.connect(self._set_copy)
@@ -2715,6 +2847,23 @@ class BodyOpPanel:
                 text = ""
             self.plane.setText(text)
         self._gate_ok()
+
+    def _nothing_picked(self):
+        ""
+
+
+        why = {"SWStyle::DeleteKeep": "Select the bodies to delete or keep first.",
+               "SWStyle::MoveCopy": "Select the bodies to move or copy first."}.get(self.kind)
+        obj = self.obj() if why else None
+        if obj is None or list(getattr(obj, "Bodies", []) or []):
+            return False
+        try:
+            from . import pmmessage
+            Gui.getMainWindow().statusBar().showMessage(why, 4000)
+            pmmessage.notice(self.form.window(), why)
+        except Exception as _fw_err:
+            _fw_log("multibody.py:nothing-picked", _fw_err)
+        return True
 
     def _ready(self):
         ""
@@ -3189,6 +3338,8 @@ class BodyOpPanel:
         self._restore_clear()
 
     def accept(self):
+        if self._nothing_picked():
+            return False
         if not self._ready():
             return False                 # OK is grey until the bodies are picked (Enter too)
         self._clear_preview()
@@ -3253,9 +3404,9 @@ class _Observer:
     def slotDeletedObject(self, obj):
         try:
             if obj.TypeId == "PartDesign::Body" or _solid_feature(obj):
-                doc = obj.Document
+                doc_name = obj.Document.Name        # the name, not the document: it may be closed before the timer runs
                 name = obj.Name
-                QtCore.QTimer.singleShot(0, lambda: _drop_orphans(doc.Name, name))
+                QtCore.QTimer.singleShot(0, lambda: _drop_orphans(doc_name, name))
         except Exception as _fw_err:
             _fw_log("multibody.py:3020", _fw_err)
 
@@ -3418,7 +3569,7 @@ class _OpCommand:
         if doc is not None and self.kind == "DeleteKeep" and not bodies(doc):
             from . import surfdelkeep
             return surfdelkeep.applies(doc)
-        return doc is not None and bool(bodies(doc))
+        return doc is not None      # bodyfirst-1126: no Body in the part opens a page that says what to do (no grey button)
 
     def Activated(self):
         doc = App.ActiveDocument
@@ -3426,6 +3577,10 @@ class _OpCommand:
             from . import surfdelkeep
             if surfdelkeep.applies(doc):
                 surfdelkeep.start(doc)
+                return
+        if doc is not None and not bodies(doc):
+            from . import solidfirstlive        # bodyfirst-1126: a part with only Part-workbench solids or nothing
+            if solidfirstlive.body_first(self.text):
                 return
         start_op(self.kind, doc, [])
 

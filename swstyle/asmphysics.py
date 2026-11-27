@@ -111,9 +111,17 @@ def mass_props(comp):
     density = DENSITY
     try:
         own = comp.LinkedObject
-        d = getattr(own, "Density", None) or getattr(getattr(own, "ShapeMaterial", None), "Density", None)
+        mat = getattr(own, "ShapeMaterial", None)
+        if mat is not None and (getattr(mat, "UUID", "") == "7f9fd73b-50c9-41d8-b7b2-575a030c1eeb" or getattr(mat, "Name", "") == "Default"):
+            mat = None          # FreeCAD's placeholder "Default" (1 kg/m^3) is no material (as asmevaluate)
+        d = getattr(own, "Density", None) or getattr(mat, "Density", None)
         if d:
             density = float(getattr(d, "Value", d)) * 1e-9      # kg/m^3 -> kg/mm^3
+        elif own is not None and own.Document is not comp.Document:
+            # asmpkg361: a part in its own file weighs what Mass Properties says it weighs: its material,
+            # else the density in its Document Properties, else 1000 kg/m^3 (it was steel, 7850)
+            from . import material
+            density = float(material.density(own.Document)) * 1e-9
     except Exception as _fw_err:
         _fw_log("asmphysics.py:117", _fw_err)
     solids = shape.Solids or [shape]
@@ -153,6 +161,35 @@ def _rotate(v, axis, angle):
     return App.Rotation(axis, math.degrees(angle)).multVec(v)
 
 
+def free_bodies(asm, found, g):
+    ""
+
+    fixed = set(ac.grounded(asm))
+    taken = {b["comp"].Name for b in found}
+    mated = set()
+    for j in ac.joint_group(asm).Group:
+        if getattr(j, "Suppressed", False) or getattr(j, "JointType", None) is None:
+            continue
+        for prop in ("Reference1", "Reference2"):
+            ref = getattr(j, prop, None)
+            if ref and ref[0] is not None:
+                mated.add(ref[0].Name)
+    out = []
+    for comp in ac.components(asm):
+        if comp in fixed or comp.Name in taken or comp.Name in mated:
+            continue
+        try:
+            if comp.Shape.isNull() or comp.Shape.Volume <= 0:
+                continue
+            centre = comp.Shape.BoundBox.Center
+        except Exception as _fw_err:
+            _fw_log("asmphysics.py:free_bodies", _fw_err)
+            continue
+        out.append({"comp": comp, "kind": "slide", "point": centre, "axis": V(g).normalize(), "joint": None,
+                    "radius": 0.0, "analysis": {}, "free": True})
+    return out
+
+
 def _motion_fn(text):
     env = {"sin": math.sin, "cos": math.cos, "pi": math.pi, "sqrt": math.sqrt, "exp": math.exp,
            "abs": abs, "__builtins__": {}}
@@ -181,26 +218,39 @@ def simulate(asm, duration, fps, gravity, motors=(), loads=(), sub=10):
     """gravity = (direction Vector, magnitude mm/s^2) or None; motors = [(joint, formula text)].
     Returns (frames [{comp name: Placement}], results {comp name: {t, x, v, a, kind}})."""
     found = bodies(asm)
-    driven = {}
-    for joint, text in motors:
+    driven, linear = {}, set()
+    for item in motors:
+        joint, text = item[0], item[1]
         try:
             driven[joint.Name] = _motion_fn(text)
         except Exception:
             continue
+        if len(item) > 2 and item[2]:
+            linear.add(joint.Name)
     g = V(gravity[0]).normalize() * float(gravity[1]) if gravity and gravity[1] else V()
+    # asmpkg360: a Linear Motor (Actuator) on a Concentric (Cylindrical) mate slides its component along the
+
+    found = [dict(b, kind="slide") if b["joint"] is not None and b["joint"].Name in linear else b for b in found]
+    if g.Length > 0:
+        found += free_bodies(asm, found, g)
     steps = max(1, int(round(duration * fps)))
     sub = max(1, int(sub))
     dt = 1.0 / fps / sub
     states = []
     for b in found:
         comp = b["comp"]
-        if b["joint"].Name in driven:
+        jname = b["joint"].Name if b["joint"] is not None else None
+        if jname in driven:
             b = dict(b, axis=_motor_axis(b))
         mass, com, matrix, density = mass_props(comp)
         inertia = _inertia(matrix, density, mass, com, b["point"], b["axis"]) if b["kind"] == "turn" else mass
+        try:
+            reach = comp.Shape.BoundBox.DiagonalLength      # mm a turn of 1 rad moves its far side, at most
+        except Exception:
+            reach = 1.0
         states.append(dict(b, place0=App.Placement(comp.Placement), com0=com, mass=mass,
-                           inertia=max(inertia, 1e-12), x=0.0, v=0.0,
-                           drive=driven.get(b["joint"].Name)))
+                           inertia=max(inertia, 1e-12), x=0.0, v=0.0, reach=reach,
+                           drive=driven.get(jname)))
 
     def losses(s, x, v):
         """The mate's Analysis tab: friction (Coulomb, smoothed) and the bushing's spring, damping and preload."""
@@ -321,6 +371,19 @@ def simulate(asm, duration, fps, gravity, motors=(), loads=(), sub=10):
                 if s["drive"]:
                     continue
                 e = asmloads.contact_hit(loads, s, s["x"], now, place_of, comps)
+                hit_x = s["x"]
+                if e is None:
+                    # asmpkg360: a fast part went through a thin one between two frames (a block on a
+                    # spring through a 10 mm plate): the way between is looked at every 5 mm
+                    reach = 1.0 if s["kind"] == "slide" else max(1.0, s.get("reach") or 1.0)
+                    n = min(24, int(abs(s["x"] - x0) * reach / 5.0))
+                    for i in range(1, n + 1):
+                        xi = x0 + (s["x"] - x0) * i / (n + 1.0)
+                        e = asmloads.contact_hit(loads, s, xi, now, place_of, comps)
+                        if e is not None:
+                            hit_x = xi
+                            break
+                solid = e is not None
                 if e is None:
                     for r in loads:
                         if r.get("kind") == "Contact" and r.get("type") == "Curves" and \
@@ -328,8 +391,20 @@ def simulate(asm, duration, fps, gravity, motors=(), loads=(), sub=10):
                             e = float(r.get("e", 0.5))
                             break
                 if e is not None:
-                    s["x"], s["v"] = x0, -e * v0
-                    now[s["comp"].Name] = place_of(s, x0)
+                    # asmpkg360: back to the point of touching (halving the step), not to the frame's start:
+                    # a part dropped onto another came to rest up to one frame's travel above it
+                    lo, hi = x0, hit_x
+                    if solid and asmloads.contact_hit(loads, s, lo, now, place_of, comps) is None:
+                        for _h in range(10):
+                            mid = 0.5 * (lo + hi)
+                            if asmloads.contact_hit(loads, s, mid, now, place_of, comps) is None:
+                                lo = mid
+                            else:
+                                hi = mid
+                    else:
+                        lo = x0
+                    s["x"], s["v"] = lo, -e * v0
+                    now[s["comp"].Name] = place_of(s, lo)
                 s["touch"] = asmloads.contact_touch(loads, s, s["x"], now, place_of, comps)
         record(t)
     return frames, results

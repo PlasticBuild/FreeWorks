@@ -21,6 +21,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -64,7 +65,7 @@ def _edited():
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
         if edit is not None:
-            return edit.Object
+            return editobj.of(edit)
         if gdoc is not None and Gui.Control.activeDialog():
             body = gdoc.ActiveView.getActiveObject("pdbody")
             tip = getattr(body, "Tip", None) if body is not None else None
@@ -432,6 +433,13 @@ class PMHandle(instant3d._Instant3D):
         self._show_value(v0)
         return True
 
+    def _geometry_snap(self, pos):
+        # Shell's thickness is not a place on the model: the pointer is over the part it hollows the
+        # whole drag, and a snap to the part's own edges made the value jump (11, 19, 13, 17)
+        if self.name == "shell":
+            return None
+        return super()._geometry_snap(pos)
+
     def value_at(self, pos):
         v = super().value_at(pos)
         if v is None:
@@ -587,7 +595,14 @@ def rotate_wire_start(sketch, point):
     cons = list(sketch.Constraints)
     construction = [sketch.getConstruction(i) for i in range(n)]
     doc = sketch.Document
-    doc.openTransaction("Loft connector")
+    # inside an open PropertyManager the change rides in the page's own step: Cancel takes it back and
+
+    try:
+        own = not App.getActiveTransaction()
+    except Exception:
+        own = True
+    if own:
+        doc.openTransaction("Loft connector")
     try:
         sketch.deleteAllGeometry()
         for old in order:
@@ -617,10 +632,12 @@ def rotate_wire_start(sketch, point):
             sketch.setVirtualSpace(k, True)
         doc.recompute()
     except Exception as error:
-        doc.abortTransaction()
+        if own:
+            doc.abortTransaction()
         App.Console.PrintWarning("Loft connector: %s\n" % error)
         return False
-    doc.commitTransaction()
+    if own:
+        doc.commitTransaction()
     return True
 
 

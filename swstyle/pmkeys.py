@@ -13,6 +13,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -48,7 +49,7 @@ _keepers = {}       # id(view) -> PickKeeper
 def _editing():
     try:
         edit = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument is not None else None
-        return edit.Object if edit is not None else None
+        return editobj.of(edit) if edit is not None else None
     except Exception as _fw_err:
         _fw_log("pmkeys.py:53", _fw_err)
         return None
@@ -123,7 +124,7 @@ def nothing_picked():
 
 def _axis_waiting():
     for combo in Gui.getMainWindow().findChildren(QtWidgets.QComboBox, "axis"):
-        if _alive(combo) and combo.currentText().startswith(WAITING):
+        if _alive(combo) and combo.currentText().endswith(("\u2026", "...")):
             return True
     return False
 
@@ -203,6 +204,8 @@ def empty_box(window):
             if not name:
                 name = box.objectName().replace("SWStyle_", "").replace("SW", "")
             name = name.split(":")[0].strip()
+            if " " not in name and any(c.isupper() for c in name[1:]):
+                return MISSING      # pkg432: an internal name ("axisSelections"), not words to show
             return "Select the %s first." % (name[:1].lower() + name[1:])
         except RuntimeError as _fw_err:
             _fw_log("pmkeys.py:208", _fw_err)
@@ -290,6 +293,39 @@ def bad_result():
     return None
 
 
+FAILED = "The feature could not be made with these settings: change them, or Cancel."
+# FreeCAD's words for a failed page -> plain words (pkg429)
+FAILED_WORDS = (("Finding axis failed", "Place the hole first: a point or a circle on the face gives its position."),)
+
+
+def failed_result():
+    ""
+
+
+    obj = _editing()
+    if obj is None or not getattr(obj, "TypeId", "").startswith("PartDesign::") or obj.TypeId == "PartDesign::Body":
+        return None
+    try:
+        take_typed()                # a value still being typed counts before the check
+        if "Touched" in obj.State:
+            obj.Document.recompute()
+        if obj.isValid():
+            return None
+        text = obj.getStatusString() or ""
+        for raw, plain in FAILED_WORDS:
+            if raw in text:
+                return plain
+        try:
+            from . import rebuilderrors
+            text = rebuilderrors.describe(obj, text) or text
+        except Exception as _fw_err:
+            _fw_log("pmkeys.py:failed-words", _fw_err)
+        return text.strip() or FAILED
+    except Exception as _fw_err:
+        _fw_log("pmkeys.py:failed_result", _fw_err)
+        return None
+
+
 MISSING = "This page still needs input above."
 BLOCKED = "Correct the value marked in red first."
 
@@ -306,6 +342,8 @@ def missing(window):
                 while group is not None and not isinstance(group, QtWidgets.QGroupBox):
                     group = group.parentWidget()
                 name = group.title().replace("&", "").strip() if group is not None else ""
+                if name and " " not in name and any(c.isupper() for c in name[1:]):
+                    name = ""       # pkg432: an internal name ("axisSelections"), not a title to show
                 if name:
                     return "Select the %s first." % (name[:1].lower() + name[1:])
     except Exception as _fw_err:
@@ -358,6 +396,8 @@ def accept(native):
     hint = nothing_picked() or no_axis() or half_specified() or empty_box(window) or bad_result()
     if hint is None and not native.isEnabled():
         hint = missing(window)
+    if hint is None:
+        hint = failed_result()
     if hint is None:
         take_typed()
         native.click()
@@ -441,6 +481,41 @@ def _refused_key(field, event):
         return False
 
 
+DEPTH_MIN = 0.0001
+
+
+def _depth_floor(field, event):
+    ""
+
+
+    try:
+        if field.objectName() not in NO_NEGATIVE:
+            return False
+        kind = event.type()
+        if kind == QtCore.QEvent.Wheel:
+            if event.angleDelta().y() >= 0:
+                return False
+            notches = max(1, abs(event.angleDelta().y()) // 120)
+        elif kind == QtCore.QEvent.KeyPress and event.key() in (QtCore.Qt.Key_Down, QtCore.Qt.Key_PageDown):
+            notches = 10 if event.key() == QtCore.Qt.Key_PageDown else 1
+        else:
+            return False
+        value = field.property("rawValue")
+        step = field.property("singleStep")
+        if value is None or step is None:
+            return False
+        value, step = float(value), float(step)
+        if value - step * notches >= DEPTH_MIN - 1e-12:
+            return False            # an ordinary step: FreeCAD's box takes it
+        if value > DEPTH_MIN + 1e-12:
+            field.setProperty("rawValue", DEPTH_MIN)
+        event.accept()
+        return True
+    except Exception as _fw_err:
+        _fw_log("pmkeys.py:depth_floor", _fw_err)
+        return False
+
+
 class EnterKey(QtCore.QObject):
     """Enter takes a typed value and presses OK."""
 
@@ -468,6 +543,8 @@ class EnterKey(QtCore.QObject):
             if not self._typing(field):
                 self.seen[id(field)] = field.text()
         elif kind == QtCore.QEvent.KeyPress and _refused_key(field, event):
+            return True
+        elif kind in (QtCore.QEvent.KeyPress, QtCore.QEvent.Wheel) and _depth_floor(field, event):
             return True
         elif kind == QtCore.QEvent.KeyPress and event.key() in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
 

@@ -805,7 +805,7 @@ class UpdateDialog:
             def update(self, key):
                 if self.busy == key:            # dl109: the row's button reads Cancel while it downloads
                     self._cancel = True
-                    self.say("Cancelling...")
+                    self.say("Canceling...")
                     return
                 st = status(key)
                 asset = (st["info"] or {}).get("asset")
@@ -859,7 +859,7 @@ class UpdateDialog:
                 self.rows[key]["bar"].setVisible(False)
                 what = "Download" if getattr(self, "_first", False) else "Update"
                 if isinstance(result, Cancelled):
-                    self.say("%s cancelled. Nothing was kept; press %s to start again." % (what, what))
+                    self.say("%s canceled. Nothing was kept; press %s to start again." % (what, what))
                 elif isinstance(result, NoSpace):
                     self.say("<span style='color:#c00000'>%s not started: %s</span>" % (what, result))
                 elif isinstance(result, Exception):

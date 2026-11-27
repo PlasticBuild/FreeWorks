@@ -449,8 +449,15 @@ def adjust(r, over=None, frame=None):
 
 
 def _is_frame(o):
-    return o.TypeId in ("PartDesign::CoordinateSystem", "App::LocalCoordinateSystem") or \
-        getattr(getattr(o, "Proxy", None), "Type", None) == "SWStyle::CoordinateSystem"
+    """A coordinate system: a body's, a part's own (Part::LocalCoordinateSystem, made outside a body) or ours."""
+    try:
+        if o.TypeId == "App::Origin" or o.isDerivedFrom("App::Origin"):
+            return False        # the part's origin is -- default --, not one more system
+        if o.TypeId == "PartDesign::CoordinateSystem" or o.isDerivedFrom("App::LocalCoordinateSystem"):
+            return True
+    except Exception as _fw_err:
+        _fw_log("massprops.py:is-frame", _fw_err)
+    return getattr(getattr(o, "Proxy", None), "Type", None) == "SWStyle::CoordinateSystem"
 
 
 def _frame_object(doc, name=None, label=None):
@@ -483,8 +490,7 @@ def frames(doc):
     offers after -- default --."""
     out = []
     for o in (doc.Objects if doc is not None else []):
-        if o.TypeId in ("PartDesign::CoordinateSystem", "App::LocalCoordinateSystem") or \
-                getattr(getattr(o, "Proxy", None), "Type", None) == "SWStyle::CoordinateSystem":
+        if _is_frame(o):
             try:
                 out.append((o.Label, o.getGlobalPlacement()))
             except Exception:
@@ -1377,7 +1383,7 @@ class MassPropertiesDialog(QtWidgets.QDialog):
 
     def showEvent(self, event):
         super().showEvent(event)
-        QtCore.QTimer.singleShot(0, self.refresh)
+        from . import safe_later as _sl; _sl.later(0, self.refresh, self, "com")
         self._axis(self._axis_on())
 
     def _items_menu(self, pos):

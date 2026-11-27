@@ -109,11 +109,21 @@ def _cached_seams(obj):
 
 
 def _rebuilding():
+    return _files_busy()
+
+
+def _files_busy():
+    """A file is opening or a document rebuilding (FreeCAD lets timers run between features then): the pass
+    waits, the next tick after does it once (File handling perf-1127)."""
     try:
-        doc = App.ActiveDocument
-        return bool(doc is not None and getattr(doc, "Recomputing", False))
+        if App.isRestoring():
+            return True
+        for d in App.listDocuments().values():
+            if getattr(d, "Restoring", False) or getattr(d, "Recomputing", False):
+                return True
     except Exception:
         return False
+    return False
 
 
 def _count_edges(shape):
@@ -600,6 +610,39 @@ def _pick_then_isolate():
         _fw_log("displayextras.py:isolateprompt", _fw_err)
 
 
+class _PickToZoom:
+    """Zoom to Selection with nothing selected: the status bar asks for the items; the first pick zooms."""
+
+    def addSelection(self, doc, obj, sub, pnt):
+        _stop_picking()
+        QtCore.QTimer.singleShot(0, lambda: Gui.runCommand("Std_ViewFitSelection", 0))
+
+
+class _ZoomToSelectionCmd:
+    """View > Modify > Zoom to Selection. FreeCAD's Fit Selection does nothing with nothing picked; here
+    it asks for the items in the status bar and zooms to the first pick (never a dead or grey entry)."""
+
+    def GetResources(self):
+        return {"MenuText": "Zoom to Selection", "ToolTip": "Zooms to the picked items.",
+                "CmdType": "ForEdit"}
+
+    def Activated(self, checked=None):
+        if Gui.Selection.getSelectionEx():
+            Gui.runCommand("Std_ViewFitSelection", 0)
+            return
+        _stop_picking()
+        o = _PickToZoom()
+        Gui.Selection.addObserver(o)
+        _PICKING.append(o)
+        try:
+            Gui.getMainWindow().statusBar().showMessage("Zoom to Selection: select the items to zoom to")
+        except Exception as _fw_err:
+            _fw_log("displayextras.py:zoomprompt", _fw_err)
+
+    def IsActive(self):
+        return App.ActiveDocument is not None and Gui.ActiveDocument is not None
+
+
 class _ExitIsolateCmd:
     def GetResources(self):
         return {"MenuText": "Exit Isolate", "ToolTip": "Shows again what was shown before Isolate.",
@@ -618,7 +661,7 @@ TANGENT_COMMANDS = {
                                     "Draws tangent edges as thin dashed lines."),
     "SWStyle_TangentEdgesRemoved": (REMOVED, "Tangent Edges Removed", "Leaves tangent edges out."),
 }
-COMMANDS = list(TANGENT_COMMANDS) + ["SWStyle_RotateAboutSceneFloor", "SWStyle_Isolate", "SWStyle_ExitIsolate"]
+COMMANDS = list(TANGENT_COMMANDS) + ["SWStyle_RotateAboutSceneFloor", "SWStyle_Isolate", "SWStyle_ExitIsolate", "SWStyle_ZoomToSelection"]
 _installed = False
 
 
@@ -637,6 +680,8 @@ def install():
         Gui.addCommand("SWStyle_Isolate", _IsolateCmd())
     if Gui.Command.get("SWStyle_ExitIsolate") is None:
         Gui.addCommand("SWStyle_ExitIsolate", _ExitIsolateCmd())
+    if Gui.Command.get("SWStyle_ZoomToSelection") is None:
+        Gui.addCommand("SWStyle_ZoomToSelection", _ZoomToSelectionCmd())
     TANGENT.install()
     if tangent_mode() != VISIBLE or seams_hidden():
         QtCore.QTimer.singleShot(0, TANGENT.apply_all)

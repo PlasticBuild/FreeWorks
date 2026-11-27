@@ -15,6 +15,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -184,7 +185,7 @@ def _editing(sketch):
     try:
         gdoc = Gui.getDocument(sketch.Document.Name)
         vp = gdoc.getInEdit() if gdoc is not None else None
-        return vp is not None and vp.Object == sketch
+        return vp is not None and editobj.of(vp) == sketch
     except Exception:
         return False
 
@@ -318,10 +319,25 @@ class SketchXpertPage(sketchtoolpm.ToolPage):
         g.content.addLayout(row)
         self.manual_group.hide()
         g = self.group("More Information/Options")
-        self.always = QtWidgets.QCheckBox("Always open this dialog when sketch error occurs", g.body)
+        # fix298: the box's text wraps (a one-line check box was 305 px wide and pushed the page past the
+        # 300 px pane: the Results Next arrow and Accept were cut off)
+        text = "Always open this dialog when sketch error occurs"
+        line = QtWidgets.QWidget(g.body)
+        lay = QtWidgets.QHBoxLayout(line)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(4)
+        self.always = QtWidgets.QCheckBox("", line)
+        self.always.setAccessibleName(text)
         self.always.setChecked(_params().GetBool(ALWAYS, False))
         self.always.toggled.connect(lambda on: _params().SetBool(ALWAYS, on))
-        g.content.addWidget(self.always)
+        label = QtWidgets.QLabel(text, line)
+        label.setWordWrap(True)
+        label.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+        label.setBuddy(self.always)
+        label.mousePressEvent = lambda event, box=self.always: box.toggle()     # the words tick it too
+        lay.addWidget(self.always, 0, QtCore.Qt.AlignTop)
+        lay.addWidget(label, 1)
+        g.content.addWidget(line)
         self.refresh_message()
 
     # ------------------------------------------------------------------ state

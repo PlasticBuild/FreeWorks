@@ -413,7 +413,7 @@ def _sheet_body():
     try:
         if Gui.Control.activeDialog():
             return None
-        body = Gui.ActiveDocument.ActiveView.getActiveObject("pdbody") or smflatten._body()
+        body = smflatten._body()
     except Exception as _fw_err:
         _fw_log("smcrossbreak.py:417", _fw_err)
         return None

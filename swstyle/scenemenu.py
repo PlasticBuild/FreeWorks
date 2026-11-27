@@ -110,23 +110,27 @@ class PreviewCard(QtWidgets.QFrame):
 def fill(menu):
     """Fill the Apply Scene flyout menu; returns it."""
     current = style.current_scene()
+    shown = style.shown_scene()
     card = PreviewCard(menu)
     menu.preview_card = card
 
     def add(text, index):
         act = menu.addAction(text)
         act.setCheckable(True)
-        act.setChecked(index == current)
+        act.setChecked(index == shown if index >= 0 else shown < 0)
         act.setData(index)
         act.triggered.connect(lambda checked=False, i=index: style.apply_scene(i))
         return act
     for i in favorites():
-        add(style.SCENES[i][0] + ("  (Default)" if i == 0 else ""), i)
+        add(style.SCENES[i][0] + (" (Default)" if i == 0 else ""), i)
     current_other = current if current in others() else None
     if current_other is not None:
         add(style.SCENES[current_other][0], current_other)     # the scene in use, though not a favourite
     menu.addSeparator()
-    add("Theme Background", -1)
+    if style.scene_label(-1) == "Theme Background":
+        # only where the theme's own background is not 3 Point Faded (it would be that row twice):
+
+        add("Theme Background", -1)
     manage = menu.addAction(T_MANAGE)
     manage.triggered.connect(lambda checked=False: QtCore.QTimer.singleShot(0, manage_favorites))
 

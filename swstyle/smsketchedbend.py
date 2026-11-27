@@ -7,6 +7,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -215,7 +216,7 @@ class Panel:
     def addSelection(self, doc, name, sub, point):
         if sub.startswith("Face"):
             at = App.Vector(*point) if point else None
-            QtCore.QTimer.singleShot(0, lambda: self._picked(doc, name, sub, at))
+            from . import safe_later as _sl; _sl.later(0, lambda: self._picked(doc, name, sub, at), self, "face")
 
     def _picked(self, doc_name, name, sub, at=None):
         try:
@@ -297,7 +298,7 @@ class Panel:
             self.error.setVisible(True)
             return False
         invalid = "Invalid" in self.obj.State
-        self.error.setText(self.obj.getStatusString() if invalid else "")
+        self.error.setText(naming.status_text(self.obj, "The bend") if invalid else "")
         self.error.setVisible(invalid)
         return not invalid
 
@@ -351,8 +352,8 @@ def start():
         return
     gdoc = Gui.ActiveDocument
     edit = gdoc.getInEdit() if gdoc is not None else None
-    if edit is not None and edit.Object.TypeId == "Sketcher::SketchObject":
-        sketch = edit.Object
+    if edit is not None and editobj.type_id(edit) == "Sketcher::SketchObject":
+        sketch = editobj.of(edit)
         Gui.runCommand("Sketcher_LeaveSketch", 0)
         if sketch.Geometry:
             QtCore.QTimer.singleShot(0, lambda: open_on(sketch))

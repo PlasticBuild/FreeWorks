@@ -517,7 +517,8 @@ def _recomputing():
     except Exception as _fw_err:
         _fw_log("rollbackbar.py:432", _fw_err)
     try:
-        return any("Recomputing" in doc.State for doc in App.listDocuments().values())
+        # FreeCAD 1.1 documents have no State: their Recomputing flag says it
+        return any(getattr(doc, "Recomputing", False) for doc in App.listDocuments().values())
     except Exception:
         return False
 
@@ -665,6 +666,8 @@ def layout(tree, doc, body, index):
             rows.append((obj, back, rect.top(), _bottom(tree, child)))
     mine = [row for row in rows if row[0] is not None] or rows    # not rows after the body's (fmtree)
     end_y = (mine[-1][3] if mine else _shown(tree, index).bottom()) + 1
+    if rows and not any(row[1] for row in rows) and rows[-1][0] is None:
+        end_y = max(end_y, rows[-1][3] + 1)         # surfaceorder-1127: surface features sit in the tree too; the bar at the end goes below them
     bar_y = next((top for obj, back, top, bottom in rows if back), end_y)
     gaps, first = [], True
     order = {o.Name: k for k, o in enumerate(body.Group)}
@@ -864,7 +867,7 @@ def _status_mark(obj):
     return None
 
 
-def row_icon(tree, obj, body, grey):
+def row_icon(tree, obj, body, grey, quiet=False):
     """The icon FreeCAD gives a row of the object, shown (grey False) or hidden (grey True), with
     the same pixmap for the Disabled mode: FreeCAD paints a hidden object's row disabled. With
     FreeCAD's own marks: an error or a rebuild due at the top right, the Tip's and a sketch's at
@@ -878,6 +881,10 @@ def row_icon(tree, obj, body, grey):
     dpr = tree.devicePixelRatioF()
     marks = [_mark(name, dpr) for name in _marks(obj, body)]
     status = _status_mark(obj)
+    if quiet and status == "overlay_recompute":
+
+        # The rollback hold (rollbackhold) leaves those touched on purpose: they rebuild when the bar moves down.
+        status = None
     status = _mark(status, dpr) if status else None
     mode = QtGui.QIcon.Disabled if grey else QtGui.QIcon.Normal
     icon = QtGui.QIcon()
@@ -1209,6 +1216,8 @@ class RollbackBar(QtCore.QObject):
             wrong = True
         if not wrong and known is None and _is_tip(obj, body):
             wrong = True
+        if not wrong and known is None and grey and _status_mark(obj) == "overlay_recompute":
+            wrong = True        # asmpkg347: FreeCAD's icon of a held (touched) feature under the bar carries its rebuild mark
         if wrong:
             self._set_look(index, obj, body, grey)
             self._changed[row] = (key, (body.Document.Name, body.Name), back, _icon_key(index))
@@ -1225,7 +1234,7 @@ class RollbackBar(QtCore.QObject):
         model = index.model()
         model.setData(index, QtGui.QBrush(colour), Qt.ForegroundRole)
         hidden = not obj.ViewObject.Visibility
-        icon = row_icon(self.source, obj, body, grey or (hidden and not _is_solid(obj)))
+        icon = row_icon(self.source, obj, body, grey or (hidden and not _is_solid(obj)), quiet=grey)
         if icon is not None:
             model.setData(index, icon, Qt.DecorationRole)
 
@@ -1272,6 +1281,11 @@ class RollbackBar(QtCore.QObject):
         """FreeCAD rewrites a row's look when its object is shown, hidden, touched, rebuilt or made
         the Tip. A row this set is set again at once, before anything is painted."""
         if self._applying or self.tree is None or (roles and not any(_role(role) in LOOK_ROLES for role in roles)):
+            return
+        if _recomputing():
+            # fh268 (PERF-1127): rows change by the hundred while a rebuild runs and the tree is not painted then
+            # (fmtree holds it): the looks are put right once, after the rebuild (_looks_now)
+            self._looks_soon()
             return
         known = self._changed.get(first.internalId()) if first.column() == 0 else None
         if known is None:

@@ -240,13 +240,13 @@ class _ToolOptionsPage(sketchtoolpm.ToolPage):
 
 # --------------------------------------------------------------------------- Insert Line
 ORIENTATIONS = ("As sketched", "Horizontal", "Vertical", "Angle")
-INSERT_LINE_MESSAGE = "Edit the settings of the next line, or sketch a line in the graphics area."
+INSERT_LINE_MESSAGE = "Edit the settings of the next new line or sketch a new line."
 LINE_PROPERTIES_MESSAGE = ("Edit the settings of the current line, sketch a new line, or select OK to change "
                            "the settings for the next line.")
 
 
 class LinePage(_ToolOptionsPage):
-    OK_ONLY = True
+    OK_ONLY = False
     TITLE = "Insert Line"
     ICON = "SKETCH_LINE"
     PIXMAP = "Sketcher_CreateLine"
@@ -1007,9 +1007,28 @@ class MirrorPage(sketchtoolpm.ToolPage):
         # filters of the sketch (those took the click on a model edge first)
         self._app_picker = _ViewOnly(self.model_picker, self._region_view)
         QtWidgets.QApplication.instance().installEventFilter(self._app_picker)
-        picks = relationspm.picked_subs(self.sketch)
+        picks = list(relationspm.picked_subs(self.sketch))
+
+        # centerline as Mirror about and mirrors the rest at once (Beginners-1 follow-along V7)
+        # fix290: only when exactly one centerline is among the picks; with more (Ctrl+A over an offset's
+        # construction caps, Triple Clamp TC16) the line is not known, so Mirror about waits for a click
+        line = None
+        if len(picks) > 1:
+            lines = []
+            for sub in picks:
+                it = sketchtoolpm.item_of(self.sketch, sub)
+                if it is not None and it.pos == relationspm.NONE and (
+                        it.geo in (dimtools.H_AXIS, dimtools.V_AXIS) or (it.geo >= 0 and
+                        dimtools._kind(self.sketch.Geometry[it.geo]) == "line" and self.sketch.getConstruction(it.geo))):
+                    lines.append(sub)
+            if len(lines) == 1:
+                line = lines[0]
         for sub in picks:
-            self.picked(sub, clear=False)
+            if sub != line:
+                self.picked(sub, clear=False)
+        if line is not None and self.entities:
+            self.target = "about"
+            self.picked(line, clear=False)
         if self.entities and self.axis is None:
 
             # is the active box, waiting for the line
@@ -1361,7 +1380,7 @@ class ShapePage(_ToolOptionsPage):
         self.count = len(self.sketch.Geometry)
         self.kind_type = _shape_next or self._type_of_tool(p)
         _shape_next = None
-        self.message("Set the properties of the %s, or sketch it in the graphics area." % self.KIND.lower())
+        pass
         g = self.group("%s Type" % self.KIND)
         try:
             from . import icons
@@ -1659,7 +1678,7 @@ class PolygonPage(_ToolOptionsPage):
     PIXMAP = "Sketcher_CreateRegularPolygon"
 
     def build(self):
-        self.message("Set the polygon's properties, or sketch it in the graphics area.")
+        pass
         g = self.group("Parameters")
         self.inscribed = QtWidgets.QRadioButton("Inscribed circle", g.body)
         self.inscribed.setObjectName("SWPolygonInscribed")
@@ -1727,7 +1746,6 @@ class FwPolygonPage(_FwToolPage, PolygonPage):
 
     def build(self):
         self._own_tool()
-        self.message("Set the polygon's properties, or sketch it in the graphics area.")
         g = self.group("Options")
         self.construction = QtWidgets.QCheckBox("For construction", g.body)
         self.construction.setObjectName("SWPolygonForConstruction")
@@ -1851,7 +1869,7 @@ class FwArcPage(_FwToolPage, _ToolOptionsPage):
 
     def build(self):
         self._own_tool()
-        self.message("Set the properties of the arc, or sketch it in the graphics area.")
+        pass
         g = self.group("Arc Type")
         try:
             from . import icons
@@ -1995,7 +2013,7 @@ class FwRectanglePage(_FwToolPage, _ToolOptionsPage):
         self._own_tool()
         self.kind = self._kind()
         p = _params()
-        self.message("Set the properties of the rectangle, or sketch it in the graphics area.")
+        pass
         g = self.group("Rectangle Type")
         try:
             from . import icons
@@ -2202,7 +2220,7 @@ class FwSplinePage(_FwToolPage, _ToolOptionsPage):
             tool.construction = self.construction.isChecked()
 
     def _made(self, sketch, geo):
-        QtCore.QTimer.singleShot(0, lambda: alive(self.construction) and self.fields.set_spline(geo, new=True))
+        from . import safe_later as _sl; _sl.later(0, lambda: alive(self.construction) and self.fields.set_spline(geo, new=True), self, "construction")
 
     def _placing(self):
         tool = _fw_tool()
@@ -2446,6 +2464,8 @@ class _Watcher(QtCore.QObject):
             page = sketchtoolpm.current()
             if isinstance(page, _ToolOptionsPage) and page.native == name and alive(page):
                 return
+            if page is not None and alive(page) and name in getattr(page, "HOSTS_TOOLS", ()):
+                return      # fix301: the open page hosts this tool (Hole Position's points): no page of its own
             shell = _shell()
             if shell is None or not shell.enabled or not _params().GetBool("ToolPropertyManagers", True):
                 return

@@ -93,6 +93,27 @@ def _fw_retyped(spin):
         return True
 
 
+class _StripHost:
+    """What the selection toolbar (selectiontoolbar.Strip) works on: the part before the fillet, the
+    picked edges' names on it, and a way to add a set of them to the box."""
+
+    def __init__(self, panel):
+        self.panel = panel
+        self.items = []
+
+    @property
+    def base(self):
+        return self.panel.obj.BaseFeature
+
+    @property
+    def overlay(self):
+        return self.panel.overlay
+
+    def update(self):
+        self.panel.take_edges([n for n in self.items if n])
+        self.items = []
+
+
 class Panel(sf.Panel):
     def __init__(self, obj):
         super().__init__(obj)
@@ -115,6 +136,7 @@ class Panel(sf.Panel):
                             heading.setVisible(False)
         self.rows = rows_of(obj)
         self.callouts = []
+        self._items_extras()
         box = QtWidgets.QWidget()
         box.setWindowTitle("Variable Radius Parameters")
         lay = QtWidgets.QFormLayout(box)
@@ -172,11 +194,162 @@ class Panel(sf.Panel):
             lay.addRow(r)
             self.transition.append(r)
         boxes = self.form if isinstance(self.form, list) else [self.form]
-        boxes.insert(1, box)
+        boxes.insert(2 if getattr(self, "head", None) is not None else 1, box)    # after Items To Fillet
         self.form = boxes
         self._fill()
         if self.points.count():
             self.points.item(0).setSelected(True)
+
+
+    # Fillet Type): the edge box with no heading of its own, Show selection toolbar, Full / Partial
+    # / No preview. The settings are the Constant Size page's (FilletSelectionToolbar, FilletPreview).
+    def _items_extras(self):
+        from . import filletpm
+        self.preview_buttons = []
+        self.toolbar_box = None
+        self.overlay = None
+        self.strip = None
+        self._base_shown = False
+        self._edge_subs = self._base_subs()
+        edges = self.widgets.get("Edges")
+        heading = getattr(self, "headings", {}).get("Edges")
+        if heading is not None:
+            heading.hide()          # the group's title (Items To Fillet) names the box
+        form = edges.parentWidget().layout() if edges is not None and edges.parentWidget() else None
+        if not isinstance(form, QtWidgets.QFormLayout):
+            return
+        row = form.getWidgetPosition(edges)[0] + 1
+        self.toolbar_box = QtWidgets.QCheckBox("Show selection toolbar")
+        self.toolbar_box.setObjectName("SWVarFilletSelectionToolbar")
+        self.toolbar_box.setToolTip("After an edge is picked, show buttons next to it that add its loop, "
+                                    "its feature's edges, or all convex or concave edges")
+        self.toolbar_box.setChecked(filletpm.params().GetBool("FilletSelectionToolbar", True))
+        self.toolbar_box.toggled.connect(self._toolbar_toggled)
+        form.insertRow(row, self.toolbar_box)
+        group = QtWidgets.QButtonGroup(self.toolbar_box)
+        chosen = filletpm.params().GetString("FilletPreview", filletpm.PREVIEWS[0])
+        for k, text in enumerate(filletpm.PREVIEWS):
+            r = QtWidgets.QRadioButton(text)
+            r.setObjectName("SWVarFillet%s" % text.replace(" ", ""))
+            r.setChecked(text == chosen)
+            group.addButton(r)
+            form.insertRow(row + 1 + k, r)
+            self.preview_buttons.append(r)
+            r.toggled.connect(lambda on, t=text: on and self._preview_changed(t))
+        try:
+            self.overlay = filletpm.Overlay()
+            view = filletpm._view_widget()
+            if view is not None:
+                from . import selectiontoolbar
+                self.strip = selectiontoolbar.Strip(_StripHost(self), view)
+        except Exception as _fw_err:
+            _fw_log("variablefilletpm.py:extras", _fw_err)
+
+    def preview_mode(self):
+        for b in getattr(self, "preview_buttons", None) or []:
+            if b.isChecked():
+                return b.text()
+        return "Full preview"
+
+    def _preview_changed(self, text):
+        from . import filletpm
+        filletpm.params().SetString("FilletPreview", text)
+        self._preview()
+
+    def _preview(self, on=None):
+        """Full preview: the filleted part. No preview: the part as it was. Partial preview: the part
+        as it was with the new faces of the first edge drawn over it (the Constant Size page's way)."""
+        super()._preview(on)
+        try:
+            obj = self.obj
+            base = getattr(obj, "BaseFeature", None)
+            vobj = getattr(obj, "ViewObject", None)
+            if vobj is None or base is None or getattr(base, "ViewObject", None) is None:
+                return
+            if on is not None:              # the page closes: the result shows as usual
+                if self._base_shown:
+                    base.ViewObject.Visibility = False
+                    self._base_shown = False
+                vobj.Visibility = bool(on)
+                if self.overlay is not None:
+                    self.overlay.show_preview([])
+                return
+            mode = self.preview_mode()
+            full = mode == "Full preview" or "Invalid" in obj.State
+            vobj.Visibility = full
+            base.ViewObject.Visibility = not full
+            self._base_shown = not full
+            faces = []
+            if mode == "Partial preview" and "Invalid" not in obj.State:
+                from . import filletpm
+                edge = self._edge()
+                faces = filletpm.new_faces(base.Shape, obj.Shape)
+                if edge is not None:
+                    reach = max([r for _n, r, _p in self.rows if r] + [0.1]) * 1.5
+                    faces = [f for f in faces if f.distToShape(edge)[0] < reach]
+            if self.overlay is not None:
+                self.overlay.show_preview(faces)
+        except Exception as _fw_err:
+            _fw_log("variablefilletpm.py:preview", _fw_err)
+
+    def _base_subs(self):
+        """The picked edges' names on the part before the fillet (the names the toolbar's sets use)."""
+        base = getattr(self.obj, "BaseFeature", None)
+        out = []
+        for source, subs in getattr(self.obj, "Edges", None) or []:
+            for s in (subs if isinstance(subs, (list, tuple)) else [subs]):
+                if source is base and s and s not in out:
+                    out.append(s)
+        return out
+
+    def _toolbar_toggled(self, on):
+        from . import filletpm
+        filletpm.params().SetBool("FilletSelectionToolbar", on)
+        if self.strip is None:
+            return
+        subs = self._base_subs()
+        if on and subs:
+            self.strip.show_for(subs[-1])
+        else:
+            self.strip.close_strip()
+
+    def _strip_after(self):
+        ""
+        before = getattr(self, "_edge_subs", [])
+        now = self._base_subs()
+        self._edge_subs = now
+        if self.strip is None or now == before:
+            return
+        added = [s for s in now if s not in before]
+        if self.toolbar_box is not None and self.toolbar_box.isChecked() and len(added) == 1 \
+                and added[0].startswith("Edge"):
+            self.strip.show_for(added[0])
+        else:
+            self.strip.close_strip()
+
+    def take_edges(self, names):
+        """The selection toolbar's set: its edges go in the box (on the part before the fillet)."""
+        base = getattr(self.obj, "BaseFeature", None)
+        if base is None:
+            return
+        pairs = []
+        for source, subs in getattr(self.obj, "Edges", None) or []:
+            for s in (subs if isinstance(subs, (list, tuple)) else [subs]):
+                pairs.append((source, s))
+        for n in names:
+            if (base, n) not in pairs:
+                pairs.append((base, n))
+        merged = []
+        for source, s in pairs:
+            for k, (src, subs) in enumerate(merged):
+                if src is source:
+                    merged[k] = (src, subs + [s])
+                    break
+            else:
+                merged.append((source, [s]))
+        self.obj.Edges = [(src, tuple(subs)) for src, subs in merged]
+        self._edge_subs = self._base_subs()
+        self._store()
 
     # ---- rows
     def _fill(self):
@@ -198,6 +371,11 @@ class Panel(sf.Panel):
 
     def _show(self):
         super()._show()
+        try:
+            if getattr(self, "toolbar_box", None) is not None:
+                self._strip_after()
+        except Exception as _fw_err:
+            _fw_log("variablefilletpm.py:strip", _fw_err)
         try:
             if getattr(self, "points", None) is not None and getattr(self, "_listed", None) != (self._edge() is not None):
                 self._fill()            # the first edge picked (or the last one taken out)
@@ -325,6 +503,14 @@ class Panel(sf.Panel):
         return super().accept()
 
     def _close(self):
+        for extra in (getattr(self, "strip", None), getattr(self, "overlay", None)):
+            try:
+                if extra is not None:
+                    extra.remove()
+            except Exception as _fw_err:
+                _fw_log("variablefilletpm.py:close-extras", _fw_err)
+        self.strip = None
+        self.overlay = None
         for c in self.callouts:
             try:
                 c.anchor = None

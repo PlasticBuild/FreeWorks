@@ -408,6 +408,11 @@ def reset(shell):
     for name in g.GetStrings():
         if name == "CMTabs" or name.startswith(("CMTab.", "CMTabKind.", "CMExtra.", "CMRemoved.", "CMName.", "CMPlace.")):
             g.RemString(name)
+    try:
+        from . import cmtabs
+        App.ParamGet(cmtabs.PREFS).RemString("TabOrder")        # tabdrag-1126: the dragged order goes too
+    except Exception as _fw_err:
+        _fw_log("cmcustom.py:taborder", _fw_err)
     _rebuild(shell)
 
 

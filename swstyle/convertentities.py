@@ -367,7 +367,8 @@ def convert(sketch, items, origin=None, construction=False):
             items[i:i + 1] = via
     for obj, name in items:
         before = len(sketch.ExternalGeo)
-        if add_external_linked(sketch, obj, name) is None:   # outside the Body, no binder: plain
+        linked = add_external_linked(sketch, obj, name)
+        if linked is None:   # outside the Body, no binder: plain
             try:
                 el = obj.Shape.getElement(name)
             except Exception as _fw_err:
@@ -398,7 +399,9 @@ def convert(sketch, items, origin=None, construction=False):
             # an ellipse or spline: kept as a defining reference instead
             try:
                 sketch.delExternal(k - 2)
-                sketch.addExternal(obj.Name, name, True)
+                # through the object actually linked: a curve outside the Body (Curve Through XYZ Points,
+                # Helix/Spiral) is reached through its binder (convspl-fix01)
+                sketch.addExternal(linked.Name, name, True)
             except Exception as _fw_err:
                 _fw_log("convertentities.py:378", _fw_err)
     if construction:
@@ -450,6 +453,12 @@ def under_pointer(sketch, view, pos=None):
         sub = info.get("Component", "") or ""
         if obj is None or obj == sketch or not sub.startswith(("Edge", "Face", "Vertex")):
             continue
+        if sub.startswith("Vertex"):
+            try:
+                from .fwsketch import modelpick as _mp
+                sub = _mp.seam_vertex(obj, sub) or sub
+            except Exception as _fw_err:
+                _fw_log("convertentities.py:seam", _fw_err)
         if getattr(obj, "Visibility", True):
             hits.append((obj, sub))
 
@@ -558,6 +567,19 @@ class _Picker(QtCore.QObject):
         return True
 
 
+class _ViewOnly(QtCore.QObject):
+    """fix300: hands the picker only the events of one view's viewport (an application-level filter)."""
+
+    def __init__(self, picker, viewport):
+        super().__init__()
+        self.picker, self.viewport = picker, viewport
+
+    def eventFilter(self, obj, event):
+        if self.viewport is None or obj is not self.viewport or self.picker.page is None:
+            return False
+        return self.picker.eventFilter(obj, event)
+
+
 # --------------------------------------------------------------------------- the page
 class ConvertPage(sketchtoolpm.ToolPage):
     TITLE = TITLE
@@ -600,6 +622,15 @@ class ConvertPage(sketchtoolpm.ToolPage):
         self.show_note("Select edges, loops, faces or sketch entities to convert.")
         self.picker = _Picker(self)
         self.picker.install()
+        # fix300: on the application too, as Mirror's: the sketch's own application-level filters took the
+        # press on a model edge first, so FreeCAD selected it and the list stayed empty (Interface run 5)
+        self._app_picker = None
+        try:
+            vp = Gui.ActiveDocument.ActiveView.graphicsView().viewport()
+            self._app_picker = _ViewOnly(self.picker, vp)
+            QtWidgets.QApplication.instance().installEventFilter(self._app_picker)
+        except Exception as _fw_err:
+            _fw_log("convertentities.py: app picker", _fw_err)
         self._enable()
 
     def _faces_with_inner(self):
@@ -696,6 +727,12 @@ class ConvertPage(sketchtoolpm.ToolPage):
         p.SetBool("Construction", self.construction.isChecked())
 
     def closing(self):
+        if getattr(self, "_app_picker", None) is not None:
+            try:
+                QtWidgets.QApplication.instance().removeEventFilter(self._app_picker)
+            except Exception as _fw_err:
+                _fw_log("convertentities.py: app picker off", _fw_err)
+            self._app_picker = None
         self.picker.remove()
 
 

@@ -766,7 +766,7 @@ def _sheet_body():
     try:
         if Gui.Control.activeDialog():
             return None
-        body = Gui.ActiveDocument.ActiveView.getActiveObject("pdbody")
+        body = smflatten._body()    # the active body when it is sheet metal, else the part's sheet metal body
     except Exception as _fw_err:
         _fw_log("smnormalcut.py:723", _fw_err)
         return None

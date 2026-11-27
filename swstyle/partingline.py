@@ -160,7 +160,7 @@ class PartingLineWindow(evaluate.ReportWindow):
         rows = [((evaluate.LABELS[k], counts[k]), []) for k in ("positive", "negative", "requires", "straddle")]
         rows.append((("Parting line edges", len(rows_line)), rows_line))
         self.set_rows(rows)
-        self.summary.setText("The bright line is the possible parting line: the mould splits there. Green faces "
+        self.summary.setText("The bright line is the possible parting line: the mold splits there. Green faces "
                              "release towards the pull, red ones the other way, yellow ones need draft; the line "
                              "also runs across blue (straddle) faces. Pick a planar face or a straight edge, then "
                              "Calculate, to set the direction of pull.")
@@ -171,7 +171,7 @@ class PartingLineWindow(evaluate.ReportWindow):
 
 
 @evaluate.command("SWStyle_PartingLineAnalysis", "Parting Line Analysis",
-                  "Shows where a two-part mould pulling along a direction would split the part.")
+                  "Shows where a two-part mold pulling along a direction would split the part.")
 def parting_line_analysis():
     return evaluate._show(PartingLineWindow)
 

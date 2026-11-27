@@ -741,7 +741,20 @@ def wizard_explode(asm, sim, duration=10.0, start=0.0, collapse=False):
     vs = ax.views(asm)
     if not vs:
         return False
-    base, steps = _step_positions(asm, vs[0])
+    # asmpkg360: the steps start from where the study starts (its keys at 0), not from where the time bar
+    # happens to show the parts (a Collapse run with the bar at the end of an Explode went up again)
+    d0 = data(sim)
+    shown = {}
+    for c in ac.components(asm):
+        plc = placement_at(d0["comps"].get(c.Name) or [], 0.0)
+        if plc is not None and not c.Placement.isSame(plc, 1e-9):
+            shown[c.Name] = (c, App.Placement(c.Placement))
+            c.Placement = plc
+    try:
+        base, steps = _step_positions(asm, vs[0])
+    finally:
+        for c, plc in shown.values():
+            c.Placement = plc
     if not steps:
         return False
     states = [base] + [s for _st, s in steps]
@@ -949,6 +962,15 @@ class AnimationWizard(QtWidgets.QDialog):
                 d["comps"] = {n: rows[:1] for n, rows in d["comps"].items()}
                 d["view"] = []
                 d["explode"] = {}
+
+                # its start row: where the study begins)
+                for k in ("cams", "mates", "look"):
+                    v = d.get(k)
+                    if isinstance(v, list):
+                        d[k] = [r for r in v[:1] if abs(float(r[0])) < 1e-9]
+                    elif isinstance(v, dict):
+                        d[k] = {n: rows[:1] for n, rows in v.items()}
+                d.pop("suppressed", None)
                 save(self.sim, d)
             dur, start = self.duration.value(), self.start.value()
             if self.rotate.isChecked():
@@ -1703,22 +1725,6 @@ class Timeline(QtWidgets.QWidget):
             return out + [r for r in comps if r[1] in res]
         return out + comps
 
-    def event(self, e):
-        if e.type() == QtCore.QEvent.ToolTip:
-            hit = self.key_at(e.pos())
-            if hit is not None and study_option(self.pane.sim, "tooltips"):
-                if hit[0] == "key":
-                    mode = interpolation(self.pane.sim, hit[1], hit[2])
-                    obj = self.pane.asm.Document.getObject(hit[1])
-                    QtWidgets.QToolTip.showText(e.globalPos(), "%s\nTime: %.2f sec\nInterpolation: %s"
-                                                % (obj.Label if obj else hit[1], hit[2], mode), self)
-                else:
-                    QtWidgets.QToolTip.showText(e.globalPos(), "Duration: %.2f sec" % self.pane.duration.value(), self)
-            else:
-                QtWidgets.QToolTip.hideText()
-            return True
-        return super().event(e)
-
     def sizeHint(self):
         return QtCore.QSize(600, self.TOP + self.ROW * len(self.rows()) + 4)
 
@@ -2255,12 +2261,26 @@ class Timeline(QtWidgets.QWidget):
         return done
 
     def event(self, e):
-        """The timeline's own Delete, Ctrl+A/C/X/V win over the main window's shortcuts while it has focus."""
+        """The timeline's own Delete, Ctrl+A/C/X/V win over the main window's shortcuts while it has focus;
+        a key or the duration bar hovered shows its tooltip (one event(): a second def would replace it)."""
         if e.type() == QtCore.QEvent.ShortcutOverride:
             ctrl = e.modifiers() & Qt.ControlModifier
             if e.key() == Qt.Key_Delete or (ctrl and e.key() in (Qt.Key_A, Qt.Key_C, Qt.Key_X, Qt.Key_V)):
                 e.accept()
                 return True
+        if e.type() == QtCore.QEvent.ToolTip:     # the key / duration tooltip (Motion Study option)
+            hit = self.key_at(e.pos())
+            if hit is not None and study_option(self.pane.sim, "tooltips"):
+                if hit[0] == "key":
+                    mode = interpolation(self.pane.sim, hit[1], hit[2])
+                    obj = self.pane.asm.Document.getObject(hit[1])
+                    QtWidgets.QToolTip.showText(e.globalPos(), "%s\nTime: %.2f sec\nInterpolation: %s"
+                                                % (obj.Label if obj else hit[1], hit[2], mode), self)
+                else:
+                    QtWidgets.QToolTip.showText(e.globalPos(), "Duration: %.2f sec" % self.pane.duration.value(), self)
+            else:
+                QtWidgets.QToolTip.hideText()
+            return True
         return super().event(e)
 
     def keyPressEvent(self, e):

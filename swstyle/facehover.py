@@ -606,6 +606,97 @@ class _Observer:
         self.owner.preselected(doc, obj, sub)
 
 
+    def addSelection(self, *args):
+        PICKED.changed()
+
+    def removeSelection(self, *args):
+        PICKED.changed()
+
+    def setSelection(self, *args):
+        PICKED.changed()
+
+    def clearSelection(self, *args):
+        PICKED.changed()
+
+
+class PickedCorners:
+    ""
+
+
+
+    def __init__(self):
+        self.nodes = []             # (scene graph, node)
+        self.pending = False
+        self.drawn = 0              # corners drawn now, for checks
+
+    def changed(self):
+        if not self.pending:
+            self.pending = True
+            QtCore.QTimer.singleShot(0, self.redraw)
+
+    def clear(self):
+        for root, node in self.nodes:
+            try:
+                root.removeChild(node)
+            except Exception as _fw_err:
+                _fw_log("facehover.py:picked-clear", _fw_err)
+        self.nodes, self.drawn = [], 0
+
+    def redraw(self):
+        self.pending = False
+        self.clear()
+        if not enabled() or contextbar.sketch_in_edit() is not None:
+            return
+        try:
+            import Part
+            from pivy import coin
+            by_doc = {}
+            for entry in Gui.Selection.getSelectionEx("*", 0):
+                for sub in entry.SubElementNames:
+                    if not sub.rsplit(".", 1)[-1].startswith("Vertex"):
+                        continue
+                    try:
+                        point = Part.getShape(entry.Object, sub, needSubElement=True).Point
+                    except Exception:
+                        continue
+                    by_doc.setdefault(entry.DocumentName, []).append(point)
+            packed = App.ParamGet(VIEW).GetUnsigned("SelectionColor", 0x53A9FFFF)
+            rgb = ((packed >> 24) & 255) / 255.0, ((packed >> 16) & 255) / 255.0, ((packed >> 8) & 255) / 255.0
+            dpr = Gui.getMainWindow().devicePixelRatioF()
+            for doc, points in by_doc.items():
+                gdoc = Gui.getDocument(doc)
+                view = getattr(gdoc, "ActiveView", None) if gdoc is not None else None
+                if view is None or not hasattr(view, "getSceneGraph"):
+                    continue
+                node = coin.SoSeparator()
+                node.setName("SWPickedCorners")
+                pick = coin.SoPickStyle()
+                pick.style = coin.SoPickStyle.UNPICKABLE
+                light = coin.SoLightModel()
+                light.model = coin.SoLightModel.BASE_COLOR
+                colour = coin.SoBaseColor()
+                colour.rgb.setValue(*rgb)
+                draw = coin.SoDrawStyle()
+                draw.pointSize = POINT_PX * dpr
+                depth = coin.SoDepthBuffer()
+                depth.test = False
+                coords = coin.SoCoordinate3()
+                coords.point.setValues(0, len(points), [tuple(p) for p in points])
+                dots = coin.SoPointSet()
+                dots.numPoints.setValue(len(points))
+                for child in (pick, light, colour, draw, depth, coords, dots):
+                    node.addChild(child)
+                root = view.getSceneGraph()
+                root.addChild(node)
+                self.nodes.append((root, node))
+                self.drawn += len(points)
+        except Exception as error:
+            _fw_log("facehover.py:picked", error)
+
+
+PICKED = PickedCorners()
+
+
 class FaceHover(QtCore.QObject):
     def __init__(self, shell):
         super().__init__(shell.window)

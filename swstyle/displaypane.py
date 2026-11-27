@@ -53,12 +53,94 @@ def _solid_feature(obj):
     return t.startswith("PartDesign::") and t != BODY and hasattr(obj, "BaseFeature")
 
 
+def _curve(obj):
+    ""
+
+    try:
+        from . import viewtypes
+        return bool(viewtypes.TYPES["Curves"][2](obj))
+    except Exception:
+        return False
+
+
 def _solid_row(obj):
     try:
         from . import multibody
         return getattr(getattr(obj, "Proxy", None), "Type", None) == multibody.ROW_TYPE
     except Exception:
         return False
+
+
+class _Many(object):
+    ""
+
+
+    def __init__(self, items):
+        self.items = list(items)
+        self.Document = self.items[0].Document
+        self.TypeId = "SWStyle::PartRow"
+
+    @property
+    def ViewObject(self):
+        return _ManyView(self.items)
+
+
+class _ManyView(object):
+    def __init__(self, items):
+        object.__setattr__(self, "_items", items)
+
+    def __getattr__(self, name):
+        return getattr(self._items[0].ViewObject, name)
+
+    def __setattr__(self, name, value):
+        for o in self._items:
+            try:
+                vo = o.ViewObject
+                if name == "DisplayMode" and value not in vo.listDisplayModes():
+                    continue
+                setattr(vo, name, value)
+            except Exception as _fw_err:
+                _fw_log("displaypane.py:many", _fw_err)
+
+
+def _loose_root(obj):
+    """A solid outside any Body that no other shape uses (a Part primitive, a Boolean's result, an
+    imported shape): one of the part's bodies."""
+    try:
+        if not obj.isDerivedFrom("Part::Feature") or obj.isDerivedFrom("Part::Part2DObject"):
+            return False
+        if _type(obj) in DATUMS or _solid_row(obj) or obj.ViewObject is None:
+            return False
+        from . import appearance
+        if not appearance.own_body(obj):
+            return False
+        # used by a Boolean, an extrusion ... : that one is the body, this is its input
+        return not any(p.isDerivedFrom("Part::Feature") for p in obj.InList)
+    except Exception:
+        return False
+
+
+def part_items(doc):
+    """The bodies the part row stands for when the part has no single Body (look audit BB29 DP-1)."""
+    out = []
+    try:
+        objs = doc.Objects if doc is not None else []
+    except (ReferenceError, RuntimeError):
+        return out      # dpclose-1127: the document closed while the pane painted it
+    for o in objs:
+        t = _type(o)
+        if t == BODY or _loose_root(o):
+            out.append(o)
+    return out
+
+
+def _part_row_object(fm):
+    if fm.flat is not None:
+        return fm.flat
+    items = part_items(getattr(fm, "doc", None) or App.ActiveDocument)
+    if not items:
+        return None
+    return items[0] if len(items) == 1 else _Many(items)
 
 
 def cells(view, node):
@@ -68,7 +150,12 @@ def cells(view, node):
         return {}
     obj, level = node.obj, None
     if node is fm.part:
-        obj, level = fm.flat, "part"
+        obj, level = _part_row_object(fm), "part"
+        if obj is None:
+            return {}
+        if fm.flat is None:
+
+            return {"mode": (obj, None), "appearance": (obj, level), "transparency": (obj, None)}
     if obj is None:
         return {}
     t = _type(obj)
@@ -87,9 +174,10 @@ def cells(view, node):
         out = {"hide": (obj, None), "mode": (obj, None), "appearance": (obj, level), "transparency": (obj, None)}
         if level == "part":
             del out["hide"]
-    elif t == "Sketcher::SketchObject" or t in DATUMS:
+    elif t == "Sketcher::SketchObject" or t in DATUMS or _curve(obj):
         out = {"hide": (obj, None)}
-    elif _solid_feature(obj):
+    elif _solid_feature(obj) or _loose_root(obj):
+
         out = {"appearance": (obj, "feature")}
     return out
 
@@ -129,6 +217,8 @@ def transparent(obj):
 
 
 def colour(obj, level):
+    if isinstance(obj, _Many):
+        obj = obj.items[0]
     if level == "row":
         # a Solid Bodies row: its own colour, else the colour the solid shows (its Body's), so the
         # row always draws its appearance circle (look audit AP1, 11-21)
@@ -194,7 +284,25 @@ def edit_appearance(obj, level):
         from . import multibody
         return multibody.pick_colour(obj)
     from . import appearance
-    return appearance.open_page(obj.Document, level, [(obj, "")])
+    items = obj.items if isinstance(obj, _Many) else [obj]
+    return appearance.open_page(obj.Document, level, [(o, "") for o in items])
+
+
+def _target(obj, level):
+    """The appearance target of a Display Pane row (part, body or feature), or None."""
+    if level not in ("part", "body", "feature"):
+        return None
+    try:
+        from . import appearance
+        if isinstance(obj, _Many):
+            obj = obj.items[0]
+        if level == "part":
+            body = obj if obj.TypeId == BODY else appearance.body_of(obj)
+            return appearance.Target("part", body) if body is not None else appearance.target_for("part", obj, "")
+        return appearance.target_for(level, obj, "")
+    except Exception as _fw_err:
+        _fw_log("displaypane.py:target", _fw_err)
+        return None
 
 
 class Pane(QtWidgets.QWidget):
@@ -283,7 +391,11 @@ class Pane(QtWidgets.QWidget):
         for index, top, height in self.rows():
             node = self.view.fm.node(index)
             for c, column in enumerate(COLUMNS):
-                got = cells(self.view, node).get(column)
+                try:
+                    got = cells(self.view, node).get(column)
+                except Exception as _fw_err:     # dpclose-1127: a row of a document closing under the paint
+                    _fw_log("displaypane.py:paint-cells", _fw_err)
+                    got = None
                 if got is None:
                     continue
                 rect = QtCore.QRectF(c * w + 3, top + (height - (w - 6)) / 2.0, w - 6, w - 6)
@@ -354,6 +466,9 @@ class Pane(QtWidgets.QWidget):
         self.setToolTip(tip)
 
     def mousePressEvent(self, event):
+        if event.button() == Qt.RightButton:
+            self._right_click(event)
+            return
         if event.button() != Qt.LeftButton:
             return
         index, column = self.cell_at(event.position())
@@ -376,6 +491,34 @@ class Pane(QtWidgets.QWidget):
             App.Console.PrintWarning("FreeCAD: Display Pane: %s\n" % error)
         self.update()
         event.accept()
+
+    def _right_click(self, event):
+        ""
+
+        index, column = self.cell_at(event.position())
+        got = cells(self.view, self.view.fm.node(index)).get(column) if index is not None else None
+        if column != "appearance" or got is None:
+            return
+        obj, level = got
+        menu = self.appearance_menu(obj, level)
+        if menu is not None and menu.actions():
+            menu.popup(event.globalPosition().toPoint())
+        event.accept()
+
+    def appearance_menu(self, obj, level):
+        menu = QtWidgets.QMenu(self)
+        menu.setObjectName("SWDisplayPaneAppearanceMenu")
+        a = menu.addAction("Edit Appearance...")
+        a.triggered.connect(lambda checked=False: (edit_appearance(obj, level), self.update()))
+        target = _target(obj, level)
+        if target is not None:
+            from . import appearance
+            if appearance.has_own(target):
+                r = menu.addAction("Remove Appearance")
+                r.setObjectName("SWDisplayPaneRemoveAppearance")
+                r.triggered.connect(lambda checked=False, t=target: (
+                    appearance.remove_with_undo(t.body.Document, [t]), self.update()))
+        return menu
 
     def mode_menu(self, obj):
         menu = QtWidgets.QMenu(self)

@@ -186,7 +186,7 @@ class CurrentEntity(QtCore.QObject):
                     self.fields[key] = box
         values = R.parameter_values(sk, item)
         for key, box in self.fields.items():
-            if key in values:
+            if key in values and not _typing(box):
                 box.blockSignals(True)
                 box.setValue(values[key])
                 box.blockSignals(False)
@@ -223,6 +223,12 @@ class CurrentEntity(QtCore.QObject):
             changed, message = False, str(error)
         if not changed:
             self._note(message)
+        box = self.fields.get(key)
+        try:
+            if box is not None and box.lineEdit() is not None:
+                box.lineEdit().setModified(False)       # the typed value is in: refreshes show the sketch again
+        except RuntimeError as _fw_err:
+            _fw_log("currententity.py:typed", _fw_err)
         self.fill()
 
     def set_construction(self, on):
@@ -250,6 +256,16 @@ class CurrentEntity(QtCore.QObject):
             return bool(R.is_infinite(self.sketch(), self.geo))
         except Exception:
             return False
+
+
+def _typing(box):
+    """True while the user is typing in box: the page's refresh leaves its text alone (the Line
+    Properties page refreshes on every tick while the tool runs, which wiped a typed Length)."""
+    try:
+        edit = box.lineEdit()
+        return box.hasFocus() and edit is not None and edit.isModified()
+    except RuntimeError:
+        return False
 
 
 def last_placed(page, types):

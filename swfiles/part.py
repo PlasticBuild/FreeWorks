@@ -41,13 +41,13 @@ def exact_bodies(path):
         try:
             return solidworks_bodies(path)
         except Exception as exc:
-            warn("%s: the decoded shape is not closed and SolidWorks could not give it (%s)" % (
+            warn("%s: the decoded shape is not closed and the other CAD program could not give it (%s)" % (
                 os.path.basename(path), exc))
             return bodies
     try:
         return solidworks_bodies(path)
     except Exception as exc:
-        raise RuntimeError("could not decode the part geometry (%s), and SolidWorks could not give it "
+        raise RuntimeError("could not decode the part geometry (%s), and the other CAD program could not give it "
                            "either (%s)" % (why, exc))
 
 
@@ -68,13 +68,13 @@ def solidworks_bodies(path):
     tmp = tempfile.mkdtemp(prefix="fw-sw-")
     try:
         step = os.path.join(tmp, "part.step")
-        swapp.run("export-step", [path, step], "Reading the shape from SolidWorks...")
+        swapp.run("export-step", [path, step], "Reading the shape...")
         shape = Part.read(step)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     solids = shape.Solids
     if not solids:
-        raise RuntimeError("SolidWorks gave no solid")
+        raise RuntimeError("No solid came back")
     base = os.path.splitext(os.path.basename(path))[0]
     if len(solids) == 1:
         return SolidWorksBodies([(base, solids[0], None)])
@@ -125,7 +125,7 @@ def open_part(path, doc=None, read_tree=None):
                 sw_bodies = solidworks_bodies(path)
             except Exception as exc:
                 sw_bodies = None
-                warn("%s: SolidWorks did not give its shape (%s)" % (base, exc))
+                warn("%s: no shape came back (%s)" % (base, exc))
             if sw_bodies and rebuild_tree(doc, tree, sw_bodies, base):
                 how, bodies = "tree", sw_bodies
             elif not sw_bodies:
@@ -142,7 +142,7 @@ def open_part(path, doc=None, read_tree=None):
 
 def read_feature_tree(path):
     try:
-        return swapp.run("tree", [path], "Reading the FeatureManager tree from SolidWorks...")["tree"]
+        return swapp.run("tree", [path], "Reading the feature tree...")["tree"]
     except swapp.HelperError as exc:
         warn("%s: feature tree not read (%s); opened as an imported body" % (os.path.basename(path), exc))
         return None
@@ -223,7 +223,7 @@ def rebuild_tree(doc, tree, bodies, base, quiet=False):
         if bodies and bodies[0][2]:
             doc.recompute()
             apply_appearance(r.body, bodies[0][2])
-        msg("%s: opened with its SolidWorks feature tree (%d features%s)" % (
+        msg("%s: opened with its feature tree (%d features%s)" % (
             base, len(r.log), ", %d not rebuilt" % len(failed) if failed else ""))
         for row in failed:
             msg("  %s: %s %s" % (row["feature"], row["status"], row.get("kind", "")))
@@ -235,7 +235,7 @@ def rebuild_tree(doc, tree, bodies, base, quiet=False):
             pass
     pct = r.pct(err) if r is not None else None
     if not quiet:
-        warn("%s: the feature tree did not rebuild to the SolidWorks shape (%s %% off); "
+        warn("%s: the feature tree did not rebuild to the file's shape (%s %% off); "
              "opened as an imported body" % (base, pct))
     return False
 

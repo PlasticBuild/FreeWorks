@@ -322,7 +322,7 @@ if Gui is not None:
          lambda: True, lambda: edit_table(True)),
         ("SWStyle_FlipNormal", "Flip Normal", "Turns the picked surface bodies' faces round.",
          lambda: bool(picked_surfaces()), _flip),
-        ("SWStyle_SketchCurveColor", "Sketch/Curve Color...", "Sets the colour of the picked sketches and curves.",
+        ("SWStyle_SketchCurveColor", "Sketch/Curve Color...", "Sets the color of the picked sketches and curves.",
          lambda: bool(picked_curves()), _colour),
     ]
     for verb, on, deps in (("Suppress", True, False), ("Unsuppress", False, False),

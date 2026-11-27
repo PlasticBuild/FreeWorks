@@ -173,11 +173,21 @@ def _recomputing():
             return True
     except Exception as _fw_err:
         _fw_log("silhouette.py:131", _fw_err)
+    return _files_busy()      # (Document has no State: the old "Recomputing" in doc.State test always failed)
+
+
+def _files_busy():
+    """A file is opening or a document rebuilding (FreeCAD lets timers run between features then): the pass
+    waits, the next tick after does it once (File handling perf-1127)."""
     try:
-        doc = App.ActiveDocument
-        return doc is not None and "Recomputing" in doc.State
+        if App.isRestoring():
+            return True
+        for d in App.listDocuments().values():
+            if getattr(d, "Restoring", False) or getattr(d, "Recomputing", False):
+                return True
     except Exception:
         return False
+    return False
 
 
 def _quick_too_big(doc):

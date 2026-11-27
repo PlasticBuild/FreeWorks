@@ -667,14 +667,14 @@ class DeleteFacePanel:
             self.source = picked
         face = sub.split(".")[-1]
         if face.startswith("Face"):
-            QtCore.QTimer.singleShot(0, lambda: self._picked(face, True))
+            from . import safe_later as _sl; _sl.later(0, lambda: self._picked(face, True), self, "toolbar_box")
 
     def removeSelection(self, doc, name, sub):
         if doc != self.doc.Name or self._gone():
             return
         face = sub.split(".")[-1]
         if face.startswith("Face"):
-            QtCore.QTimer.singleShot(0, lambda: self._picked(face, False))
+            from . import safe_later as _sl; _sl.later(0, lambda: self._picked(face, False), self, "toolbar_box")
 
     def _picked(self, face, add):
         if add and face not in self.faces:

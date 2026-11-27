@@ -38,6 +38,17 @@ SMALLEST_SCALE = 0.5   # the first sheet of the series whose fitted scale is 1:2
 
 
 def _standard(doc=None):
+    """The drawing's own drafting standard (Document Properties > Drafting Standard, kept in the document), else
+    the default for new documents, as options._read_standard."""
+    try:
+        from . import migrate
+        d = doc if doc is not None else App.ActiveDocument
+        if d is not None:
+            value = migrate.doc_meta(d)
+            if value:
+                return value
+    except Exception as _fw_err:
+        _fw_log("drawauto.py:standard", _fw_err)
     try:
         from . import paths
         return paths.params().GetString("DraftingStandard", "ISO")
@@ -46,8 +57,8 @@ def _standard(doc=None):
         return "ISO"
 
 
-def series():
-    return ANSI_SERIES if _standard().upper().startswith("ANSI") else ISO_SERIES
+def series(doc=None):
+    return ANSI_SERIES if _standard(doc).upper().startswith("ANSI") else ISO_SERIES
 
 
 def pick_sheet(page, shapes):
@@ -55,7 +66,7 @@ def pick_sheet(page, shapes):
     from . import drawings as D
     from . import drawsheet as SH
     chosen = None
-    for name in series():
+    for name in series(page.Document):
         path = SH.size_path(name)
         if not path:
             continue

@@ -89,7 +89,7 @@ def add_properties(obj):
     """The two amounts on a light added from the DisplayManager (lights saved before keep Coin's look)."""
     if not hasattr(obj, "Ambient"):
         obj.addProperty("App::PropertyPercent", "Ambient", "Light",
-                        "Light the light adds from everywhere, 0-100 % of its colour").Ambient = AMBIENT_DEFAULT
+                        "Light the light adds from everywhere, 0-100 % of its color").Ambient = AMBIENT_DEFAULT
     if not hasattr(obj, "Specularity"):
         obj.addProperty("App::PropertyPercent", "Specularity", "Light",
                         "How much highlight the light puts on shiny faces, 0-100 % of its Brightness"

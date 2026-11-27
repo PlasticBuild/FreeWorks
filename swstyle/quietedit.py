@@ -8,6 +8,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -62,7 +63,7 @@ def close(obj):
         return False
     try:
         in_edit = gdoc.getInEdit()
-        if in_edit is None or in_edit.Object is not obj:
+        if in_edit is None or editobj.of(in_edit) is not obj:
             return False
     except Exception:
         return False

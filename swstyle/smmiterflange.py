@@ -15,6 +15,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -105,12 +106,14 @@ def walls(shape, edge, sketch, radius, thk, outer_first):
         if d.Length < 1e-6:
             raise ValueError(NOT_PROFILE)
         lines.append((d.Length, V(d).normalize()))
-    if lines[0][1].dot(n) ** 2 < 1e-12 and lines[0][1].dot(o) > 0:
+    if lines[0][1].dot(n) ** 2 < 1e-12:
+        # along the sheet face either way (outward or back over the sheet): no bend to make, and the
+
         raise ValueError("The first profile line must leave the face of the sheet")
     a0 = math.degrees(math.atan2(lines[0][1].dot(n), lines[0][1].dot(o)))
     turns = [math.degrees(math.atan2(p[1].cross(q[1]).dot(k), p[1].dot(q[1]))) for p, q in zip(lines, lines[1:])]
-    if any(abs(t) < 1e-6 for t in turns):
-        raise ValueError(NOT_PROFILE)
+    if any(abs(t) < 1e-6 or abs(abs(t) - 180.0) < 1e-6 for t in turns):
+        raise ValueError(NOT_PROFILE)       # straight on, or folded back on itself (tan 90 deg)
     up = a0 > 0
     # F on the outside of each bend? A bend turning the other way swaps the sides.
     outer = [outer_first] + [outer_first if (t > 0) == up else not outer_first for t in turns]
@@ -632,8 +635,8 @@ def start():
         return
     gdoc = Gui.ActiveDocument
     edit = gdoc.getInEdit() if gdoc is not None else None
-    if edit is not None and edit.Object.TypeId == "Sketcher::SketchObject":
-        sketch = edit.Object
+    if edit is not None and editobj.type_id(edit) == "Sketcher::SketchObject":
+        sketch = editobj.of(edit)
         Gui.runCommand("Sketcher_LeaveSketch", 0)
         if sketch.Geometry:
             QtCore.QTimer.singleShot(0, lambda: open_on(sketch))
@@ -662,7 +665,7 @@ class Command:
         try:
             gdoc = Gui.ActiveDocument
             edit = gdoc.getInEdit() if gdoc is not None else None
-            in_sketch = edit is not None and edit.Object.TypeId == "Sketcher::SketchObject"
+            in_sketch = edit is not None and editobj.type_id(edit) == "Sketcher::SketchObject"
             return in_sketch or not Gui.Control.activeDialog()
         except Exception:
             return True

@@ -1429,6 +1429,11 @@ def _part_body():
     except Exception as _fw_err:
         _fw_log("smconvert.py:1430", _fw_err)
         return None
+    if body is None:
+        # pkg459: a part opened from a file has no active body (FreeCAD does not keep it): its one body,
+        # as the other features take it (simplefeature.body_of)
+        bodies = [o for o in App.ActiveDocument.Objects if o.TypeId == "PartDesign::Body"]
+        body = bodies[0] if len(bodies) == 1 else None
     if body is None or body.Tip is None or body.Tip.Shape.isNull() or not body.Tip.Shape.Solids:
         return None
     return body

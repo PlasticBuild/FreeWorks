@@ -299,7 +299,7 @@ def _warm():
         App.Console.PrintLog("FreeCAD: curvature generation: %s\n" % error)
 
 
-@command("SWStyle_Curvature", "Curvature", "Colours faces by how tightly they curve: black flat, red tight.", True)
+@command("SWStyle_Curvature", "Curvature", "Colors faces by how tightly they curve: black flat, red tight.", True)
 def curvature():
     if CURVATURE.on:
         CURVATURE.hide()
@@ -711,29 +711,144 @@ class Sensor:
 
             obj.Value = 0.0
             obj.Alerting = True
-            base = obj.Label.lstrip("⚠ ").strip()
-            if obj.Label != "⚠ " + base:
-                obj.Label = "⚠ " + base
+            base = _sensor_label(obj)
             App.Console.PrintWarning("Sensor '%s': %s\n" % (base, sensorpm.missing(obj)))
+            _sensor_view(obj)
             return
         obj.Value = v
         v, a, b = obj.Value, obj.Limit1, obj.Limit2
         rule = obj.Operator
         bad = sensorpm.alerting(rule, v, a, b)
         obj.Alerting = bool(obj.Alert and bad)
-        base = obj.Label.lstrip("⚠ ").strip()
-        label = ("⚠ " + base) if obj.Alerting else base
-        if obj.Label != label:
-            obj.Label = label
+        base = _sensor_label(obj)
+        _sensor_view(obj)
         if obj.Alerting:
             App.Console.PrintWarning("Sensor '%s': %s = %s (%s %s)\n" % (base, sensorpm.watched(obj), _f(v, 3),
                                                                         rule.lower(), _f(a, 3)))
+
+    def onDocumentRestored(self, obj):
+        # a sensor from an older file: its name loses the old mark, its row gets the sensor icon (once the
+        # file's view data is read, or that would put its empty view proxy back)
+        try:
+            _sensor_label(obj)
+        except Exception as _fw_err:
+            _fw_log("evaluate2.py:sensor-restore", _fw_err)
+        if App.GuiUp:
+            QtCore.QTimer.singleShot(0, lambda o=obj: _sensor_view(o) if _alive(o) else None)
 
     def dumps(self):
         return None
 
     def loads(self, state):
         return None
+
+
+def _sensor_label(obj):
+    ""
+
+
+
+    base = obj.Label
+    while base.startswith("\u26a0"):
+        base = base[1:].lstrip()
+    if base and obj.Label != base:
+        obj.Label = base
+    return base
+
+
+class ViewProviderSensor:
+    ""
+
+    def __init__(self, vobj):
+        self.Object = vobj.Object
+        vobj.Proxy = self
+
+    def attach(self, vobj):
+        self.Object = vobj.Object
+        try:
+            # an empty display mode: FreeCAD's tree greys the icon of a row it can't show, and a sensor
+
+            from pivy import coin
+            vobj.addDisplayMode(coin.SoSeparator(), "Default")
+        except Exception as _fw_err:
+            _fw_log("evaluate2.py:sensor-mode", _fw_err)
+
+    def getDisplayModes(self, vobj):
+        return ["Default"]
+
+    def getDefaultDisplayMode(self):
+        return "Default"
+
+    def setDisplayMode(self, mode):
+        return mode
+
+    def getIcon(self):
+        obj = getattr(self, "Object", None)
+        try:
+            from . import icons
+            icon = icons.family("TOOLS_SENSOR")
+            if icon.isNull():
+                return ""
+            if obj is not None and getattr(obj, "Alerting", False):
+                return _warning_marked(icon)
+            return icon
+        except Exception as _fw_err:
+            _fw_log("evaluate2.py:sensor-icon", _fw_err)
+            return ""
+
+    def dumps(self):
+        return None
+
+    def loads(self, state):
+        return None
+
+
+_MARKED = {}
+
+
+def _warning_marked(icon, size=16):
+    """The icon with the warning triangle at its lower left, as the tree marks a row that needs a look."""
+    key = icon.cacheKey()
+    if key not in _MARKED:
+        from PySide import QtGui
+        from .whatswrong import warning_icon
+        out = QtGui.QPixmap(size * 2, size * 2)
+        out.setDevicePixelRatio(2)
+        out.fill(QtCore.Qt.transparent)
+        p = QtGui.QPainter(out)
+        p.drawPixmap(QtCore.QRect(0, 0, size, size), icon.pixmap(size * 2, size * 2))
+        mark = int(size * 0.6)
+        p.drawPixmap(QtCore.QRect(0, size - mark, mark, mark), warning_icon(mark).pixmap(mark * 2, mark * 2))
+        p.end()
+        _MARKED[key] = QtGui.QIcon(out)
+    return _MARKED[key]
+
+
+def _alive(obj):
+    try:
+        return obj.Document is not None and obj.Document.getObject(obj.Name) is not None
+    except Exception:
+        return False
+
+
+def _sensor_view(obj):
+    """Gives a sensor its row icon (older sensors too) and redraws it when the alert changes."""
+    if not App.GuiUp:
+        return
+    try:
+        vobj = obj.ViewObject
+        if vobj is None:
+            return
+        if vobj.Proxy is None or type(vobj.Proxy).__name__ != "ViewProviderSensor":
+            ViewProviderSensor(vobj)       # FreeCAD calls its attach
+            if not vobj.Visibility:
+                vobj.Visibility = True
+        was = getattr(vobj.Proxy, "_alerting", None)
+        if was != bool(obj.Alerting):
+            vobj.Proxy._alerting = bool(obj.Alerting)
+            vobj.signalChangeIcon()
+    except Exception as _fw_err:
+        _fw_log("evaluate2.py:sensor-view", _fw_err)
 
 
 def make_sensor(prop="Mass", operator="Is greater than", limit1=0.0, limit2=0.0, bodies=None):
@@ -765,7 +880,13 @@ def measured_value(obj):
     for o, subs in obj.References:
         for s in subs or [""]:
             try:
-                shapes.append(o.getSubObject(s) if s else o.Shape)
+                # as the Measure window reads its picks (msens-fix01): an origin or reference plane or axis, a
+                # coordinate system, a component's element (getSubObject gave None for an origin plane: 0)
+                shape = measure.element(o.Document.Name, o.Name, s)
+                if shape is None:
+                    shape = o.getSubObject(s) if s else o.Shape
+                if shape is not None:
+                    shapes.append(shape)
             except Exception as _fw_err:
                 _fw_log("evaluate2.py:673", _fw_err)
     units = measure.Units(obj.Unit or "Millimeters", 6)

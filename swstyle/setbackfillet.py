@@ -267,6 +267,7 @@ def without_features(base, pairs):
     import Part
     near = [f for e in edges for f in base.ancestorsOfType(e, Part.Face)]
     clean = None
+    too_big = True          # pkg429: every try reached the part's own walls, not a feature
     # the faces in reach alone first (a hole is its one wall): growing them to every joined face
     # can run on round a through-cut into the part's own faces, and nothing comes out at all
     for faces in (seeds, _whole_features(base, seeds, near)):
@@ -275,6 +276,7 @@ def without_features(base, pairs):
             # inside walls and bottom): OpenCascade's defeaturing of those never came back and
             # froze FreeCAD as the Fillet page opened; these are no feature to take off
             continue
+        too_big = False
         try:
             got = base.defeaturing(faces)
         except Exception:
@@ -284,7 +286,11 @@ def without_features(base, pairs):
         clean = got
         break
     if clean is None:
-        raise RuntimeError("The features under the fillet could not be taken out: tick Keep features.")
+        if too_big:
+            # pkg429: the size runs past the faces beside the edge (Chamfer 60 mm on a 40 x 30 x 20
+            # block said "features under the fillet" on the Chamfer page)
+            raise RuntimeError("The size is too large for the faces beside the edges: make it smaller.")
+        raise RuntimeError("The features under the edges could not be taken out: tick Keep features.")
     if len(clean.Solids) == 1:
         clean = clean.Solids[0]
     out = {}

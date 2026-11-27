@@ -335,7 +335,7 @@ def _page_class():
             self.reverse.toggled.connect(self.changed)
             g.content.addWidget(self.reverse)
             # after the command returns: FreeCAD commits what a command opens while it runs
-            QtCore.QTimer.singleShot(0, self.changed)
+            from . import safe_later as _sl; _sl.later(0, self.changed, self, "reverse")
 
         def changed(self, *args):
             if not sketchtoolpm.alive(self):

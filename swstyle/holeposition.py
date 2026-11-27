@@ -38,6 +38,7 @@ class HolePositionPage(sketchtoolpm.ToolPage):
     ICON = "FEATURES_HOLE_WIZARD"
     PIXMAP = "PartDesign_Hole"
     TOOL_IS_PAGE = True     # pkg239: the Point tool runs for the whole tab; Enter is still the page's OK
+    HOSTS_TOOLS = ("FreeWorks_Point",)
 
     def __init__(self, sketch, spec):
         self.spec = spec
@@ -219,7 +220,7 @@ def _cancel(doc, name):
             except Exception as _fw_err:
                 _fw_log("holeposition.py:219", _fw_err)
     try:
-        Gui.getMainWindow().statusBar().showMessage("Hole Wizard cancelled.", 3000)
+        Gui.getMainWindow().statusBar().showMessage("Hole Wizard canceled.", 3000)
     except Exception as _fw_err:
         _fw_log("holeposition.py:223", _fw_err)
 

@@ -22,6 +22,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -101,7 +102,7 @@ def sketch_in_edit():
     try:
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
-        obj = edit.Object if edit is not None else None
+        obj = editobj.of(edit) if edit is not None else None
     except Exception:
         return None
     if obj is not None and obj.TypeId == SKETCH and dialog_open():
@@ -527,7 +528,7 @@ def run_key(shell, key):
 _CHECKED_RELATIONS = {
     "RelHorizontal": "Horizontal", "RelVertical": "Vertical", "RelCollinear": "Collinear",
     "RelParallel": "Parallel", "RelPerpendicular": "Perpendicular", "RelEqual": "Equal",
-    "RelTangent": "Tangent",
+    "RelTangent": "Tangent", "RelCoradial": "Coradial", "RelEqualCurvature": "Equal Curvature",
 }
 
 
@@ -592,7 +593,14 @@ def _command_entry(shell, key, detail=""):
         return None
     if not cmd.natives and not (cmd.call and shell.special_enabled(cmd.call)):
         return None
-    return Entry(key, cmd.label, binding.icon(), _tip(cmd.label, detail or (cmd.tip or "")),
+    icon = binding.icon()
+    if key in ("RelCoradial", "RelEqualCurvature"):     # coradial-1127: no FreeCAD command draws it; the Properties panel's picture
+        try:
+            from . import relationspm
+            icon = relationspm.relation_icon("Coradial" if key == "RelCoradial" else "Equal Curvature")
+        except Exception as _fw_err:
+            _fw_log("contextbar.py:coradial", _fw_err)
+    return Entry(key, cmd.label, icon, _tip(cmd.label, detail or (cmd.tip or "")),
                  lambda shell=shell, key=key: run_key(shell, key))
 
 
@@ -735,9 +743,11 @@ def relation_keys(items):
         keys += ["RelSymmetric"]
     elif n == 2 and lines == 1 and (circles == 1 or curves == 1):
         keys += ["RelTangent"]
+    elif n == 2 and curves >= 1 and circles + curves == 2:
+        keys += ["RelTangent"]          # an arc and a spline, two splines (as Add Relations offers)
     elif circles == n:
         if n == 2:
-            keys += ["RelTangent", "RelConcentric"]
+            keys += ["RelTangent", "RelConcentric", "RelCoradial"]     # coradial-1127
         if own:
             keys += ["RelEqual"]
     order = {k: i for i, k in enumerate(catalog.RELATIONS)}
@@ -792,12 +802,24 @@ def sketch_entries(shell, sketch, subs):
     except Exception:
         existing = set()
     out = []
-    for key in drop_existing(relation_keys(items), items, existing) + spline_end_keys(sketch, subs) + \
-            dangling_keys(sketch, subs):
+    for key in drop_existing(relation_keys(items) + curvature_keys(sketch, items), items, existing) + \
+            spline_end_keys(sketch, subs) + dangling_keys(sketch, subs):
         entry = _command_entry(shell, key)
         if entry is not None:
             out.append(entry)
     return out
+
+
+def curvature_keys(sketch, items):
+    """A spline and an arc, a line or a spline that meet at an end: Make Equal Curvature."""
+    if len(items) != 2 or any(k == "point" for k, _g in items):
+        return []
+    try:
+        from .fwsketch import eqcurv
+        return ["RelEqualCurvature"] if eqcurv.offer(sketch, items[0][1], items[1][1]) else []
+    except Exception as _fw_err:
+        _fw_log("contextbar.py:curvature_keys", _fw_err)
+        return []
 
 
 def dangling_keys(sketch, subs):
@@ -947,7 +969,7 @@ class Bar(QtWidgets.QWidget):
         self.buttons = []
         x = 2
         for entry in entries:
-            b = Button(entry, self)
+            b = (getattr(entry, "make", None) or Button)(entry, self)     # an entry may bring its own button (a named drop-down)
             b.move(x, 2)
             b.clicked.connect(lambda checked=False, e=entry: self.chosen.emit(e))
             b.show()
@@ -990,10 +1012,11 @@ class MenuRow(QtWidgets.QWidget):
         layout.setSpacing(0)
         self.buttons = []
         for entry in entries:
-            b = Button(entry, self)
+            b = (getattr(entry, "make", None) or Button)(entry, self)
 
             b._icon_size = max(1, int(round(MENU_ICON * b.k)))
-            b.setFixedSize(int(round(MENU_BUTTON[0] * b.k)), int(round(MENU_BUTTON[1] * b.k)))
+            b.setFixedSize(int(round(getattr(b, "row_width", lambda w: w)(MENU_BUTTON[0]) * b.k)),
+                           int(round(MENU_BUTTON[1] * b.k)))
             b.clicked.connect(lambda checked=False, e=entry: self.chosen.emit(e))
             layout.addWidget(b)
             self.buttons.append(b)
@@ -1047,6 +1070,10 @@ class _Observer:
         self.owner.selection_changed()
 
 
+# ctrlpick-1127: modifier keys pressed (or auto-repeating) while picking more do not dismiss the bar
+_MODIFIER_KEYS = (Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta)
+
+
 class _Dismiss(QtCore.QObject):
     """Application-wide filter, installed only while the bar shows."""
 
@@ -1058,12 +1085,19 @@ class _Dismiss(QtCore.QObject):
         if not isinstance(event, QtCore.QEvent):
             return False        # a stale PySide wrapper (QLayoutItem etc.) can arrive here
         t = event.type()
+        if t in (QtCore.QEvent.KeyPress, QtCore.QEvent.ShortcutOverride) and event.key() in _MODIFIER_KEYS:
+            return False        # ctrlpick-1127: Ctrl/Shift/Alt held for a multi-pick keep the bar
         if t in (QtCore.QEvent.KeyPress, QtCore.QEvent.ShortcutOverride, QtCore.QEvent.Wheel):
             self.owner.dismiss()
         elif t in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseButtonDblClick):
             # Qt 6 hands a real click to the window first and then to the widget under the
             # pointer: judge the click by where it is, or a click on the bar hides it first.
             if not self.owner.on_bar(obj) and not self.owner.over_bar(event):
+                if t == QtCore.QEvent.MouseButtonPress and event.button() == Qt.LeftButton \
+                        and obj not in self.owner._trees and sketch_in_edit() is not None:
+                    # ctrlpick-1127: a Ctrl+click in a sketch is taken by a sketch filter before the view's
+                    # own filter sees it; this press is the click the next pick's bar is shown for
+                    self.owner._click = (time.monotonic(), event.globalPosition().toPoint(), "view")
                 self.owner.dismiss()
         elif t == QtCore.QEvent.WindowDeactivate and obj is self.owner.mw:
             self.owner.dismiss()
@@ -1278,6 +1312,11 @@ class ContextBar(QtCore.QObject):
         if not self.active or not alive(self.bar):
             return
         click = self._click
+        if (click is None or time.monotonic() - click[0] > CLICK_TIME) and sketch_in_edit() is not None \
+                and QtGui.QGuiApplication.queryKeyboardModifiers() & (Qt.ControlModifier | Qt.ShiftModifier):
+            # ctrlpick-1127-v3: a Ctrl/Shift+click on a spline is eaten by the spline handles' filter before
+            # any of ours sees the press; a pick added with Ctrl/Shift held in a sketch came from a click
+            click = self._click = (time.monotonic(), QtGui.QCursor.pos(), "view")
         if not self.shell.enabled or click is None or time.monotonic() - click[0] > CLICK_TIME:
             self.dismiss()
             return

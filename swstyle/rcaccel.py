@@ -25,6 +25,7 @@ from PySide import QtCore, QtGui, QtWidgets
 
 CHEVRON = "»"
 LETTER = "swMnemonic"
+SILENT = "swSilentLetter"
 # items that run a FreeCAD command without being one of the catalog's (their text says which)
 TEXT_COMMANDS = {"Delete": "Std_Delete", "Delete...": "Std_Delete", "Copy": "Std_Copy", "Paste": "Std_Paste",
                  "Cut": "Std_Cut", "Zoom to Fit": "Std_ViewFitAll", "Undo": "Std_Undo", "Redo": "Std_Redo",
@@ -111,25 +112,63 @@ def sw_letter(a):
     return got if got and got.upper() in t.upper() else None
 
 
-def assign(menu):
+def _bar_letter(a, menu, kind):
     ""
 
+    try:
+        from . import swletters
+        bar = getattr(swletters, "BAR", {}).get(kind or "", {}).get(label_of(menu.title()).strip() if menu is not None else "")
+    except Exception:
+        return None, False
+    if not bar:
+        return None, False
+    t = label_of(a.text()).strip()
+    bare = " ".join(t.rstrip(". ").split())
+    for k in ((bare + " >", bare) if a.menu() is not None else (bare,)):
+        if k in bar:
+            got = bar[k]
+            return (got if got and got.upper() in t.upper() else None), True
+    return None, False
+
+
+def assign(menu, silent=None):
+    ""
+
+
+
+
     used, out = set(), {}
+    bare = []
     wanted = [a for a in menu.actions() if _wanted(a)]
     kind = doc_kind() if wanted else None      # once a menu: it walks every object of the document
+
+    # shares some: Open... and Open Recent are both O, the key then moves between them); then the same menu's
+    # letter from another menu bar, only where it is still free
+    borrowed = []
     for a in wanted:
+        u, here = _bar_letter(a, menu, kind)
+        if not here:
+            borrowed.append(a)
+        elif u is not None:
+            used.add(u.upper())
+            out[a] = u.upper()
+        else:
+            bare.append(a)
+    for a in borrowed:
         u = menu_letter(a, menu, kind)
-        if u is not None:
+        if u is not None and u.upper() not in used:
             used.add(u.upper())
             out[a] = u.upper()
     mine = set(used)
     for a in wanted:
-        u = None if a in out else sw_letter(a)
-        if u is not None and (not mine or u.upper() not in mine):    # another menu's letter: not over this menu's own
+        u = None if a in out or a in bare else sw_letter(a)
+        # mnemonics-1126: another menu's letter only while this menu has not used it (a menu with no letters of its own
+        # gave Center Rectangle, Circle, Conic... all C)
+        if u is not None and u.upper() not in used:
             used.add(u.upper())
             out[a] = u.upper()
     for a in wanted:
-        if a in out:
+        if a in out or a in bare:
             continue
         for c in _letters(a.text()):
             u = c.upper()
@@ -137,11 +176,14 @@ def assign(menu):
                 used.add(u)
                 out[a] = u
                 break
-    for a in wanted:
-        if a not in out:        # every letter of its words is taken: it shares one (the letter then moves between them)
-            first = _letters(a.text())
-            if first:
-                out[a] = first[0].upper()
+
+
+    if silent is not None:
+        for a in bare:
+            first = next((c.upper() for c in label_of(a.text()) if c.isalnum()), None)
+            if first and first not in used:
+                used.add(first)
+                silent[a] = first
     return out
 
 
@@ -150,8 +192,20 @@ def _with_mark(text, letter):
     return _marked(text, letter) + tab + keys
 
 
+
+AT = {"Align Between Lines": 16, "Align Parallel/Concentric": 10, "All Annotations": 4, "Close All": 8,
+      "D-Cubed Debug...": 8, "Filter Features": 7, "Horizontal to Sheet Counterclockwise": 21, "Intersect...": 8,
+      "Key Properties...": 12, "Offset On Surface": 13, "Save Sheet Format...": 16, "Save to This PC": 8,
+      "Select by Size...": 10, "Selection Filter": 11, "Sketch Ink": 9, "Sketch Settings": 7,
+      "Sketch/Curve Color...": 13, "Top Level Envelopes": 12, "Two View - Vertical": 11,
+      "Vertical To Another View": 21, "Model Items...": 8, "Model Items": 8}     # toolsins-1126: Model It&ems
+
+
 def _marked(text, letter):
     t = plain(text).replace("&", "&&")
+    at = AT.get(t)
+    if at is not None and at < len(t) and t[at].upper() == letter:
+        return t[:at] + "&" + t[at:]
     i = 0
     words_first = [k for k, c in enumerate(t) if c.upper() == letter and (k == 0 or t[k - 1] in " /-")]
     if words_first:
@@ -197,12 +251,47 @@ def key_for(a):
 KEY = "swKeyText"
 
 
-def _restore_keys(menu):
+def _event_keys(event):
+    """The key press as a key text ("Ctrl+C", "Del"), keypad flag left out."""
+    mods = event.modifiers() & ~QtCore.Qt.KeypadModifier
+    try:
+        seq = QtGui.QKeySequence(QtCore.QKeyCombination(mods, QtCore.Qt.Key(event.key())))
+    except Exception:
+        seq = QtGui.QKeySequence(int(mods) | int(event.key()))
+    return seq.toString(QtGui.QKeySequence.PortableText)
+
+
+def _key_hits(menu, event):
+    ""
+
+    if event.key() in (QtCore.Qt.Key_Shift, QtCore.Qt.Key_Control, QtCore.Qt.Key_Alt, QtCore.Qt.Key_Meta):
+        return []
+    text = _event_keys(event)
+    if not text:
+        return []
+    out = []
     for a in menu.actions():
         k = a.property(KEY)
-        if k and a.shortcut().isEmpty():
-            a.setShortcut(QtGui.QKeySequence(k))
-            a.setShortcutContext(QtCore.Qt.WidgetShortcut)
+        if not k or not a.isVisible() or not a.isEnabled():
+            continue
+        if QtGui.QKeySequence(k).toString(QtGui.QKeySequence.PortableText) == text:
+            out.append(a)
+    return out
+
+
+def _plain_letter(event):
+    plain_key = not (event.modifiers() & ~(QtCore.Qt.ShiftModifier | QtCore.Qt.KeypadModifier))
+    return plain_key and event.text() and event.text()[0].isalnum()
+
+
+def _run(menu, a):
+    menu.setActiveAction(a)
+    a.trigger()
+    top = menu
+    while isinstance(top.parentWidget(), QtWidgets.QMenu):
+        top = top.parentWidget()
+    top.close()
+    menu.close()
 
 
 class _Letters(QtCore.QObject):
@@ -213,26 +302,32 @@ class _Letters(QtCore.QObject):
             return False        # a stale PySide wrapper (QLayoutItem etc.) can arrive here
         if not isinstance(menu, QtWidgets.QMenu):
             return False
-        if event.type() in (QtCore.QEvent.Show, QtCore.QEvent.Paint):
-            _restore_keys(menu)
-            return False
         if event.type() == QtCore.QEvent.ShortcutOverride:
-            plain_key = not (event.modifiers() & ~(QtCore.Qt.ShiftModifier | QtCore.Qt.KeypadModifier))
-            if plain_key and event.text() and event.text()[0].isalnum():
+            if _plain_letter(event):
                 event.accept()          # in an open menu a letter is an access letter, not a command's key
+                return True
+            if _key_hits(menu, event):
+                event.accept()          # the menu item's key, not the window's shortcut
                 return True
             return False
         if event.type() != QtCore.QEvent.KeyPress:
             return False
-        if not menu.property("swLetters"):
-            return False
+        if not _plain_letter(event):
+            hits = _key_hits(menu, event)
+            if hits:
+                _run(menu, hits[0])
+                return True
         if event.modifiers() & ~(QtCore.Qt.ShiftModifier | QtCore.Qt.KeypadModifier):
             return False
         text = event.text()
         if not text or not text[0].isalnum():
             return False
         u = text[0].upper()
-        hits = [a for a in menu.actions() if a.property(LETTER) == u and a.isVisible() and a.isEnabled()]
+        if menu.property("swLetters"):
+            hits = [a for a in menu.actions() if a.property(LETTER) == u and a.isVisible() and a.isEnabled()]
+        else:
+            hits = []       # drawn underlines: Qt takes those letters itself
+        hits = hits or [a for a in menu.actions() if a.property(SILENT) == u and a.isVisible() and a.isEnabled()]
         if not hits:
             return False
         if len(hits) > 1:            # Windows: the letter moves between the items that share it
@@ -280,10 +375,22 @@ def _decorate(menu, keyboard, depth, keys=True):
     # a menu with its own marks keeps them, except the menu bar's (its marks come from here, and the
     # Window list's "&1 name" is not a mark of ours), which are worked out afresh each time
     own = keys and any("&" in plain_marks(a.text()) for a in menu.actions())
-    for a, letter in ({} if own else assign(menu)).items():
+    silent = {}
+    letters = {} if own else assign(menu, silent)
+    for a, letter in letters.items():
         a.setProperty(LETTER, letter)
         if keyboard:
             a.setText(_with_mark(a.text(), letter))
+    if not own:     # mnemonics-1126: an item left without a letter drops one it kept from another menu (a shared action)
+        for a in menu.actions():
+            if a in letters or not _wanted(a):
+                continue
+            text, tab, rest = a.text().partition("\t")
+            if "&" in plain_marks(text) and not (text[:1] == "&" and text[1:2].isdigit()):     # not the Window list's "&1 name"
+                a.setText(plain(text).replace("&", "&&") + tab + rest)
+                a.setProperty(LETTER, None)
+        for a in menu.actions():
+            a.setProperty(SILENT, silent.get(a))      # mbletters-1127: works, not drawn
     for a in menu.actions():
         if a.menu() is not None:
             sub = a.menu()
@@ -300,8 +407,6 @@ def _decorate(menu, keyboard, depth, keys=True):
         key = key_for(a)
         if key:
             a.setProperty(KEY, key)
-            a.setShortcut(QtGui.QKeySequence(key))
-            a.setShortcutContext(QtCore.Qt.WidgetShortcut)      # shown beside it; works while the menu is open
     menu.setProperty("swLetters", not keyboard)      # drawn underlines: Qt itself takes the letters
     try:
         from . import rctips
@@ -449,6 +554,12 @@ def install_keys():
     except Exception as error:
         import FreeCAD
         FreeCAD.Console.PrintLog("FreeCAD: key fallback: %s\n" % error)
+    try:
+        from . import sheetkeys
+        sheetkeys.install()       # kbmap-1127: FreeCAD's spreadsheet keeps Ctrl+B (Bold) and its other keys
+    except Exception as error:
+        import FreeCAD
+        FreeCAD.Console.PrintLog("FreeCAD: spreadsheet keys: %s\n" % error)
     return f
 
 

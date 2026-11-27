@@ -301,6 +301,33 @@ class ToolCommand:
 
     def Activated(self):
         _close_view_pm()
+        if self.native in SECTION_TOOLS and not _view_picked():
+
+            try:
+                if "FreeWorks_DrawSectionView" in Gui.listCommands():
+                    Gui.runCommand("FreeWorks_DrawSectionView", 0)
+                    return
+            except Exception as error:
+                App.Console.PrintLog("FreeCAD: Drawing Tools section: %s\n" % error)
+        want = PICK_COUNT.get(self.native)
+        if want and not _fits(want[0]):
+            # FreeCAD's tool would only say "Wrong selection" / "No sub-elements selected": its page says what to
+
+            try:
+                from . import toolfirst
+                if toolfirst.show_wait(OWN + self.key, self.key, want[1], want[0]) is not None:
+                    return
+            except Exception as error:
+                App.Console.PrintLog("FreeCAD: Drawing Tools pick: %s\n" % error)
+        need = PICK_FIRST.get(self.native)
+        if need:
+            try:        # case 1625: with the wrong pick FreeCAD's command only says "Wrong selection": wait for it
+                from . import toolfirst
+                if not toolfirst.fits(need):
+                    toolfirst.show_wait(OWN + self.key, self.key)
+                    return
+            except Exception as error:
+                App.Console.PrintLog("FreeCAD: Drawing Tools pick: %s\n" % error)
         try:
             from . import drawscene
             if self.native in FACES_FIRST and not _face_picked():
@@ -310,11 +337,133 @@ class ToolCommand:
                 drawscene.face_mode(interactive=True)       # FreeCAD's Dimension tool picks as it runs
         except Exception as error:
             App.Console.PrintLog("FreeCAD: Drawing Tools faces: %s\n" % error)
+        if self.key == "TDX_MoveView":
+            self.move_task = _move_view()
+            return
+        if self.key in NATIVE_TRANSACTION_TOOLS and App.getActiveTransaction() is None:
+            self._run_native_edit()
+            return
         Gui.runCommand(self.native, 0)
 
+    def _run_native_edit(self):
+        doc = App.ActiveDocument
+        if doc is None:
+            return
+        doc.openTransaction(self.label)
+        try:
+            Gui.runCommand(self.native, 0)
+        except Exception:
+            doc.abortTransaction()
+            raise
+        doc.commitTransaction()
 
+
+
+def _move_view():
+    # Keep the Move View transaction open until the task completes.
+    from TechDrawTools import TaskMoveView, TDToolsMovers
+
+    doc = App.ActiveDocument
+    if doc is None or Gui.Control.activeDialog() or App.getActiveTransaction() is not None:
+        return None
+
+    class MoveViewTask(TaskMoveView):
+        def __init__(self):
+            super().__init__()
+            self.transaction = App.getActiveTransaction()
+
+        def reject(self):
+            if self.transaction and App.getActiveTransaction() == self.transaction:
+                App.closeActiveTransaction(True)
+            return True
+
+        def accept(self):
+            if (App.ActiveDocument is not doc or not self.transaction
+                    or App.getActiveTransaction() != self.transaction):
+                return False
+            view, source, target = (doc.getObject(name) for name in
+                                    (self.viewName, self.fromPageName, self.toPageName))
+            if (view is None or source is None or target is None or source is target
+                    or not source.isDerivedFrom("TechDraw::DrawPage")
+                    or not target.isDerivedFrom("TechDraw::DrawPage") or view not in source.Views):
+                App.Console.PrintWarning("Select a drawing view and two different sheets.\n")
+                return False
+            try:
+                TDToolsMovers.moveView(view, source, target)
+            except Exception:
+                self.reject()
+                raise
+            App.closeActiveTransaction(False)
+            return True
+
+    picked = [item for item in Gui.Selection.getSelection() if item.Document is doc]
+    view = next((item.Name for item in picked if item.isDerivedFrom("TechDraw::DrawView")), "")
+    pages = [item.Name for item in picked if item.isDerivedFrom("TechDraw::DrawPage")]
+    source, target = (pages + ["", ""])[:2]
+    task = MoveViewTask()
+    try:
+        task.setValues(view, source, target)
+        Gui.Control.showDialog(task)
+    except Exception:
+        task.reject()
+        raise
+    return task
+
+
+NATIVE_TRANSACTION_TOOLS = ("TDX_PositionSection", "TDX_AlignVertH", "TDX_AlignVertV")
+PICK_FIRST = {"TechDraw_ArchView": "bimsection", "TechDraw_DraftView": "model"}      # toolfirst.fits kinds
 FACES_FIRST = ("TechDraw_FaceCenterLine", "TechDraw_ExtensionAreaAnnotation", "TechDraw_AreaDimension")
 FACES_LIVE = ("TechDraw_Dimension",)
+
+
+SECTION_TOOLS = ("TechDraw_SectionView", "TechDraw_ComplexSection")
+_EDGES_POINTS = "Select edges or points of a drawing view."
+PICK_COUNT = {         # what FreeCAD's tool needs picked first: (toolfirst pick, the page's text)
+    "TechDraw_ComplexSection": ("viewprofile", "Select the view, then the sketch or wire that is the cutting profile "
+                                               "(Ctrl+click both)."),
+    "TechDraw_ExtensionCreateLengthArc": ("sub:Edge:1", "Select an arc of a drawing view."),
+    "TechDraw_ExtensionCreateHorizChainDimension": ("sub:Vertex:2", "Select the points to dimension, in order."),
+    "TechDraw_ExtensionCreateVertChainDimension": ("sub:Vertex:2", "Select the points to dimension, in order."),
+    "TechDraw_ExtensionCreateObliqueChainDimension": ("sub:Vertex:2", "Select the points to dimension, in order."),
+    "TechDraw_ExtensionCreateHorizCoordDimension": ("sub:Vertex:2", "Select the base point, then the points to dimension."),
+    "TechDraw_ExtensionCreateVertCoordDimension": ("sub:Vertex:2", "Select the base point, then the points to dimension."),
+    "TechDraw_ExtensionCreateObliqueCoordDimension": ("sub:Vertex:2",
+                                                      "Select the base point, then the points to dimension."),
+    "TechDraw_ExtensionCreateHorizChamferDimension": ("sub:Vertex:2", "Select the two end points of the chamfer."),
+    "TechDraw_ExtensionCreateVertChamferDimension": ("sub:Vertex:2", "Select the two end points of the chamfer."),
+    "TechDraw_AxoLengthDimension": ("sub:Edge:2", "Select two edges of the view: the one to measure, then one "
+                                                  "along the same axis."),
+    "TechDraw_HoleShaftFit": ("dims:1", "Select a length or diameter dimension."),
+    "TechDraw_ExtensionCascadeHorizDimension": ("dims:2", "Select the horizontal dimensions to space out."),
+    "TechDraw_ExtensionCascadeVertDimension": ("dims:2", "Select the vertical dimensions to space out."),
+    "TechDraw_ExtensionCascadeObliqueDimension": ("dims:2", "Select the aligned dimensions to space out."),
+    "TechDraw_ExtensionPosHorizChainDimension": ("dims:2", "Select the horizontal dimensions to line up."),
+    "TechDraw_ExtensionPosVertChainDimension": ("dims:2", "Select the vertical dimensions to line up."),
+    "TechDraw_ExtensionPosObliqueChainDimension": ("dims:2", "Select the aligned dimensions to line up."),
+    "TechDraw_ExtensionHoleCircle": ("sub:Edge:3", "Select three or more circles of a drawing view."),
+    "TechDraw_2LineCenterLine": ("sub:Edge:2", "Select two edges of a drawing view."),
+    "TechDraw_2PointCenterLine": ("sub:Vertex:2", "Select two points of a drawing view."),
+    "TechDraw_Midpoints": ("sub:Edge:1", "Select edges of a drawing view."),
+    "TechDraw_Quadrants": ("sub:Edge:1", "Select circles or arcs of a drawing view."),
+    "TechDraw_CommandAddOffsetVertex": ("sub:Vertex:1", "Select a point of a drawing view."),
+    "TechDraw_CosmeticCircle": ("sub:Vertex:1", "Select the point for the circle's center."),
+    "TechDraw_2PointCosmeticLine": ("sub:Vertex:2", "Select two points of a drawing view."),
+}
+
+
+def _fits(pick):
+    try:
+        from . import toolfirst
+        return toolfirst.fits(pick)
+    except Exception:
+        return True                       # never block the tool when the check itself fails
+
+
+def _view_picked():
+    try:
+        return any(o.isDerivedFrom("TechDraw::DrawViewPart") for o in Gui.Selection.getSelection())
+    except Exception:
+        return False
 
 
 def _face_picked():

@@ -183,6 +183,55 @@ def _styled(view, tag, style=CENTER_STYLE, weight=THIN_WEIGHT):
     return tag
 
 
+class quiet_view:
+    """with quiet_view(view): many cosmetic lines at once. TechDraw redraws the whole view for each cosmetic line
+    made or restyled; on a big view (50 parts, 400 edges) that was about 6 s for one center mark and 20 minutes
+    for Auto insert's center marks on 12 views. Hidden meanwhile, the view is drawn once, at the end (0.08 s a
+    mark). A view hidden already, or one inside another quiet_view, is left as it is."""
+
+    def __init__(self, view):
+        self.view = view
+        self.vo = None
+
+    def __enter__(self):
+        _BATCH[0] += 1
+        try:
+            vo = self.view.ViewObject
+            if vo is not None and vo.Visibility:
+                vo.Visibility = False
+                self.vo = vo
+        except Exception as _fw_err:
+            _fw_log("drawannot.py:quiet_view", _fw_err)
+        return self
+
+    def __exit__(self, *exc):
+        _BATCH[0] -= 1
+        if _BATCH[0] <= 0:
+            _BATCH[0] = 0
+            _CENTRES.clear()
+        if self.vo is not None:
+            try:
+                self.vo.Visibility = True
+            except Exception as _fw_err:
+                _fw_log("drawannot.py:quiet_view show", _fw_err)
+        return False
+
+
+_BATCH = [0]
+_CENTRES = {}
+
+
+def _model_centre(view):
+    """DV.model_centre, kept for the view while a quiet_view batch runs: the model does not change meanwhile, and
+    it cost 35 ms a call on a 50-part view (one call per center mark)."""
+    if not _BATCH[0]:
+        return DV.model_centre(view)
+    key = view.Name
+    if key not in _CENTRES:
+        _CENTRES[key] = DV.model_centre(view)
+    return V(_CENTRES[key])
+
+
 def _tags(view, name):
     if not hasattr(view, name):
         view.addProperty("App::PropertyStringList", name, "FreeCAD", "Annotations made of cosmetic lines")
@@ -221,6 +270,11 @@ def center_mark(view, centre, radius, size=2.5, extended=None, gap=1.5, angle=0.
                 extended = True
         if font is None:
             font = page is None or _standard(page) != "ANSI"
+    with quiet_view(view):
+        return _center_mark(view, centre, radius, size, extended, gap, angle, font)
+
+
+def _center_mark(view, centre, radius, size, extended, gap, angle, font):
     k = DV.view_scale(view)
     s = size / k
     tags = []
@@ -248,7 +302,7 @@ def _remember_mark(view, tags, centre, radius, size, extended, gap, angle, font)
     model changes (follow_center_marks)."""
     try:
         d, x, y = D.view_frame(view)
-        p = DV.model_centre(view) + x * centre.x + y * centre.y
+        p = _model_centre(view) + x * centre.x + y * centre.y
         rows = list(getattr(view, "SWCenterMarkAnchors", []) or [])
         rows.append("%s|%.6g,%.6g,%.6g|%.6g|%.6g|%d|%.6g|%.6g|%d" % (
             ",".join(tags), p.x, p.y, p.z, radius, size, bool(extended), gap, angle, bool(font)))
@@ -265,7 +319,7 @@ def has_center_mark(view, centre):
 
     try:
         d, x, y = D.view_frame(view)
-        p = DV.model_centre(view) + x * centre.x + y * centre.y
+        p = _model_centre(view) + x * centre.x + y * centre.y
         live = set(getattr(view, "SWCenterMarks", []) or [])
         for row in list(getattr(view, "SWCenterMarkAnchors", []) or []):
             parts = row.split("|")
@@ -285,7 +339,7 @@ def drop_center_mark(view, centre):
 
     try:
         d, x, y = D.view_frame(view)
-        p = DV.model_centre(view) + x * centre.x + y * centre.y
+        p = _model_centre(view) + x * centre.x + y * centre.y
         live = list(getattr(view, "SWCenterMarks", []) or [])
         rows = list(getattr(view, "SWCenterMarkAnchors", []) or [])
         for row in rows:
@@ -311,6 +365,17 @@ def drop_center_mark(view, centre):
 def follow_center_marks(view):
     ""
 
+    _BATCH[0] += 1                       # the model centre found once for all the marks (35 ms each on a big view)
+    try:
+        return _follow_center_marks(view)
+    finally:
+        _BATCH[0] -= 1
+        if _BATCH[0] <= 0:
+            _BATCH[0] = 0
+            _CENTRES.clear()
+
+
+def _follow_center_marks(view):
     rows = list(getattr(view, "SWCenterMarkAnchors", []) or [])
     if not rows:
         return False
@@ -619,6 +684,11 @@ def centerline(view, a1, b1, a2, b2, over=None):
 
 
 def auto_centerlines(view, over=None):
+    with quiet_view(view):
+        return _auto_centerlines(view, over)
+
+
+def _auto_centerlines(view, over=None):
     ""
 
 
@@ -744,6 +814,20 @@ class CenterlinePanel(D._Panel):
 
 
 # --------------------------------------------------------------------------- dimensions
+_SPEC = re.compile(r"%[-+ #0]*\d*(?:\.\d+)?[wWfeEgG]")
+
+
+def set_text(dim, text):
+    """dim's text. TechDraw draws an empty label for a text with no number format in it (FreeCAD 1.1): such a
+    text (the Hole Wizard's callout, its values written out) is shown as it is (Arbitrary)."""
+    plain = not _SPEC.search(text.replace("%%", ""))
+    if plain:
+        dim.Arbitrary = True        # first, then the text (TechDraw warns on a text without a format)
+    dim.FormatSpec = text
+    if not plain and dim.Arbitrary:
+        dim.Arbitrary = False
+
+
 def dimension(page, view, kind, refs, at=None, fmt=None):
     """A TechDraw dimension of kind (Distance, DistanceX, DistanceY, Radius, Diameter) on view's refs."""
     doc = page.Document
@@ -752,7 +836,7 @@ def dimension(page, view, kind, refs, at=None, fmt=None):
     dim.MeasureType = "Projected"
     dim.References2D = [(view, r) for r in refs]
     if fmt:
-        dim.FormatSpec = fmt
+        set_text(dim, fmt)
     page.addView(dim)
     if at is not None:
         dim.X, dim.Y = at
@@ -765,7 +849,7 @@ def _project0(view, p):
 
 def _project(view, p):
     """3D model point -> view geometry (unscaled, centred)."""
-    q = view.projectPoint(p) - view.projectPoint(DV.model_centre(view))
+    q = view.projectPoint(p) - view.projectPoint(_model_centre(view))
     return V(q.x, q.y, 0)
 
 
@@ -1135,6 +1219,110 @@ def _target_body(text, at, tip):
     return "".join(body), r + _reach(at, tip)
 
 
+def _pmi_tolerance(dim, o, prefix=""):
+    """The 3D dimension's tolerance and precision on the drawing dimension, as the Dimension PM writes them (kept
+    on the dimension, so the drawing's Document Properties defaults leave them alone): Basic in its box, else
+    symmetric or plus/minus."""
+    from . import drawdimpm as DP
+    plus, minus = float(getattr(o, "Plus", 0.0) or 0.0), float(getattr(o, "Minus", 0.0) or 0.0)
+    if o.Kind.startswith("Basic"):
+        tol = "Basic"
+    elif abs(plus) < 1e-12 and abs(minus) < 1e-12:
+        tol = "None"
+    elif abs(plus + minus) < 1e-12:
+        tol = "Symmetric"
+    else:
+        tol = "Bilateral"
+    m = re.search(r"\d+\.(\d+)", o.Text or "")
+    places = ".123456"[:len(m.group(1)) + 1] if m else ".12"
+    DP.apply(dim, tol=tol, plus=plus, minus=minus, precision=places, tol_precision=places, text=prefix + DP.DIM)
+
+
+def _round_on(view, face):
+    """(edge index, centre in view geometry) of a hole or boss face seen end on in view, else None."""
+    s = getattr(face, "Surface", None)
+    if type(s).__name__ != "Cylinder":
+        return None
+    d = D.view_frame(view)[0]
+    if abs(abs(s.Axis.dot(d)) - 1) > 1e-6:
+        return None
+    c = _project(view, s.Center)
+    for i, cc, r in circles(view):
+        if abs(cc.x - c.x) < 1e-3 and abs(cc.y - c.y) < 1e-3 and abs(r - s.Radius) < 1e-4:
+            return i, cc
+    return None
+
+
+def _plane_on(view, face):
+    """(view vertices on a flat face seen edge on, its normal in view geometry) or None."""
+    s = getattr(face, "Surface", None)
+    if type(s).__name__ != "Plane":
+        return None
+    d = D.view_frame(view)[0]
+    if abs(s.Axis.dot(d)) > 1e-6:
+        return None
+    n = _project(view, face.CenterOfMass + s.Axis) - _project(view, face.CenterOfMass)
+    verts = vertices(view)
+    on = []
+    for x in face.Vertexes:
+        name = _vertex_near(view, _project(view, x.Point), verts)
+        if name is not None and name not in on:
+            on.append(name)
+    return (on, n) if on else None
+
+
+def pmi_dimension(page, view, o):
+    ""
+
+
+    els = _pmi_elements(o)
+    k = DV.view_scale(view)
+    if o.Kind in ("Size", "BasicSize", "Pattern"):
+        hits = [h for h in (_round_on(view, e) for e in els) if h is not None]
+        if not hits:
+            return None
+        i, c = min(hits, key=lambda h: (h[1].x, h[1].y))
+        r = next(e.Surface.Radius for e in els if type(getattr(e, "Surface", None)).__name__ == "Cylinder")
+        dim = dimension(page, view, "Diameter", ["Edge%d" % i], (c.x * k + r * k + 8, c.y * k + r * k + 8))
+        m = re.match(r"\s*(\d+)X", o.Text or "")
+        _pmi_tolerance(dim, o, ("%sX " % m.group(1) if o.Kind == "Pattern" and m else "") + "\u2300")
+        return dim
+    if o.Kind not in ("Location", "BasicLocation") or len(els) < 2:
+        return None
+    verts = dict(vertices(view))
+    first = _plane_on(view, els[0])
+    if first is None:
+        return None
+    names, n = first
+    across = abs(n.x) >= abs(n.y)                 # the face's normal runs across the sheet: a horizontal distance
+    kind = "DistanceX" if across else "DistanceY"
+    targets = []
+    for e in els[1:]:
+        hole = _round_on(view, e)
+        if hole is not None:
+            v = _vertex_near(view, hole[1], list(verts.items()))
+            if v is not None:
+                targets.append(v)
+            continue
+        other = _plane_on(view, e)
+        if other is not None:
+            targets += other[0][:1]
+    for t in targets:
+        p = verts[int(t[6:])]
+        for a in names:
+            q = verts[int(a[6:])]
+            run = abs((p.x - q.x) if across else (p.y - q.y))
+            if abs(run - float(o.Value)) > 1e-3:
+                continue
+            mid = ((p.x + q.x) / 2 * k, (p.y + q.y) / 2 * k)
+            lo = min(v.y for v in verts.values()) * k if across else min(v.x for v in verts.values()) * k
+            at = (mid[0], lo - 10.0) if across else (lo - 10.0, mid[1])
+            dim = dimension(page, view, kind, [a, t], at)
+            _pmi_tolerance(dim, o)
+            return dim
+    return None
+
+
 def pmi_items(page, views, kinds, eliminate_duplicates=True):
     """Model Items' Datums, Datum targets, Geometric tolerances and Tolerance dimensions: the part's own 3D
     annotations (its MBD ones), each brought into the view that best shows its face, once per drawing."""
@@ -1153,6 +1341,22 @@ def pmi_items(page, views, kinds, eliminate_duplicates=True):
         best = next((v for v in shows if _sees(v, o)), shows[0] if shows else None)
         if best is None:
             continue
+        if o.Kind in PMI_DIMENSIONS:
+            dim = None
+            for v in [best] + [v for v in shows if v is not best]:
+                try:
+                    dim = pmi_dimension(page, v, o)
+                except Exception as _fw_err:
+                    _fw_log("drawannot.py:pmi_dimension", _fw_err)
+                    dim = None
+                if dim is not None:
+                    break
+            if dim is not None:
+                dim.addProperty("App::PropertyString", "SWModelItemKey", "FreeCAD", "model item it came from")
+                dim.SWModelItemKey = key
+                seen.add(key)
+                made.append(dim)
+                continue
         tip = _sheet(best, _pmi_anchor(o))
         at = _sheet(best, V(o.TextPosition))
         if math.hypot(at[0] - tip[0], at[1] - tip[1]) < 6.0:
@@ -1231,6 +1435,64 @@ def model_notes(page, views, eliminate_duplicates=True):
     return made
 
 
+def model_weld_svg(bead, at, tip):
+    ""
+
+
+
+    try:
+        import json
+        from . import weweld
+        paths = json.loads(bead.Paths or "[]")
+        if not paths:
+            return "", 0
+        sym = weweld.symbol_of(paths[0])
+    except Exception as _fw_err:
+        _fw_log("drawannot.py:model weld", _fw_err)
+        return "", 0
+    L = 18.0
+    tx, ty = _rel(at, tip)
+    x0 = -L / 2 if tx < 0 else L / 2
+    body = ['<line x1="%g" y1="0" x2="%g" y2="0" stroke="#000" stroke-width="%g"/>' % (-L / 2, L / 2, STROKE),
+            _arrow(tx, ty, x0, 0)]
+
+    def glyph(kind, below):
+        kind = str(kind or "None")
+        names = [kind]
+        if kind.endswith(" Groove"):
+            names += [kind[:-7], kind[:-7] + "-groove"]
+        for n in names:
+            g = _weld_glyph(n, below)
+            if g:
+                return g
+        return ""
+    for key, below in (("arrow", True), ("other", False)):
+        side = sym.get(key) or {}
+        if side.get("symbol", "None") == "None":
+            continue
+        body.append(glyph(side["symbol"], below))
+        y = 4 if below else -1.5
+        if side.get("size"):
+            body.append('<text x="-1" y="%g" font-family="osifont, Arial" font-size="2.5" text-anchor="end">%s</text>'
+                        % (y, _esc(side["size"])))
+        if side.get("lp"):
+            body.append('<text x="3.8" y="%g" font-family="osifont, Arial" font-size="2.5">%s</text>'
+                        % (y, _esc(side["lp"])))
+    if sym.get("around"):
+        body.append('<circle cx="%g" cy="0" r="1.2" fill="none" stroke="#000" stroke-width="%g"/>' % (x0, STROKE))
+    if sym.get("field"):
+        body.append('<path d="M%g 0 L%g -5 L%g -4 L%g -3 Z" fill="#000" stroke="#000" stroke-width="%g"/>'
+                    % (x0, x0, x0 + 2.5, x0, STROKE))
+    if sym.get("process"):
+        far = L / 2 if x0 < 0 else -L / 2
+        sg = 1.0 if far > 0 else -1.0
+        body.append('<polyline points="%g,%g %g,0 %g,%g" fill="none" stroke="#000" stroke-width="%g"/>'
+                    % (far + sg * 2.5, -2.5, far, far + sg * 2.5, 2.5, STROKE))
+        body.append('<text x="%g" y="0.9" font-family="osifont, Arial" font-size="2.5" text-anchor="%s">%s</text>'
+                    % (far + sg * 3.2, "start" if sg > 0 else "end", _esc(sym["process"])))
+    return "".join(body), L / 2 + _reach(at, tip)
+
+
 def model_welds(page, views, eliminate_duplicates=True):
     """Model Items' Welds: each weld bead of the model, its weld symbol text on a leader to the bead."""
     made = []
@@ -1252,7 +1514,9 @@ def model_welds(page, views, eliminate_duplicates=True):
         tip = _sheet(view, centre)
         at = (tip[0] + 14.0, tip[1] + 10.0)
         text = o.SymbolText or "Weld"
-        body, reach = note_svg(text, at, tip)
+        body, reach = model_weld_svg(o, at, tip)
+        if not body:
+            body, reach = note_svg(text, at, tip)
         s = svg_symbol(page, "WeldSymbol", body, reach, at, "Weld Symbol%d" % _count(page.Document, "WeldSymbol"),
                        "WeldSymbol")
         s.addProperty("App::PropertyString", "SWModelItemKey", "FreeCAD", "model item it came from")
@@ -2124,7 +2388,7 @@ def _one_item(page, view, sk, c, verts, x, y):
         dim = dimension(page, view, c.Type, [ref], at)
         try:
             if "SWRoundAt" not in dim.PropertiesList:
-                dim.addProperty("App::PropertyVector", "SWRoundAt", "FreeCAD", "Model Items: the circle's centre, radius")
+                dim.addProperty("App::PropertyVector", "SWRoundAt", "FreeCAD", "Model Items: the circle's center, radius")
                 dim.setPropertyStatus("SWRoundAt", ["Hidden"])
             dim.SWRoundAt = V(cg.x * k, cg.y * k, g.Radius * k)
         except Exception as _fw_err:
@@ -2308,6 +2572,7 @@ class ModelItemsPanel(D._Panel):
         lay.addWidget(self.source)
         self.dest = QtWidgets.QListWidget(box)                # Destination view(s)
         self.dest.setObjectName("SWModelItemsDestination")
+        self.dest.setProperty("swpickbox", True)
         self.dest.setMaximumHeight(56)
         self.dest.setStyleSheet("QListWidget { background: #d6ecff; }")
         self.dest.setToolTip("Destination view(s): click views on the sheet")
@@ -2767,15 +3032,63 @@ class SideHole:
     def __init__(self, face, shape, radius, edges):
         self.face, self.shape, self.radius, self.edges = face, shape, radius, edges
 
-    def text(self, digits=2):
+    def text(self, digits=2, view=None):
+
+        wiz = self.wizard_text(view) if view is not None else None
+        if wiz:
+            return wiz
         ax = D._unit(self.face.Surface.Axis)
         ts = [ax.dot(v.Point) for v in self.face.Vertexes] or [0.0]
         length = max(ts) - min(ts)
         span = [ax.dot(v.Point) for v in self.shape.Vertexes] or [0.0]
         w = "%%.%dw" % digits
-        if length >= (max(span) - min(span)) - 1e-4:
+        through = length >= (max(span) - min(span)) - 1e-4
+        if not through:
+            # THRU when both ends open to air: a drill under a counterbore / countersink is shorter than the part
+            c = self.face.Surface.Center
+            base = c - ax * c.dot(ax)
+            steps = [0.05] + [self.radius * k / 4.0 for k in range(1, 7)]
+            try:
+                ends = [base + ax * (min(ts) - e) for e in steps] + [base + ax * (max(ts) + e) for e in steps]
+                through = not any(self.shape.isInside(p, 1e-6, True) for p in ends)
+            except Exception:
+                pass
+        if through:
             return "⌀%s THRU" % w
         return "⌀%s ↧ %.*f" % (w, digits, length)
+
+    def wizard_text(self, view):
+        """The Hole Wizard callout of the hole this side face belongs to (its cut has a cylinder of the same
+        radius on the same axis line), else None."""
+        s0 = self.face.Surface
+        a0 = D._unit(s0.Axis)
+        for o in _model_objects(view):
+            src = o
+            if o.TypeId in PATTERNS:
+                continue                       # a pattern's copies: the original hole's line is checked itself
+            if o.TypeId != "PartDesign::Hole" and not getattr(o, "HoleWizardSpec", ""):
+                continue
+            try:
+                tool = o.AddSubShape.copy()
+                body = o.getParentGeoFeatureGroup()
+                if body is not None and not body.Placement.isIdentity():
+                    tool.transformShape(body.Placement.toMatrix())
+            except Exception:
+                continue
+            for f in tool.Faces:
+                s = f.Surface
+                if type(s).__name__ != "Cylinder" or abs(s.Radius - s0.Radius) > 1e-4:
+                    continue
+                ax = D._unit(s.Axis)
+                off = (s.Center - s0.Center) - a0 * (s.Center - s0.Center).dot(a0)
+                if abs(abs(ax.dot(a0)) - 1) < 1e-4 and off.Length < 1e-3:
+                    try:
+                        from . import holespec
+                        text = holespec.callout_text(src) or thread_callout(src) or legacy_callout(src)
+                    except Exception:
+                        text = None
+                    return text.replace("%", "%%") if text else None
+        return None
 
 
 def _is_hole(face):
@@ -2906,6 +3219,13 @@ def mark_callout(dim, digits=2, count=False):
             dim.addProperty(kind, name, "FreeCAD", "hole callout text as made")
             dim.setPropertyStatus(name, "Hidden")
         setattr(dim, name, value)
+    try:
+        vo = dim.ViewObject
+        if dim.Type == "Diameter" and vo is not None and "RenderingExtent" in vo.PropertiesList and \
+                vo.RenderingExtent not in ("Confined", "Minimal"):
+            vo.RenderingExtent = "Confined"
+    except Exception as _fw_err:                # on to the centre (Reduced) or across to a second arrow (Normal)
+        _fw_log("drawannot.py:mark_callout", _fw_err)
 
 
 
@@ -3039,7 +3359,7 @@ def refresh_hole_callouts(doc):
             text = expand_callout(fmt, callout_values(view, c0, cv.Radius, dim.SWCalloutDigits)) if fmt else \
                 callout_text(view, c0, cv.Radius, dim.SWCalloutDigits, dim.SWCalloutCount)
             if text != dim.FormatSpec:
-                dim.FormatSpec = text
+                set_text(dim, text)
                 dim.SWCalloutAuto = text
                 changed.append(dim)
         except Exception:
@@ -3136,7 +3456,7 @@ class HoleCalloutPanel(D._Panel):
 
     def callout_text(self, view, c, r):
         if isinstance(c, SideHole):
-            return c.text(len(self.precision.currentText()) - 1)
+            return c.text(len(self.precision.currentText()) - 1, view)
         return callout_text(view, c, r, len(self.precision.currentText()) - 1, self.count.isChecked())
 
     def restyle(self, *_):
@@ -3145,7 +3465,7 @@ class HoleCalloutPanel(D._Panel):
         dim = self.dims[-1]
         view, c, r = self.refs[dim.Name]
         apply_tolerance(dim, self.tol_type.currentText(), self.tol_max.value(), self.tol_min.value())
-        dim.FormatSpec = self.callout_text(view, c, r)
+        set_text(dim, self.callout_text(view, c, r))
         mark_callout(dim, len(self.precision.currentText()) - 1, self.count.isChecked())
         self.doc.recompute()
         self.show_text(dim)
@@ -3161,7 +3481,7 @@ class HoleCalloutPanel(D._Panel):
         dim = self.dims[-1]
         view, c, r = self.refs[dim.Name]
         if isinstance(c, SideHole):
-            t = c.text(len(self.precision.currentText()) - 1)
+            t = c.text(len(self.precision.currentText()) - 1, view)
             return {"<NUM_INST>": "", "<MOD-DIAM>": "⌀", "<HOLE-DIAM>": "%%.%dw" % (len(self.precision.currentText()) - 1),
                     "<THRU>": "THRU" if "THRU" in t else "", "<HOLE-TEXT>": t, "<MOD-DEPTH>": "↧" if "↧" in t else "",
                     "<HOLE-DEPTH>": t.split("↧")[1].strip() if "↧" in t else "", "<THREAD>": "",
@@ -3188,11 +3508,11 @@ class HoleCalloutPanel(D._Panel):
         if has_variables(t):
             set_callout_format(dim, t)
             out = expand_callout(t, self.values())
-            dim.FormatSpec = out
+            set_text(dim, out)
             dim.SWCalloutAuto = out
         elif t != dim.FormatSpec:
             set_callout_format(dim, "")
-            dim.FormatSpec = t
+            set_text(dim, t)
         self.doc.recompute()
 
     def sheet_click(self, p):
@@ -3327,9 +3647,7 @@ def svg_symbol(page, name, body, reach, at, label, kind):
     font = doc_font(page.Document)
     if font:
         body = with_font(body, font)
-    R = max(5.0, reach + 5.0)
-    svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="%gmm" height="%gmm" viewBox="%g %g %g %g">%s</svg>'
-           % (2 * R, 2 * R, -R, -R, 2 * R, 2 * R, body))
+    svg = symbol_svg(body, reach)
     doc = page.Document
     s = doc.addObject("TechDraw::DrawViewSymbol", name)
     s.Symbol = svg
@@ -3344,6 +3662,26 @@ def svg_symbol(page, name, body, reach, at, label, kind):
         except Exception as _fw_err:
             _fw_log("drawannot.py:2784", _fw_err)
     return s
+
+
+class _Reach(float):
+    """A symbol's reach (its old square half size) that may also know its half width and half height (rx, ry)."""
+    rx = ry = None
+
+
+def symbol_half(reach):
+    """(half width, half height) of a symbol's svg box: the note's own extent when known, else the square."""
+    Rs = max(5.0, reach + 5.0)
+    rx, ry = getattr(reach, "rx", None), getattr(reach, "ry", None)
+    if rx is None or ry is None:
+        return Rs, Rs
+    return max(3.0, min(Rs, rx)), max(3.0, min(Rs, ry))
+
+
+def symbol_svg(body, reach):
+    hx, hy = symbol_half(reach)
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="%gmm" height="%gmm" viewBox="%g %g %g %g">%s</svg>'
+            % (2 * hx, 2 * hy, -hx, -hy, 2 * hx, 2 * hy, body))
 
 
 def _reach(at, tip):
@@ -3649,7 +3987,24 @@ def note_svg(text, at, tip=None, arrow="Filled arrow", size=TEXT_SIZE, align="Le
             lead = lead.replace("<line ", '<line stroke-dasharray="%s" ' % leader_dash)
             lead = lead.replace("<path ", '<path stroke-dasharray="%s" ' % leader_dash)
         body.append(lead)
-    return "".join(body), max(fw, fh) / 2 * (1.6 if border != "None" else 1.0) + pad + _reach(at, tip)
+    reach = _Reach(max(fw, fh) / 2 * (1.6 if border != "None" else 1.0) + pad + _reach(at, tip))
+    # the note's own extent on each axis (look audit DW-3: the square of the leader's length made the hover and
+
+    k = 1.6 if border != "None" else 1.0
+    hx, hy = fw / 2 * k + pad, fh / 2 * k + pad
+    if angle:
+        hx = hy = math.hypot(hx, hy)
+    pts = [(hx, hy)]
+    if tip is not None:
+        tx, ty = _rel(at, tip)
+        pts.append((abs(tx) + 2.0, abs(ty) + 2.0))
+        pts.append((w / 2 + 5.0, hy))
+        for j in jogs or ():
+            jx, jy = _rel(at, j)
+            pts.append((abs(jx) + 1.0, abs(jy) + 1.0))
+    reach.rx = max(x for x, _y in pts) + 1.0
+    reach.ry = max(y for _x, y in pts) + 1.0
+    return "".join(body), reach
 
 
 def attached_documents(page, tip):
@@ -4047,6 +4402,9 @@ def model_document(page):
     return None
 
 
+
+BALLOON_SHAPES = ("None", "Circular", "Triangle", "Hexagon", "Box", "Diamond", "Pentagon", "Circular Split Line",
+                  "Flag - Five Sided", "Flag - Triangle", "Underline", "Square", "Square Circle", "Inspection")
 BALLOON_SIZES = ("Tight Fit", "1 Character", "2 Characters", "3 Characters", "4 Characters", "5 Characters",
                  "User Defined")
 QTY_DENOTATIONS = ("X", "x", " X", "PLCS", "PLACES")
@@ -4075,13 +4433,36 @@ def balloon_svg(text, at, tip, shape="Circular", size=TEXT_SIZE, fit="2 Characte
         body.append('<text x="0" y="%g" font-family="osifont, Arial" font-size="%g" text-anchor="middle">%s</text>'
                     % (size * 0.95, size * 0.8, _esc(lower)))
     else:
-        if shape == "Flag":
+        if shape in ("Flag", "Flag - Five Sided"):
             body.append('<polygon points="%g,%g %g,%g %g,0 %g,%g" fill="none" stroke="#000" stroke-width="%g"/>'
                         % (-r, -r * 0.8, r * 0.6, -r * 0.8, r * 1.3, r * 0.6, r * 0.8, STROKE))
             body.append('<line x1="%g" y1="%g" x2="%g" y2="%g" stroke="#000" stroke-width="%g"/>'
                         % (-r, -r * 0.8, -r, r * 0.8, STROKE))
             body.append('<line x1="%g" y1="%g" x2="%g" y2="%g" stroke="#000" stroke-width="%g"/>'
                         % (-r, r * 0.8, r * 0.6, r * 0.8, STROKE))
+        elif shape == "Flag - Triangle":
+            # a triangular flag: the upright side at the left, its point to the right
+            body.append('<polygon points="%g,%g %g,0 %g,%g" fill="none" stroke="#000" stroke-width="%g"/>'
+                        % (-r * 0.9, -r * 1.2, r * 1.5, -r * 0.9, r * 1.2, STROKE))
+        elif shape == "Pentagon":
+            pts = " ".join("%g,%g" % (r * 1.15 * math.sin(math.radians(a)), -r * 1.15 * math.cos(math.radians(a)))
+                           for a in range(0, 360, 72))
+            body.append('<polygon points="%s" fill="none" stroke="#000" stroke-width="%g"/>' % (pts, STROKE))
+        elif shape == "Square Circle":
+            # the circle inside a square
+            body.append('<rect x="%g" y="%g" width="%g" height="%g" fill="none" stroke="#000" stroke-width="%g"/>'
+                        % (-r, -r, 2 * r, 2 * r, STROKE))
+            body.append('<circle cx="0" cy="0" r="%g" fill="none" stroke="#000" stroke-width="%g"/>'
+                        % (r * 0.85, STROKE))
+        elif shape == "Inspection":
+            # the inspection balloon: an oval with round ends round the text
+            w = max(2 * r, _text_width(text or "0", size) + 2 * r * 0.8)
+            body.append('<rect x="%g" y="%g" width="%g" height="%g" rx="%g" ry="%g" fill="none" stroke="#000" '
+                        'stroke-width="%g"/>' % (-w / 2, -r * 0.8, w, r * 1.6, r * 0.8, r * 0.8, STROKE))
+        elif shape == "Box":
+            # a box as wide as the text needs, as high as the text (Square stays square)
+            w = max(2 * r - 3, _text_width(text or "0", size) + 1.0)
+            body.append(_frame("Box", w, size * 1.1))
         elif shape == "Underline":
             body.append('<line x1="%g" y1="%g" x2="%g" y2="%g" stroke="#000" stroke-width="%g"/>'
                         % (-r, size * 0.6, r, size * 0.6, STROKE))
@@ -4691,6 +5072,88 @@ class _AnnotPanel(D._Panel):
         return True
 
 
+# --------------------------------------------------------------------------- DW-2: the note on the pointer
+def _svg_image(svg, w, h):
+    """svg drawn into a w x h image with a clear background (no renderer kept: nothing shared to outlive)."""
+    for mod in ("PySide6.QtSvg", "PySide2.QtSvg", "PySide.QtSvg"):
+        try:
+            m = __import__(mod, fromlist=["QSvgRenderer"])
+            break
+        except Exception:
+            m = None
+    if m is None:
+        return None
+    r = m.QSvgRenderer(QtCore.QByteArray(svg.encode("utf-8")))
+    if not r.isValid():
+        return None
+    img = QtGui.QImage(max(1, int(w)), max(1, int(h)), QtGui.QImage.Format_ARGB32_Premultiplied)
+    img.fill(QtCore.Qt.transparent)
+    pa = QtGui.QPainter(img)
+    try:
+        pa.setRenderHint(QtGui.QPainter.Antialiasing, True)
+        r.render(pa)
+    finally:
+        pa.end()
+    return img
+
+
+def note_ghost(panel, p):
+    ""
+
+    clicks = getattr(panel, "clicks", None)
+    view = getattr(clicks, "view", None)
+    scene = view.scene() if view is not None else None
+    item = getattr(panel, "_note_ghost", None)
+    if scene is None:
+        return None
+    if p is None:
+        if item is not None:
+            item.setVisible(False)
+        return None
+    tip = panel.tip if getattr(panel, "leader", None) is not None and panel.leader.isChecked() else None
+    jogs = getattr(panel, "_jog_clicks", None) or []
+    if tip is None and jogs:
+        tip = jogs[0]
+    f = panel.fmt()
+    f["jogs"] = [list(j) for j in jogs[1:]]
+    panel._attach_tip = tip
+    body, reach = note_svg(panel.note_text(), p, tip, panel.arrow.currentText(), **f)
+    font = doc_font(panel.page.Document)
+    if font:
+        body = with_font(body, font)
+    svg = symbol_svg(body, reach)
+    hx, hy = symbol_half(reach)
+    if item is None:
+        item = QtWidgets.QGraphicsPixmapItem()
+        item.setOpacity(0.55)
+        item.setZValue(1e6)
+        item.setAcceptedMouseButtons(QtCore.Qt.NoButton)
+        item.setTransformationMode(QtCore.Qt.SmoothTransformation)
+        scene.addItem(item)
+        panel._note_ghost = item
+        panel._note_ghost_svg = None
+        olds = getattr(clicks, "_ghost", None)
+        if not olds:                       # the PM's own clean-up (SheetClicks.stop) takes it away too
+            clicks._ghost = [item]
+    zoom = max(0.05, abs(view.transform().m11()))
+    k = min(zoom, 4000.0 / max(1.0, 2 * hx * D.REZ), 4000.0 / max(1.0, 2 * hy * D.REZ))   # screen pixels, capped
+    key = (svg, round(k, 4))
+    if key != getattr(panel, "_note_ghost_svg", None):
+        img = _svg_image(svg, 2 * hx * D.REZ * k, 2 * hy * D.REZ * k)
+        if img is None:
+            item.setVisible(False)
+            return None
+        item.setPixmap(QtGui.QPixmap.fromImage(img))
+        panel._note_ghost_svg = key
+    pm = item.pixmap()
+    if pm.width() <= 0 or pm.height() <= 0:
+        return None
+    item.setTransform(QtGui.QTransform.fromScale(2 * hx * D.REZ / pm.width(), 2 * hy * D.REZ / pm.height()))
+    item.setPos(D.to_scene(p[0] - hx, p[1] + hy))
+    item.setVisible(True)
+    return item
+
+
 # --------------------------------------------------------------------------- the note text box's right-click menu
 NUMBER = re.compile(r"^(\s*)(\d+)\.\s")
 
@@ -5161,6 +5624,8 @@ class NotePanel(_AnnotPanel):
         self.pick_leader()
 
     def sheet_click(self, p):
+        if getattr(self, "editing", None) is not None:
+            return False                     # editing a picked note: clicks go on to the sheet
         if self.hole_button.isChecked():
             return self._pick_hole(p)
         if self.painter.isChecked():
@@ -5377,7 +5842,19 @@ class NotePanel(_AnnotPanel):
             self.font_more["style"] = self.font_more["style"].strip()
         self.retext()
 
+    def sheet_move(self, p):
+        try:
+            busy = getattr(self, "editing", None) is not None or self.hole_button.isChecked() \
+                or self.painter.isChecked()
+            note_ghost(self, None if busy else p)
+        except Exception as _fw_err:
+            _fw_log("drawannot.py:note ghost", _fw_err)
+
     def place(self, p, tip):
+        try:
+            note_ghost(self, None)             # the placed note takes the ghost's place
+        except Exception as _fw_err:
+            _fw_log("drawannot.py:note ghost off", _fw_err)
         self._attach_tip = tip
         text = self.note_text()
         body, reach = note_svg(text, p, tip, self.arrow.currentText(), **self.fmt())
@@ -5509,9 +5986,7 @@ class NotePanel(_AnnotPanel):
         text = self.note_text()
         body, reach = note_svg(text, (float(s.X), float(s.Y)), tip, self.arrow.currentText(), **self.fmt())
         self._store(s)
-        R = max(5.0, reach + 5.0)
-        s.Symbol = ('<svg xmlns="http://www.w3.org/2000/svg" width="%gmm" height="%gmm" viewBox="%g %g %g %g">%s</svg>'
-                    % (2 * R, 2 * R, -R, -R, 2 * R, 2 * R, body))
+        s.Symbol = symbol_svg(body, reach)
         s.SWText = self.text.toPlainText() or "Note"
         if self.text.toPlainText().strip():
             self._empty[s.Name] = False
@@ -5535,12 +6010,40 @@ class NotePanel(_AnnotPanel):
         PP.finish_layers(self)
 
 
+NOTE_EDIT = []      # the Note PM opened on a picked note
+
+
+def edit_note(s, page=None):
+    ""
+    import json
+    if page is None:
+        page = next((o for o in s.InList if o.TypeId == "TechDraw::DrawPage"), None) or D.active_page()
+    if page is None:
+        return None
+    pn = NotePanel(page)
+    pn.editing = s
+    pn.last = s
+    pn.text.blockSignals(True)
+    pn.text.setPlainText(str(getattr(s, "SWText", "") or ""))
+    pn.text.blockSignals(False)
+    try:
+        f = json.loads(s.SWNoteOptions) if "SWNoteOptions" in s.PropertiesList else {}
+    except Exception:
+        f = {}
+    if f:
+        pn.load_format(f)
+    pn._show_xy()
+    pn.say("Edit the note's text and options, then OK.")
+    D._show(pn)
+    NOTE_EDIT[:] = [pn]
+    return pn
+
+
 class BalloonPanel(_AnnotPanel):
     TITLE = "Balloon"
     PIXMAP = "TechDraw_Balloon"
     AGAIN = "Balloon placed. Click an edge for the next one, or OK."
-    SHAPES = ("None", "Circular", "Triangle", "Hexagon", "Diamond", "Circular Split Line", "Flag", "Underline",
-              "Square")
+    SHAPES = BALLOON_SHAPES
 
     def build(self):
         from . import drawpmparts as PP
@@ -5874,6 +6377,7 @@ def make_balloon(page, view, tip, at, shape="Circular", text=None, fit="2 Charac
             item = cl
     text = text or _balloon_text(view, item, kind, custom, comp) or item
     lower = _balloon_text(view, item, lower_kind, lower_custom, comp) if shape == "Circular Split Line" else ""
+    at, line = magnetic_snap(page, at)
     qtext, place = "", "Right"
     if qty:
         place, denote, value = qty
@@ -5900,6 +6404,7 @@ def make_balloon(page, view, tip, at, shape="Circular", text=None, fit="2 Charac
     if qtext:
         b.addProperty("App::PropertyString", "SWBalloonQuantity", "FreeCAD", "quantity text beside it")
         b.SWBalloonQuantity = qtext
+    join_magnetic(line, b)
     return b
 
 
@@ -6450,6 +6955,8 @@ class AutoBalloonPanel(D._Panel):
     LAYER = True
     PIXMAP = "TechDraw_Balloon"
     LAYOUTS = ("Top", "Bottom", "Left", "Right", "Square", "Circular")
+
+    GROUP_ORDER = ("Item Numbers", "Balloon Layout", "Balloon Settings")
 
     def build(self):
         self.say("Select drawing sheet/view(s) to insert balloons.")
@@ -7898,6 +8405,7 @@ class StackedBalloonPanel(D._Panel):
             self.say("Click where the stack goes.")
             return True
         tip, self.tip = self.tip, None
+        p = magnetic_snap(self.page, p)[0]
         self.stack = (None, tip, p, list(self.first))
         self.rebuild()
         self.say("Stack placed. Click more components to add balloons to it, or OK.")
@@ -7957,6 +8465,8 @@ class StackedBalloonPanel(D._Panel):
             [o for o in self.doc.Objects if getattr(o, "SWAnnotation", "") == "StackedBalloon"])), "StackedBalloon")
         s.addProperty("App::PropertyStringList", "SWItems", "FreeCAD", "stacked item numbers")
         s.SWItems = list(items)
+        line = magnetic_snap(self.page, p, 0.01)[1]
+        join_magnetic(line, s)
         self.made.append(s)
         self.stack = (s, tip, p, list(items))
         self.items.blockSignals(True)
@@ -8470,7 +8980,7 @@ class AreaHatchPanel(D._Panel):
         s.SWHatchPattern = "Solid" if k == "Solid" else self.pattern.currentText()
         s.addProperty("App::PropertyString", "SWHatchView", "FreeCAD", "the hatched view")
         s.SWHatchView = view.Name
-        s.addProperty("App::PropertyVector", "SWHatchCentre", "FreeCAD", "the hatched area's centre (view geometry)")
+        s.addProperty("App::PropertyVector", "SWHatchCentre", "FreeCAD", "the hatched area's center (view geometry)")
         s.SWHatchCentre = c
         if getattr(self, "sketch_area", False):        # extapps85: a sketch hatch, behind or over the view's lines
             self.sketch_area = False
@@ -8574,9 +9084,7 @@ def redraw_note(o, text=None):
     font = doc_font(o.Document)
     if font:
         body = with_font(body, font)
-    R = max(5.0, reach + 5.0)
-    o.Symbol = ('<svg xmlns="http://www.w3.org/2000/svg" width="%gmm" height="%gmm" viewBox="%g %g %g %g">%s</svg>'
-                % (2 * R, 2 * R, -R, -R, 2 * R, 2 * R, body))
+    o.Symbol = symbol_svg(body, reach)
     return True
 
 
@@ -8613,7 +9121,54 @@ def magnetic_line(page, a, b, equal=True, catch=10.0):
                    "MagneticLine")
     s.addProperty("App::PropertyStringList", "SWMembers", "FreeCAD", "annotations on the line")
     s.SWMembers = [o.Name for _, o in found]
+    s.addProperty("App::PropertyString", "SWLineEnds", "FreeCAD", "start and end on the sheet (mm)")
+    s.SWLineEnds = "%.4f,%.4f,%.4f,%.4f" % (a[0], a[1], b[0], b[1])
     return s
+
+
+def _line_ends(line):
+    """A magnetic line's start and end on the sheet: as stored, or read from its drawn line (older lines)."""
+    try:
+        v = [float(x) for x in (getattr(line, "SWLineEnds", "") or "").split(",")]
+        if len(v) == 4:
+            return (v[0], v[1]), (v[2], v[3])
+    except ValueError:
+        pass
+    import re
+    m = re.search(r'x1="([-\d.e]+)" y1="([-\d.e]+)" x2="([-\d.e]+)" y2="([-\d.e]+)"', getattr(line, "Symbol", "") or "")
+    if not m:
+        return None
+    x1, y1, x2, y2 = [float(g) for g in m.groups()]
+    cx, cy = float(line.X), float(line.Y)
+    return (cx + x1, cy - y1), (cx + x2, cy - y2)
+
+
+def magnetic_snap(page, at, catch=5.0):
+    ""
+
+    best = None
+    for line in page.Views:
+        if getattr(line, "SWAnnotation", "") != "MagneticLine":
+            continue
+        ends = _line_ends(line)
+        if not ends:
+            continue
+        (ax, ay), (bx, by) = ends
+        L = math.hypot(bx - ax, by - ay)
+        if L < 1e-9:
+            continue
+        ux, uy = (bx - ax) / L, (by - ay) / L
+        t = (at[0] - ax) * ux + (at[1] - ay) * uy
+        d = abs((at[0] - ax) * uy - (at[1] - ay) * ux)
+        if -catch <= t <= L + catch and d <= catch and (best is None or d < best[0]):
+            t = max(0.0, min(L, t))
+            best = (d, (ax + ux * t, ay + uy * t), line)
+    return (best[1], best[2]) if best else (at, None)
+
+
+def join_magnetic(line, obj):
+    if line is not None and obj is not None and obj.Name not in list(line.SWMembers):
+        line.SWMembers = list(line.SWMembers) + [obj.Name]
 
 
 def _along(edge, k, step):
@@ -8984,7 +9539,7 @@ class LocationLabelPanel(D._Panel):
                          "Location Label%d" % _count(self.doc, "LocationLabel"), "LocationLabel")
         obj.addProperty("App::PropertyStringList", "SWLines", "FreeCAD", "label lines")
         obj.SWLines = lines
-        obj.addProperty("App::PropertyString", "SWView", "FreeCAD", "labelled view")
+        obj.addProperty("App::PropertyString", "SWView", "FreeCAD", "labeled view")
         obj.SWView = view.Name
         self.made.append(obj)
         self.doc.recompute()
@@ -9075,7 +9630,7 @@ class CircularNotePatternPanel(D._Panel):
     PIXMAP = "TechDraw_Annotation"
 
     def build(self):
-        self.say("Click the pattern centre, then the note to pattern.")
+        self.say("Click the pattern center, then the note to pattern.")
         box, lay = D._group("Parameters", self.form)
         grid = QtWidgets.QGridLayout()
         self.count = QtWidgets.QSpinBox(box)
@@ -9120,7 +9675,7 @@ class CircularNotePatternPanel(D._Panel):
                                        cy + x * math.sin(a) + y * math.cos(a)))
         self.centre = None
         self.doc.recompute()
-        self.say("Pattern made. Click a centre for another, or OK.")
+        self.say("Pattern made. Click a center for another, or OK.")
         return True
 
 
@@ -9158,7 +9713,7 @@ COMMANDS = {
                                     "Labels a section or detail view with where it is cut."),
     "FreeWorks_DrawLinearNotePattern": ("Linear Note Pattern", "TechDraw_Annotation", "Copies a note in a row."),
     "FreeWorks_DrawCircularNotePattern": ("Circular Note Pattern", "TechDraw_Annotation",
-                                          "Copies a note around a centre."),
+                                          "Copies a note around a center."),
 }
 PANELS = {"FreeWorks_DrawCenterMark": CenterMarkPanel, "FreeWorks_DrawCenterline": CenterlinePanel,
           "FreeWorks_DrawModelItems": ModelItemsPanel, "FreeWorks_DrawHoleCallout": HoleCalloutPanel,

@@ -172,6 +172,7 @@ class FormatPainterPanel(D._Panel):
         box, lay = D._group("Destination", self.form)
         self.dst_list = QtWidgets.QListWidget(box)
         self.dst_list.setObjectName("SWPainterTargets")
+        self.dst_list.setProperty("swpickbox", True)
         self.dst_list.setMaximumHeight(90)
         lay.addWidget(self.dst_list)
         self.lay.addWidget(box)
@@ -447,6 +448,10 @@ def resolve_fields(page, texts):
                 if own is not None and out[k] == last:
                     out[k] = own
                     shown.pop(k, None)
+                elif "$PRP" in str(out[k]):
+                    # usage run 11-27: Title Block Fields' OK wrote the link itself as the field's own text, so the
+
+                    out[k] = ""
                 continue
             if k in soft:
                 if k in shown:

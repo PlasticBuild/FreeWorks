@@ -238,7 +238,7 @@ class VisualizationTab(ae.VisualizationWindow):
         self.slider.setObjectName("FW_VisSlider")
         self.slider.setRange(1, 99)
         self.slider.setValue(50)
-        self.slider.setToolTip("Drag to move where the colours change")
+        self.slider.setToolTip("Drag to move where the colors change")
         self.bar = ColourBar(self.slider)
         self.slider.valueChanged.connect(lambda *_: (self.bar.update(), self._paint()))
 

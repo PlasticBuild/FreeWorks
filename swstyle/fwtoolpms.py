@@ -91,7 +91,8 @@ class _TypedPage(N._FwToolPage, N._ToolOptionsPage):
 
     def build(self):
         self._own_tool()
-        self.message(self.MESSAGE)
+        if self.MESSAGE:
+            self.message(self.MESSAGE)
         type_group = None
         if self.ENTRIES:
             g = self.group(self.TYPE_GROUP or "%s Type" % self.TITLE)
@@ -268,7 +269,7 @@ class FwCirclePage(_TypedPage):
     PIXMAP = "Sketcher_CreateCircle"
     ENTRIES = FW_CIRCLES
     KIND = "Circle"
-    MESSAGE = "Set the properties of the circle, or sketch it in the graphics area."
+    MESSAGE = ""
     EDIT_KIND = "circle"
     CURRENT = ("Circle",)
     PARAMS = (("cx", "Center X", "mm"), ("cy", "Center Y", "mm"), ("radius", "Radius", "mm"))
@@ -360,7 +361,7 @@ class FwSlotPage(_TypedPage):
     PIXMAP = "Sketcher_CreateSlot"
     ENTRIES = FW_SLOTS
     KIND = "Straight Slot"
-    MESSAGE = "Set the properties of the slot, or sketch it in the graphics area."
+    MESSAGE = ""
     EDIT_KIND = "slot"
     PARAMS = (("sx", "Start X", "mm"), ("sy", "Start Y", "mm"), ("ex", "End X", "mm"), ("ey", "End Y", "mm"),
               ("length", "Length", "mm"), ("width", "Width", "mm"))

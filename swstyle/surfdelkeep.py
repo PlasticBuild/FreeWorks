@@ -275,7 +275,7 @@ class Panel:
             _log("observer", err)
 
     def getStandardButtons(self):
-        return int(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        return QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel    # sketchfirst-1126
 
     def accept(self):
         o = self.obj()

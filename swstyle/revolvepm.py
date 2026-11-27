@@ -49,10 +49,17 @@ def _alive(w):
 
 
 def _select_index(combo):
+    """The "Select reference..." entry: the last one of FreeCAD's axis list in every UI language."""
     for i in range(combo.count()):
         if combo.itemText(i).startswith(SELECT):
             return i
-    return -1
+    return combo.count() - 1 if combo.count() > 2 else -1
+
+
+def _is_select(combo):
+    """True while the axis list stands on its "Select reference..." entry (any UI language)."""
+    i = combo.currentIndex()
+    return i >= 0 and i == _select_index(combo)
 
 
 def _construction(text, feature):
@@ -94,6 +101,38 @@ def sw_name(text, feature=None):
     return "Edge<%s>@%s" % (n, label)
 
 
+_QUIET = {"owner": None, "was": None}
+_QUIET_NAMES = ("ReportOutput", "NotificationAreaObserver", "StatusBar")
+
+
+def _quiet(owner, on):
+    ""
+
+
+
+    try:
+        if on and _QUIET["owner"] is None:
+            _QUIET["was"] = [(n, App.Console.GetStatus(n, "Err")) for n in _QUIET_NAMES]
+            for n, was in _QUIET["was"]:
+                if was:
+                    App.Console.SetStatus(n, "Err", False)
+            _QUIET["owner"] = owner
+        elif not on and _QUIET["owner"] is owner:
+            for n, was in _QUIET["was"] or ():
+                if was:
+                    App.Console.SetStatus(n, "Err", True)
+            _QUIET.update(owner=None, was=None)
+    except Exception as _fw_err:
+        _fw_log("revolvepm.py:quiet", _fw_err)
+
+
+def _quiet_release(*_args):
+    """The panel is gone (its widgets deleted with it): errors are shown again whoever held them."""
+    owner = _QUIET["owner"]
+    if owner is not None:
+        _quiet(owner, False)
+
+
 class AxisBox(QtCore.QObject):
     """The Axis of Revolution pick box over FreeCAD's hidden axis drop-down."""
 
@@ -104,6 +143,7 @@ class AxisBox(QtCore.QObject):
         self.waiting = False
         self._axis_generation = 0
         self.combo.currentIndexChanged.connect(self._selection_changed)
+        self.combo.destroyed.connect(_quiet_release)     # revquiet-1127
         panel = combo.parentWidget()
         self.title = QtWidgets.QLabel("Axis of Revolution", panel)
         self.title.setObjectName("SWStyle_AxisTitle")
@@ -147,7 +187,31 @@ class AxisBox(QtCore.QObject):
             if self.combo.itemText(i).lower().startswith("construction line"):
                 self._choose(i)
                 return
+        i = self._centerline_index()
+        if i >= 0:
+            self._choose(i)
+            return
         self.wait()
+
+    def _centerline_index(self):
+        """The one centerline's entry in any UI language: FreeCAD's list is vertical axis, horizontal axis,
+        the construction lines, X, Y, Z, Select reference (English words are not matched)."""
+        try:
+            from . import revolveaxis
+            sketch = self.feature.Profile
+            sketch = sketch[0] if isinstance(sketch, (list, tuple)) else sketch
+            n = len(revolveaxis.centerlines(sketch))
+            count = self.combo.count()
+            if n == 1 and count == 7 and self.combo.itemText(count - 1) != self.combo.itemText(count - 2):
+                return 2
+            if n == 1 and count == 7:
+                # a translated list that carries no entry for the centerline: add the entry FreeCAD's panel
+                # would name "Construction line 1" so that choosing it applies Axis0 as it does in English
+                self.combo.insertItem(2, "Construction line 1")
+                return 2
+        except Exception as _fw_err:
+            _fw_log("revolvepm.py:centerline_index", _fw_err)
+        return -1
 
     def _choose(self, index):
         if not _alive(self.combo):
@@ -173,7 +237,7 @@ class AxisBox(QtCore.QObject):
 
     def _rearm(self):
         """Still waiting for the axis after a value change: put FreeCAD back in picking."""
-        if self.waiting and _alive(self.combo) and self.combo.currentText().startswith(SELECT):
+        if self.waiting and _alive(self.combo) and _is_select(self.combo):
             index = self.combo.currentIndex()
             generation = getattr(self, "_axis_generation", 0)
             QtCore.QTimer.singleShot(0, lambda: self._activate(index, generation))
@@ -213,13 +277,15 @@ class AxisBox(QtCore.QObject):
     def sync(self):
         if not _alive(self.combo) or not _alive(self.box):
             self.timer.stop()
+            _quiet(self, False)
             return
         text = self.combo.currentText()
-        if text.startswith(SELECT):
+        if _is_select(self.combo):
             self.waiting = True
         elif self.waiting:
             self.waiting = False
-        shown = "" if self.waiting and text.startswith(SELECT) else sw_name(text, self.feature)
+        _quiet(self, self.waiting)
+        shown = "" if self.waiting and _is_select(self.combo) else sw_name(text, self.feature)
         if self.box.count() != (1 if shown else 0) or (shown and self.box.item(0).text() != shown):
             self.box.clear()
             if shown:
@@ -555,7 +621,7 @@ class RevolveFields(QtCore.QObject):
 
 
     def _fc(self):
-        return self.mode.currentText()
+        return pmfields.native_name(self.mode, last="Two Directions")
 
     def current(self):
         if self.midplane is not None and self.midplane.isChecked():
@@ -567,12 +633,12 @@ class RevolveFields(QtCore.QObject):
         return "Blind"
 
     def _set_mode(self, text):
-        for i in range(self.mode.count()):
-            if self.mode.itemText(i) == text:
-                if self.mode.currentIndex() != i:
-                    self.mode.setCurrentIndex(i)
-                    self.mode.activated.emit(i)
-                return
+        i = pmfields.native_index(self.mode, text, last="Two Directions")
+        if i >= 0:
+            if self.mode.currentIndex() != i:
+                self.mode.setCurrentIndex(i)
+                self.mode.activated.emit(i)
+            return
 
     def _end_picked(self, index):
         item = self.end.itemText(index)

@@ -386,7 +386,7 @@ class SWGusset:
         obj.Preview = ["Partial", "Full"]
         add("App::PropertyBool", "OverrideFlat", GROUP, "Override document settings in the flat pattern")
         add("App::PropertyBool", "ShowProfile", GROUP, "Show the gusset's profile in the flat pattern")
-        add("App::PropertyBool", "ShowCenter", GROUP, "Show the gusset's centre in the flat pattern")
+        add("App::PropertyBool", "ShowCenter", GROUP, "Show the gusset's center in the flat pattern")
         obj.UseOffset = True
         obj.Offset = 10.0
         obj.IndentDepth = 10.0
@@ -648,7 +648,11 @@ class Panel:
         self.offset_reverse.setObjectName("SWSMGussetOffsetReverse")
         self.offset_reverse.setCheckable(True)
         self.offset_reverse.setChecked(bool(obj.OffsetReverse))
-        self.offset_reverse.setText("⇄")
+        try:
+            from . import pmvalues
+            self.offset_reverse.setIcon(pmvalues.reverse_icon())
+        except Exception:
+            self.offset_reverse.setText("⇄")
         self.offset_reverse.setToolTip("Reverse direction")
         row.addWidget(self.offset_reverse)
         f.addRow(row)
@@ -693,12 +697,15 @@ class Panel:
         row = QtWidgets.QHBoxLayout()
         self.rounded = QtWidgets.QToolButton()
         self.rounded.setObjectName("SWSMGussetRounded")
-        self.rounded.setText("◠")
-        self.rounded.setToolTip("Rounded gusset")
+        self.rounded.setCheckable(True)
+        from . import pmpics
+        pmpics.picture(self.rounded, "gusset", "Rounded gusset")
+        self.rounded.setAutoRaise(True)
         self.flat = QtWidgets.QToolButton()
         self.flat.setObjectName("SWSMGussetFlat")
-        self.flat.setText("⏢")
-        self.flat.setToolTip("Flat gusset")
+        self.flat.setCheckable(True)
+        pmpics.picture(self.flat, "gusset", "Flat gusset")
+        self.flat.setAutoRaise(True)
         group3 = QtWidgets.QButtonGroup(prof)
         for b in (self.rounded, self.flat):
             b.setCheckable(True)
@@ -1013,7 +1020,7 @@ def _sheet_body():
     try:
         if Gui.Control.activeDialog():
             return None
-        body = Gui.ActiveDocument.ActiveView.getActiveObject("pdbody") or smflatten._body()
+        body = smflatten._body()
     except Exception as _fw_err:
         _fw_log("smgusset.py:982", _fw_err)
         return None

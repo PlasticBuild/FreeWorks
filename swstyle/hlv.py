@@ -673,6 +673,21 @@ class _HiddenEdges:
                 shapes = _section_shapes(gdoc.Document, sec)
             except Exception as _fw_err:
                 _fw_log("hlv.py:section-shapes", _fw_err)
+        groups = None
+        if shapes is None and self.mode in ("hlr", "hlv") and component_colour() and has_links(gdoc.Document):
+            groups = _component_groups(gdoc.Document)
+        if groups is not None:
+            # Use Component Color In HLR/HLV: each component's edges in its own colour; parts' own edges as before
+            for rgb, group in groups:
+                glines = polylines(group, DRAFT if draft_quality() else FINE, ghost)
+                if not glines:
+                    continue
+                self._edge_set(root, glines, rgb or _edge_rgb(), 0xFFFF, coin.SoDepthBuffer.LEQUAL, edge_width())
+                if self.mode == "hlv":
+                    pattern = 0xFFFF if _option("HiddenEdges", "Dashed") == "Solid" else DASH
+                    hidden = tuple(0.5 * c + 0.5 * h for c, h in zip(rgb, _hidden_rgb())) if rgb else _hidden_rgb()
+                    self._edge_set(root, glines, hidden, pattern, coin.SoDepthBuffer.GREATER, edge_width())
+            shapes = []          # drawn: nothing more below
         lines = polylines(shapes if shapes is not None else _shapes(gdoc.Document), DRAFT if draft_quality() else FINE,
                           ghost if self.mode in ("hlr", "hlv") else None)
         self.keyed = keyed_polylines(gdoc.Document, DRAFT if draft_quality() else FINE)
@@ -724,10 +739,20 @@ class _HiddenEdges:
                         hovered.append(self.keyed[key])
         except Exception as _fw_err:
             _fw_log("hlv.py:377", _fw_err)
+        try:
+            # hiddenpick-1127: a hidden edge under the pointer (Allow selection in wireframe and HLV modes)
+            from . import hiddenpick
+            hovered.extend(hiddenpick.PICK.lines())
+        except Exception as _fw_err:
+            _fw_log("hlv.py:hiddenpick", _fw_err)
         for lines, colour in ((picked, _colour("SelectionColor", 0x1CAD1C00)),
                               (hovered, _colour("HighlightColor", 0xE1E11400))):
             if lines:
                 self._edge_set(hl, lines, colour, 0xFFFF, coin.SoDepthBuffer.LEQUAL, max(2, edge_width()))
+                if self.mode == "hlv":
+                    # the stretch behind the model in the same colour, dashed like the hidden edges: a picked
+                    # hidden edge was drawn in front only, so it never showed (hiddenpick-1127)
+                    self._edge_set(hl, lines, colour, DASH, coin.SoDepthBuffer.GREATER, max(2, edge_width()))
 
     def _hook_theme(self):
         """A theme switch redraws the edges in the new theme's colour."""
@@ -958,6 +983,86 @@ def hlr_active():
     return HIDDEN.mode == "hlr"
 
 
+
+# Visible each component's edges are drawn in the component's colour (its own appearance, else its part's), the hidden
+
+COMP_KEY = "ComponentColorHLR"
+
+
+def component_colour():
+    return App.ParamGet(PARAMS).GetBool(COMP_KEY, False)
+
+
+def set_component_colour(on):
+    App.ParamGet(PARAMS).SetBool(COMP_KEY, bool(on))
+    if HIDDEN.mode in ("hlr", "hlv"):
+        HIDDEN.draw()
+
+
+def _component_groups(doc):
+    """[(rgb or None, [shapes])]: the shown components grouped by their colour, then everything else (None)."""
+    out, rest = {}, []
+    try:
+        from . import asmappearance
+    except Exception:
+        asmappearance = None
+    for obj in doc.Objects:
+        try:
+            if not _component(obj):
+                continue
+            shape = _link_shape(obj)
+            if shape is None or not _has_edges(shape):
+                continue
+            rgb = None
+            if asmappearance is not None:
+                rgb = tuple(round(float(c), 3) for c in asmappearance.colour_of(obj)[:3])
+            out.setdefault(rgb, []).append(shape)
+        except Exception as _fw_err:
+            _fw_log("hlv.py:component-groups", _fw_err)
+    for obj in doc.Objects:
+        try:
+            if _component(obj) or obj.TypeId in ("PartDesign::Body", "App::Part") or not obj.isDerivedFrom("Part::Feature"):
+                continue
+            if any(obj.isDerivedFrom(t) for t in SKIP) or obj.ViewObject is None or not obj.ViewObject.isVisible():
+                continue
+            if not _parents_shown(obj):
+                continue
+            import Part
+            shape = _shown_part(doc, Part.getShape(obj))
+            if shape is not None and not shape.isNull() and _has_edges(shape):
+                rest.append(shape)
+        except Exception as _fw_err:
+            _fw_log("hlv.py:component-rest", _fw_err)
+    groups = list(out.items())
+    if rest:
+        groups.append((None, rest))
+    return groups
+
+
+class _ComponentColour:
+    def GetResources(self):
+        return {"MenuText": "Use Component Color In HLR/HLV", "Pixmap": "DrawStyleHiddenLine",
+                "ToolTip": "In Hidden Lines Removed and Visible, draws each component's edges in its own color",
+                "Checkable": component_colour(), "CmdType": "ForEdit"}
+
+    def Activated(self, checked=None):
+        set_component_colour(not component_colour())
+        self.IsActive()
+
+    def IsActive(self):
+        state = component_colour()
+        try:
+            actions = Gui.Command.get("SWStyle_ComponentColorHLR").getAction()
+        except Exception:
+            actions = []
+        for action in actions:
+            if action.isChecked() != state:
+                blocked = action.blockSignals(True)
+                action.setChecked(state)
+                action.blockSignals(blocked)
+        return Gui.ActiveDocument is not None
+
+
 def draft_quality():
     return App.ParamGet(PARAMS).GetBool(DRAFT_KEY, False)
 
@@ -999,7 +1104,7 @@ def show_hlr():
 class _HLRCommand:
     def GetResources(self):
         return {"MenuText": "Hidden Lines Removed", "Pixmap": "DrawStyleHiddenLine",
-                "ToolTip": "White faces and black edges, with the hidden edges left out."}
+                "ToolTip": "Visible edges only, the hidden ones left out; the background shows through the faces."}
 
     def IsActive(self):
         return Gui.ActiveDocument is not None
@@ -1011,7 +1116,7 @@ class _HLRCommand:
 class _Command:
     def GetResources(self):
         return {"MenuText": "Hidden Lines Visible", "Pixmap": "DrawStyleHiddenLine",
-                "ToolTip": "Edges only: visible edges solid, hidden edges grey and dashed."}
+                "ToolTip": "Edges only: visible edges solid, hidden edges gray and dashed."}
 
     def IsActive(self):
         return Gui.ActiveDocument is not None
@@ -1054,6 +1159,8 @@ def register():
         Gui.addCommand("SWStyle_HiddenLinesRemoved", _HLRCommand())
     if "SWStyle_DraftQualityHLR" not in Gui.listCommands():
         Gui.addCommand("SWStyle_DraftQualityHLR", _DraftQuality())
+    if "SWStyle_ComponentColorHLR" not in Gui.listCommands():
+        Gui.addCommand("SWStyle_ComponentColorHLR", _ComponentColour())
     try:
         from . import checkstate      # the Display Style flyout and buttons tick the style in use
         checkstate.register("SWStyle_HiddenLinesVisible", lambda: HIDDEN.mode == "hlv")

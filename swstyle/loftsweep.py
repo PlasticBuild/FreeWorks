@@ -53,12 +53,56 @@ CUT_PROFILES = tuple(sp.SWEEP_PROFILES) + ("Solid Profile",)
 
 
 # --------------------------------------------------------------------------- picks
+GROUP_PROP = "%sGroupEdges"
+
+
+def kept_edges(obj, name):
+    """The sketch edges a pick field keeps as they are ("Sketch.Edge1"): a SelectionManager group, or
+    the edges of a FreeCAD path moved over to this feature."""
+    return list(getattr(obj, GROUP_PROP % name, None) or [])
+
+
+def keep_edges(obj, name, source, subs):
+    """Marks (source, subs) of a pick field as a chosen group of the sketch's edges, not the whole
+    sketch (features-465)."""
+    prop = GROUP_PROP % name
+    if prop not in obj.PropertiesList:
+        obj.addProperty("App::PropertyStringList", prop, "Sweep",
+                        "Edges of the sketch picked as a group for %s (SelectionManager): only these are used" % name)
+        try:
+            obj.setEditorMode(prop, 2)
+        except Exception as _fw_err:
+            _fw_log("loftsweep.py:keep_edges", _fw_err)
+    setattr(obj, prop, ["%s.%s" % (source.Name, s) for s in subs if s])
+
+
+def _sketch_part(source, subs):
+    """True when subs name some, not all, of a sketch's edges."""
+    try:
+        edges = len(source.Shape.Edges)
+    except Exception:
+        return False
+    names = {s for s in subs if s and s.startswith("Edge")}
+    return bool(names) and len(names) < edges and len(names) == len([s for s in subs if s])
+
+
 def _links(obj, name):
     ""
 
+
+
     out, seen = [], set()
-    for source, subs in getattr(obj, name, None) or []:
+    kept = set(kept_edges(obj, name))
+    items = getattr(obj, name, None) or []
+    picked = {"%s.%s" % (source.Name, s) for source, subs in items
+              for s in (subs if isinstance(subs, (list, tuple)) else [subs])}
+    kept = kept if kept and picked == kept else set()      # a new click replaced the group: whole sketch again
+    for source, subs in items:
         subs = subs if isinstance(subs, (list, tuple)) else [subs]
+        if kept and subs and all(s and "%s.%s" % (source.Name, s) in kept for s in subs):
+            for sub in subs:
+                out.append((source, [sub]))
+            continue
         if source.isDerivedFrom("Sketcher::SketchObject") or source.TypeId.startswith("Part::Part2D"):
             if source.Name not in seen:
                 seen.add(source.Name)
@@ -390,7 +434,7 @@ def _loft_fields(cut):
                      group=True),
                Field("GuideInfluence", "enum", "Guide curves influence", "To Next Guide", values=list(sp.GUIDE_INFLUENCE),
                      box="Guide Curves", tip="How far along the profile each guide curve pulls it"),
-               Field("Centerline", "pick", "Centerline", what=("Edge",), optional=True, box="Centerline Parameters"),
+               Field("Centerline", "pick", "Centerline", what=("Edge", ""), optional=True, box="Centerline Parameters"),
                Field("Sections", "int", "Number of sections", 12, low=2, high=100, box="Centerline Parameters"),
                Field("MergeTangent", "bool", "Merge tangent faces", True, box="Options"),
                Field("Close", "bool", "Close loft", False, box="Options"),
@@ -848,6 +892,15 @@ def convert(native, **values):
             "PartDesign::AdditivePipe": SWEEP, "PartDesign::SubtractivePipe": CUT_SWEEP}[native.TypeId]
     picks, carried = picks_of(native)
     carried.update(values)
+    # FreeCAD's path may be some of a sketch's edges: the new feature keeps those edges, not the sketch
+    groups = {}
+    for field in ("Path", "Guides"):
+        by_source = {}
+        for o, s in picks.get(field, []):
+            by_source.setdefault(o, []).append(s)
+        for o, subs in by_source.items():
+            if (o.isDerivedFrom("Sketcher::SketchObject") or o.TypeId.startswith("Part::Part2D")) and _sketch_part(o, subs):
+                groups.setdefault(field, []).append((o, subs))
     if values.get("ProfileType") == "Circular Profile" and picks.get("Profile") and not picks.get("Path"):
 
         # the profile on FreeCAD's page) is the path the circle runs along
@@ -856,13 +909,26 @@ def convert(native, **values):
     # FreeCAD's page was making a new feature (its "Make AdditivePipe" step is the last one): this
 
     made = "Make " + native.TypeId.split("::")[-1]
-    new = bool(doc.UndoNames) and doc.UndoNames[0] == made
+    try:
+        tx = App.getActiveTransaction()
+    except Exception:
+        tx = None
+    top = doc.UndoNames[0] if doc.UndoNames else None
+    # FreeCAD 1.1 names the new feature's step after it ("Loft") and keeps it open while its page is:
+    # an open step that is the top one is this page's new feature (an edit has no open step)
+    new = top is not None and (top == made or (tx is not None and tx[0] == top))
     _cancel_page()
     old = doc.getObject(name)
     if new and old is not None:
         try:
-            if doc.UndoNames and doc.UndoNames[0] == made:
-                doc.undo()
+            if doc.UndoNames and doc.UndoNames[0] == top:
+                # features-479 (Reviewer): abort only this page's own open step; with another step open
+                # nothing is undone here (the removal below still takes the feature away)
+                cur = App.getActiveTransaction()
+                if cur is not None and tx is not None and cur[0] == top:
+                    doc.abortTransaction()
+                elif cur is None:
+                    doc.undo()
             if doc.getObject(name) is not None:
                 body0 = old.getParentGeoFeatureGroup()
                 if body0 is not None:
@@ -873,7 +939,7 @@ def convert(native, **values):
             App.Console.PrintLog("FreeCAD: drop FreeCAD's new %s: %s\n" % (name, error))
         old = doc.getObject(name)
         if old is None:
-            return sf.make(spec, picks=picks, **carried)
+            return _keep_groups(sf.make(spec, picks=picks, **carried), groups, True)
     body = sf.body_of(doc)
     if old is not None and body is not None:
         # an existing feature: the new one takes its place in the tree
@@ -893,11 +959,26 @@ def convert(native, **values):
         body.removeObject(old)
         doc.removeObject(old.Name)
         obj.Label = label           # after the old one is gone, or FreeCAD numbers it (Loft002)
+        _keep_groups(obj, groups)
         doc.recompute()
         Gui.Selection.clearSelection()
         Gui.ActiveDocument.setEdit(obj.Name)
         return obj
-    return sf.make(spec, picks=picks, **carried)
+    return _keep_groups(sf.make(spec, picks=picks, **carried), groups, True)
+
+
+def _keep_groups(obj, groups, recompute=False):
+    if obj is None or not groups:
+        return obj
+    try:
+        for field, pairs in groups.items():
+            for o, subs in pairs[:1]:
+                keep_edges(obj, field, o, subs)
+        if recompute:
+            obj.Document.recompute()
+    except Exception as _fw_err:
+        _fw_log("loftsweep.py:keep_groups", _fw_err)
+    return obj
 
 
 def _cancel_page():
@@ -917,6 +998,52 @@ def _cancel_page():
 # --------------------------------------------------------------------------- the boxes on FreeCAD's pages
 def _later(native, **values):
     QtCore.QTimer.singleShot(0, lambda: convert(native, **values))
+
+
+def _activate_soon(name):
+    """After the page conversion queued by the same click (_later runs first: connected first)."""
+    QtCore.QTimer.singleShot(0, lambda: _activate_box(name, 8))
+
+
+def _in_task_panel(w):
+    """features-479 (Reviewer): only a box of the open task panel in the main window, not a same-named box of
+    another window."""
+    try:
+        if w.window() is not Gui.getMainWindow():
+            return False
+        p = w.parentWidget()
+        while p is not None:
+            if p.inherits("Gui::TaskView::TaskView") or "TaskView" in type(p).__name__ or p.objectName() == "TaskView":
+                return True
+            p = p.parentWidget()
+    except Exception:
+        return True
+    return False
+
+
+def _activate_box(name, tries):
+    ""
+
+    try:
+        from . import pmlayout
+        for w in QtWidgets.QApplication.allWidgets():
+            if isinstance(w, QtWidgets.QListWidget) and w.objectName() == "SWStyle_" + name and w.window().isVisible() \
+                    and _in_task_panel(w):
+                g = w
+                while g is not None and not g.inherits("QSint::ActionGroup"):
+                    g = g.parentWidget()
+                if g is not None and not pmlayout._group_open(g):
+                    pmlayout._show_hide(g)
+                if w.isVisible():
+                    w.setFocus(QtCore.Qt.OtherFocusReason)
+                    if QtWidgets.QApplication.focusWidget() is w and tries <= 4:
+                        return
+                break
+    except Exception as _fw_err:
+        _fw_log("loftsweep.py:activate_box", _fw_err)
+        return
+    if tries > 0:
+        QtCore.QTimer.singleShot(250, lambda: _activate_box(name, tries - 1))
 
 
 def _group(panel, title):
@@ -966,16 +1093,19 @@ def add_loft_boxes(panel, native):
     g.setObjectName("SWStyle_LoftGuides")
     g.setToolTip("Pick the guide curves the loft follows between the profiles")
     guides.layout().addWidget(g)
-    g.clicked.connect(lambda: _later(native))
+    g.clicked.connect(lambda: (sf.focus_next("Guides"), _later(native)))     # the next pick is a guide curve
     centre = _group(panel, "Centerline Parameters")
     c = QtWidgets.QPushButton("Centerline...", centre)
     c.setObjectName("SWStyle_LoftCenterline")
     c.setToolTip("Pick a centerline: the loft's sections stay square to it")
     centre.layout().addWidget(c)
-    c.clicked.connect(lambda: _later(native))
+    c.clicked.connect(lambda: (sf.focus_next("Centerline"), _later(native)))     # the next pick is the centerline
     micro = QtWidgets.QCheckBox("Micro tolerance", panel)
     micro.setObjectName("SWStyle_LoftMicroTolerance")
     micro.setToolTip("A finer tolerance for lofts of very small geometry")
+
+    g.clicked.connect(lambda: _activate_soon("Guides"))
+    c.clicked.connect(lambda: _activate_soon("Centerline"))
     micro.toggled.connect(lambda on: on and _later(native, MicroTolerance=True))
     lay.addWidget(micro)
     _option_checks(panel, native, "Loft", (("MergeTangent", "Merge tangent faces", True, "Faces that meet tangent become one face"),
@@ -1117,7 +1247,7 @@ class _DragSketch(QtCore.QObject):
         name = self.sketch_at(info)
         if name:
             cb.setHandled()
-            QtCore.QTimer.singleShot(0, lambda n=name: self.pick(n))
+            from . import safe_later as _sl; _sl.later(0, lambda n=name: self.pick(n), self, "move")
 
     def sketch_at(self, info):
         if not info:

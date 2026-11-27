@@ -219,11 +219,49 @@ def _is_cut_list(obj):
     return type(getattr(obj, "Proxy", None)).__name__ in ("CutListFolder", "SMCutListFolder")
 
 
+_FOLDER_ICONS = {}
+
+
+def _folder_icon(obj):
+    ""
+
+    if obj is None:
+        return None
+    if _is_cut_list(obj):
+        key = "FW_Tree_CutList"
+    elif obj.TypeId == "App::DocumentObjectGroup" and obj.Name.startswith("SheetMetalFolder"):
+        key = "FW_Tree_SheetMetalFolder"
+    else:
+        return None
+    return _drawn_folder(key)
+
+
+def _drawn_folder(key):
+    icon = _FOLDER_ICONS.get(key)
+    if icon is None:
+        try:
+            import pathlib
+            path = pathlib.Path(__file__).resolve().parent / "resources" / "icons-drawn" / (key + ".svg")
+            icon = QtGui.QIcon(str(path)) if path.is_file() else False
+        except Exception as _fw_err:
+            _fw_log("fmtree.py:folder_icon", _fw_err)
+            icon = False
+        _FOLDER_ICONS[key] = icon
+    return icon or None
+
+
+def _is_com(obj):
+    """Insert > Reference Geometry > Center of Mass (curves.CenterOfMass)."""
+    return type(getattr(obj, "Proxy", None)).__name__ == "CenterOfMass"
+
+
 def _is_lead(obj):
     ""
 
     if obj is None:
         return False
+    if _is_com(obj):
+        return True
     if "SWWeldment" in obj.PropertiesList:
         return True
     if obj.TypeId == "App::DocumentObjectGroup" and obj.Name.startswith("SheetMetalFolder"):
@@ -331,8 +369,25 @@ _marked = {}
 
 def _failed(obj):
     ""
+
     try:
-        return obj is not None and "Invalid" in obj.State
+        if obj is not None and _is_equations(obj):
+            from . import equations
+            if hasattr(equations, "errors"):
+                from . import tickcache
+                doc = obj.Document
+                return bool(tickcache.get(("eq_errors", doc.Name, len(doc.Objects)), lambda: equations.errors(doc)))
+        return obj is not None and "Invalid" in obj.State and not _redundant_only(obj)
+    except Exception:
+        return False
+
+
+def _redundant_only(obj):
+    ""
+
+    try:
+        return obj.TypeId == "Sketcher::SketchObject" and bool(obj.RedundantConstraints) and \
+            not obj.ConflictingConstraints and not obj.MalformedConstraints
     except Exception:
         return False
 
@@ -351,16 +406,19 @@ def _any_failed(doc):
 
 def _any_failed_now(doc):
     try:
-        return any("Invalid" in o.State for o in doc.Objects)
+        return any("Invalid" in o.State and not _redundant_only(o) for o in doc.Objects)
     except Exception:
         return False
 
 
 def _warned(obj):
     ""
+
     try:
-        return obj is not None and obj.TypeId == "Sketcher::SketchObject" and "Invalid" not in obj.State \
-            and bool(obj.RedundantConstraints)
+        if obj is not None and _is_sensor(obj) and getattr(obj, "Alerting", False):
+            return True
+        return obj is not None and obj.TypeId == "Sketcher::SketchObject" and bool(obj.RedundantConstraints) \
+            and ("Invalid" not in obj.State or _redundant_only(obj))
     except Exception:
         return False
 
@@ -579,6 +637,20 @@ def _has_comment(obj):
         return bool((getattr(obj, "Comment", "") or "").strip())
     except Exception:
         return False
+
+
+def comment_tip(obj):
+    ""
+
+    try:
+        target = getattr(obj, "Target", None) if obj.Name.startswith("Comment") else None
+        for o in (obj, target):
+            if o is not None and _has_comment(o):
+                import html
+                return "<qt>%s</qt>" % html.escape(o.Comment.strip()).replace("\n", "<br>")
+    except Exception as _fw_err:
+        _fw_log("fmtree.py:comment tip", _fw_err)
+    return ""
 
 
 _commented = {}
@@ -849,9 +921,44 @@ def _guard_model(cls):
                         # tooltip or colour): straight to the row's own value, past the wrapper chain
                         # (Qt asks every row for these on every paint)
                         return _BASE_DATA[0](self, index, role)
+                    if self.__dict__.get("_fw_memo_on") and self.__dict__.get("_fw_asm") is False and index.isValid():
+                        node = self.node(index)
+                        if node is not None and node.src is not None:
+                            memo = self._fw_memo_fresh()
+                            slot = memo.get(id(node))
+                            if slot is None:
+                                if len(memo) > 5000:
+                                    memo.clear()
+                                slot = memo[id(node)] = {}
+                            key = ("chain", role)
+                            try:
+                                return slot[key]
+                            except KeyError:
+                                value = slot[key] = _fn(self, index, role)
+                                return value
                     return _fn(self, index, role)
                 except Exception:
                     return None
+        elif name == "flags":
+            def guarded(self, index, _fn=fn):
+                try:
+                    if not index.isValid() or not self.__dict__.get("_fw_memo_on"):
+                        return _fn(self, index)
+                    node = self.node(index)
+                    if node is None or node.src is None:
+                        return _fn(self, index)
+                    memo = self._fw_memo_fresh()
+                    slot = memo.get(id(node))
+                    if slot is None:
+                        if len(memo) > 5000:
+                            memo.clear()
+                        slot = memo[id(node)] = {}
+                    f = slot.get("flags")
+                    if f is None:
+                        f = slot["flags"] = _fn(self, index)
+                    return f
+                except Exception:
+                    return Qt.NoItemFlags
         else:
             def guarded(self, *args, _fn=fn, _empty=empty):
                 try:
@@ -860,6 +967,202 @@ def _guard_model(cls):
                     return QtCore.QModelIndex() if isinstance(_empty, QtCore.QModelIndex) else _empty
         guarded._fw_guard = True
         setattr(cls, name, guarded)
+
+
+# --------------------------------------------------------------- data() memo (perf 11-26, Round 3)
+# A pick repaints the rows it shows, and every row asks data() for 7 roles each time (33,000 calls
+# per 200 picks in a 400-solid part, about 90 us each). A pick changes only the selection look,
+# which Qt draws from the selection model, so a row's answers are kept until something they are
+# made from changes: a rebuild, any change of FreeCAD's rows, any document change or recompute,
+# and a change of theme, palette or Tree Display option (_memo_token, read once per event pass).
+_MEMO_MODELS = []      # weak references to the live models
+_MEMO_OBSERVER = []
+
+
+def _memo_token():
+    try:
+        from . import style
+        theme = style.current_theme()
+    except Exception:
+        theme = None
+    try:
+        pal = QtWidgets.QApplication.palette().cacheKey()
+    except Exception:
+        pal = None
+    try:
+        shown = dict(display())
+    except Exception:
+        shown = None
+    try:
+        from . import rollbackbar
+        back = rollbackbar.enabled()
+    except Exception:
+        back = None
+    try:        # Model Display > comment colours: kept in doc.Meta, which sends no change (Options > OK)
+        from . import optionspages
+        doc = App.ActiveDocument
+        notes = tuple(str(optionspages.doc_value(doc, "Model Display", s, c)) for s, c in COMMENT_DEFAULTS.items())
+    except Exception:
+        notes = None
+    return (theme, pal, shown, back, notes)
+
+
+def _memo_forget_all(*args):
+    for ref in list(_MEMO_MODELS):
+        model = ref()
+        if model is None:
+            try:
+                _MEMO_MODELS.remove(ref)
+            except ValueError:
+                pass
+            continue
+        try:
+            model._fw_memo.clear()
+        except Exception:
+            pass
+
+
+class _MemoObserver:
+    """Any document change forgets every model's answers (cheap: one dict clear)."""
+
+    def slotCreatedObject(self, obj):
+        _memo_forget_all()
+
+    def slotDeletedObject(self, obj):
+        _memo_forget_all()
+
+    def slotChangedObject(self, obj, prop):
+        _memo_forget_all()
+
+    def slotRecomputedObject(self, obj):
+        _memo_forget_all()
+
+    def slotRecomputedDocument(self, doc):
+        _memo_forget_all()
+
+    def slotChangedDocument(self, doc, prop):
+        _memo_forget_all()
+
+    def slotUndoDocument(self, doc):
+        _memo_forget_all()
+
+    def slotRedoDocument(self, doc):
+        _memo_forget_all()
+
+    def slotDeletedDocument(self, doc):
+        _memo_forget_all()
+
+    def slotActivateDocument(self, doc):
+        _memo_forget_all()
+
+
+# fh268 (PERF-1127): FreeCAD lets the event loop run while a document rebuilds or opens, so the FeatureManager tree
+# was painted again and again (every visible row, each time a feature finished) while the rows were still changing.
+
+# showed) from the start of a rebuild or open until no document is rebuilding or opening, then painted once.
+_TREES = []          # weak references to the FeatureTree widgets
+_HELD = []           # the viewports held now
+_HOLD_TIMER = []
+
+
+def _busy_docs():
+    try:
+        if getattr(App, "isRestoring", None) and App.isRestoring():
+            return True
+        return any(getattr(d, "Recomputing", False) or getattr(d, "Restoring", False)
+                   for d in App.listDocuments().values())
+    except Exception:
+        return True
+
+
+def _hold_trees():
+    if _HELD:
+        return
+    for ref in list(_TREES):
+        tree = ref()
+        if tree is None or not alive(tree):
+            continue
+        try:
+            vp = tree.viewport()
+            if vp.isVisible() and vp.updatesEnabled():
+                vp.setUpdatesEnabled(False)
+                _HELD.append(vp)
+        except Exception as _fw_err:
+            _fw_log("fmtree.py:hold", _fw_err)
+    if _HELD:
+        if not _HOLD_TIMER:
+            t = QtCore.QTimer()
+            t.setInterval(250)
+            t.timeout.connect(_release_when_done)
+            _HOLD_TIMER.append(t)
+        _HOLD_TIMER[0].start()
+
+
+def _release_when_done():
+    if _busy_docs():
+        return
+    if _HOLD_TIMER:
+        _HOLD_TIMER[0].stop()
+    held, _HELD[:] = list(_HELD), []
+    for vp in held:
+        try:
+            if alive(vp):
+                vp.setUpdatesEnabled(True)
+                vp.update()
+        except Exception as _fw_err:
+            _fw_log("fmtree.py:release", _fw_err)
+
+
+class _HoldObserver:
+    def slotBeforeRecomputeDocument(self, doc):
+        _hold_trees()
+
+    def slotStartRestoreDocument(self, doc):
+        _hold_trees()
+
+    def slotRecomputedDocument(self, doc):
+        QtCore.QTimer.singleShot(0, _release_when_done)
+
+    def slotFinishRestoreDocument(self, doc):
+        QtCore.QTimer.singleShot(0, _release_when_done)
+
+    def slotDeletedDocument(self, doc):
+        QtCore.QTimer.singleShot(0, _release_when_done)
+
+
+_HOLD_OBSERVER = []
+
+
+def _hold_watch(tree):
+    import weakref
+    try:
+        _TREES.append(weakref.ref(tree))
+    except TypeError:
+        return
+    if not _HOLD_OBSERVER:
+        try:
+            observer = _HoldObserver()
+            App.addDocumentObserver(observer)
+            _HOLD_OBSERVER.append(observer)
+        except Exception as _fw_err:
+            _fw_log("fmtree.py:hold-observer", _fw_err)
+
+
+def _memo_watch(model):
+    import weakref
+    try:
+        _MEMO_MODELS.append(weakref.ref(model))
+    except TypeError:
+        return False
+    if not _MEMO_OBSERVER:
+        try:
+            observer = _MemoObserver()
+            App.addDocumentObserver(observer)
+            _MEMO_OBSERVER.append(observer)
+        except Exception as _fw_err:
+            _fw_log("fmtree.py:memo-observer", _fw_err)
+            return False
+    return True
 
 
 class Model(QtCore.QAbstractItemModel):
@@ -891,6 +1194,13 @@ class Model(QtCore.QAbstractItemModel):
         self.src.layoutChanged.connect(self.soon)
         self.src.modelReset.connect(self.soon)
         self.src.dataChanged.connect(self._data)
+        self._fw_memo = {}
+        self._fw_memo_tok = None
+        self._fw_memo_on = _memo_watch(self)      # no observer: no memo (answers could go stale)
+        for _signal in (self.layoutChanged, self.modelReset, self.rowsInserted,
+                        self.rowsRemoved, self.rowsMoved):
+            _signal.connect(self._fw_forget)
+        self.dataChanged.connect(self._fw_changed)
         self.rebuild()
 
     def disconnect_source(self):
@@ -910,6 +1220,7 @@ class Model(QtCore.QAbstractItemModel):
     def rebuild(self):
         self.timer.stop()
         self.beginResetModel()
+        self._fw_forget()
         self.ids = {}
         try:
             _doc = App.ActiveDocument
@@ -926,6 +1237,28 @@ class Model(QtCore.QAbstractItemModel):
             _LABEL_INDEX[:] = [None, None]
         self.endResetModel()
         self.rebuilt.emit()
+
+    def _fw_annotation_views(self, folder, index, doc):
+        ""
+
+        try:
+            from . import treevirtual
+            views = {name: [] for name in treevirtual.inserted_views(doc)}
+            loose = []
+            for child in self._children(index):
+                name = treevirtual.view_of(_object(doc, child.data(Qt.DisplayRole)))
+                (loose.append(child) if name is None else views.setdefault(name, []).append(child))
+            for name in sorted(views, key=treevirtual.view_key):
+                node = folder.add(Node(text=name, icon=self.icons["Annotations"],
+                                       tip="Annotation view: %d annotation(s)" % len(views[name])))
+                for child in views[name]:
+                    self._mirror(node, child, doc)
+            for child in loose:
+                self._mirror(folder, child, doc)
+        except Exception as _fw_err:
+            _fw_log("fmtree.py:annotation-views", _fw_err)
+            for child in self._children(index):
+                self._mirror(folder, child, doc)
 
     def _mirror(self, parent, index, doc, link=False, deep=True):
         node = parent.add(Node(src=QtCore.QPersistentModelIndex(index), link=link,
@@ -972,6 +1305,11 @@ class Model(QtCore.QAbstractItemModel):
                 if drawing and _drawing_annotation(_object(self.doc or App.ActiveDocument,
                                                            child.data(Qt.DisplayRole))):
                     continue
+                if "\u200b" in str(child.data(Qt.DisplayRole) or "") and getattr(_object(
+                        self.doc or App.ActiveDocument, child.data(Qt.DisplayRole)), "TypeId", "") == \
+                        "PartDesign::FeatureBase":
+                    continue
+                                    # lists only Surface-Knit1; FreeCAD's tree shows the row again on refill
                 out.append(child)
                 continue
             try:
@@ -1081,13 +1419,14 @@ class Model(QtCore.QAbstractItemModel):
                 self._mirror(folders["Sensors"], i, doc)
                 inside.add(o.Name)
             elif _is_annotation_folder(o):
-                for child in self._children(i):
-                    self._mirror(folders["Annotations"], child, doc)
+                self._fw_annotation_views(folders["Annotations"], i, doc)
                 inside.add(o.Name)
         if inside:
             rows = [(i, o) for i, o in rows if o is None or o.Name not in inside]
         for name, node in folders.items():
             n = len(node.children)
+            if name == "Annotations":       # its annotation views count by what is in them
+                n = sum(len(c.children) if c.src is None else 1 for c in node.children)
             node.tip = ("%d %s" % (n, "sensor(s)" if name == "Sensors" else "annotation(s)")) if n else \
                 dict((v[0], v[2]) for v in VIRTUAL)[name]
 
@@ -1112,6 +1451,7 @@ class Model(QtCore.QAbstractItemModel):
             part.add(Node(text=name, icon=self.icons[name], tip=tip))
         features = []
         leads = [(i, o) for i, o in rows if flat is not None and _is_lead(o)]
+        leads.sort(key=lambda r: 0 if _is_com(r[1]) else 1)       # Center of Mass first, just below Origin
         if flat is not None:
             features = self._lay_out_body(part, flat[0], flat[1], doc, leads)
         folder_rows = {o.Name: i for i, o in rows if treefolders.is_folder(o)}
@@ -1124,6 +1464,7 @@ class Model(QtCore.QAbstractItemModel):
             if o is not None and o.TypeId == BODY:
                 features += [c for c in node.children]
                 body_nodes.append(node)
+        self._creation_order(part, doc)          # surfaceorder-1127
 
         placed = set()
         if folder_rows:
@@ -1149,6 +1490,97 @@ class Model(QtCore.QAbstractItemModel):
         self._tree_items(part)
         self._flat_folder(part)
         self._shared_sketches(part)
+        self._hole_rows(part)
+
+    def _hole_rows(self, part):
+        ""
+
+
+        try:
+            from . import holeoptions
+            kind = holeoptions.HOLE_OPTIONS.internal
+        except Exception:
+            return
+
+        def options_hole(o):
+            return getattr(o, "Hole", None) if getattr(o, "SWStyleKind", "") == kind else None
+
+        def thread_hole(o):
+            try:
+                if "SizeFor" not in o.PropertiesList or "Edge" not in o.PropertiesList:
+                    return None
+                for each in o.Edge:
+                    link = each[0]
+                    if getattr(link, "TypeId", "") == "PartDesign::Hole":
+                        return link
+                    h = options_hole(link)
+                    if h is not None:
+                        return h
+            except Exception as _fw_err:
+                _fw_log("fmtree.py:hole_rows", _fw_err)
+            return None
+
+        def walk(node):
+            kids = node.children
+            holes = {k.obj.Name: k for k in kids if k.obj is not None and not k.link
+                     and getattr(k.obj, "TypeId", "") == "PartDesign::Hole"}
+            if holes or any(k.link for k in kids):
+                keep, moved = [], []
+                for k in kids:
+                    o = k.obj
+                    h = None if o is None else (options_hole(o) or thread_hole(o))
+                    if h is None:
+                        keep.append(k)
+                    elif k.link:
+                        self._forget(k)
+                    elif h.Name not in holes:
+                        keep.append(k)
+                    elif options_hole(o) is not None:
+                        self._forget(k)         # no row: its picks show the hole's row
+                        if k.src is not None:
+                            self.by_id.setdefault(k.src.internalId(), []).append(holes[h.Name])
+                    else:
+                        moved.append((holes[h.Name], k))
+                if len(keep) != len(kids):
+                    node.children = []
+                    for k in keep:
+                        node.add(k)
+                    for hole, k in moved:
+                        hole.add(k)
+            for k in node.children:
+                walk(k)
+        try:
+            walk(part)
+        except Exception as _fw_err:
+            _fw_log("fmtree.py:hole_rows", _fw_err)
+
+    @staticmethod
+    def _creation_order(part, doc):
+        ""
+
+
+        try:
+            kids = part.children
+            start = max((n for n, k in enumerate(kids) if k.obj is not None and k.obj.TypeId == ORIGIN), default=-1)
+            tail = kids[start + 1:]
+            if len(tail) < 2 or not any(k.obj is not None and not k.obj.isDerivedFrom("PartDesign::Feature")
+                                        and k.obj.TypeId not in (BODY, ORIGIN) for k in tail):
+                return
+            order = {o.Name: n for n, o in enumerate(doc.Objects)}
+            keyed, last = [], -1
+            for k in tail:
+                if k.obj is not None and k.obj.Name in order:
+                    last = order[k.obj.Name]
+                keyed.append((last, len(keyed), k))
+            keyed.sort(key=lambda t: (t[0], t[1]))
+            new = [k for _a, _b, k in keyed]
+            if new == tail:
+                return
+            part.children[start + 1:] = new
+            for row, k in enumerate(part.children):
+                k.row = row
+        except Exception as _fw_err:
+            _fw_log("fmtree.py:creation_order", _fw_err)
 
     def _flat_folder(self, part):
         ""
@@ -1159,7 +1591,7 @@ class Model(QtCore.QAbstractItemModel):
             return
         if not flats:
             return
-        box = Node(text="Flat-Pattern", icon=QtGui.QIcon(":/icons/folder.svg"),
+        box = Node(text="Flat-Pattern", icon=_drawn_folder("FW_Tree_FlatPattern") or QtGui.QIcon(":/icons/folder.svg"),
                    tip="The part's flat pattern")
         at = part.children.index(flats[0])
         rest = [n for n in part.children if n not in flats]
@@ -1303,6 +1735,23 @@ class Model(QtCore.QAbstractItemModel):
 
     def data(self, index, role=Qt.DisplayRole):
         node = self.node(index) if index.isValid() else None
+        if node is None or node.src is None or not self.__dict__.get("_fw_memo_on"):
+            return self._fw_data_now(index, role)        # a virtual row: its own fields, nothing to keep
+        memo = self._fw_memo_fresh()
+        slot = memo.get(id(node))
+        if slot is None:
+            if len(memo) > 5000:
+                memo.clear()
+            slot = memo[id(node)] = {}
+        try:
+            return slot[role]
+        except KeyError:
+            pass
+        value = slot[role] = self._fw_data_now(index, role)
+        return value
+
+    def _fw_data_now(self, index, role=Qt.DisplayRole):
+        node = self.node(index) if index.isValid() else None
         if node is None:
             return None
         if role == Qt.SizeHintRole:
@@ -1319,9 +1768,13 @@ class Model(QtCore.QAbstractItemModel):
             if role == Qt.DisplayRole and node.obj is not None and node is not self.part:
                 return display_text(node.obj, value)
             if role == Qt.ToolTipRole and node.obj is not None and node is not self.part:
-                tip = _error_tip(node) or pattern_tip(node.obj)
+                tip = _error_tip(node) or pattern_tip(node.obj) or comment_tip(node.obj)
                 if tip:
                     return tip
+            if role == Qt.DecorationRole and node.obj is not None and not node.link:
+                own = _folder_icon(node.obj)
+                if own is not None:
+                    value = own
             if role == Qt.DecorationRole and isinstance(value, QtGui.QPixmap):
                 value = QtGui.QIcon(value)
             if role in (Qt.DecorationRole, Qt.ForegroundRole) and _folder_back(node.obj):
@@ -1540,7 +1993,43 @@ class Model(QtCore.QAbstractItemModel):
             self.soon()
         return False        # the rows come back from the rebuild, nothing to remove here
 
+    def _fw_memo_fresh(self):
+        """The memo, emptied first when the theme, palette or an option it is made from changed."""
+        try:
+            from . import tickcache
+            tok = tickcache.get(("fmtree memo token",), _memo_token)
+        except Exception:
+            tok = _memo_token()
+        memo = self._fw_memo
+        if tok != self._fw_memo_tok:
+            memo.clear()
+            self._fw_memo_tok = tok
+        return memo
+
+    def _fw_forget(self, *args):
+        memo = self.__dict__.get("_fw_memo")
+        if memo:
+            memo.clear()
+
+    def _fw_forget_node(self, node):
+        """A row's answers and those of every row it sits under (their marks follow it)."""
+        memo = self.__dict__.get("_fw_memo")
+        while memo and node is not None:
+            memo.pop(id(node), None)
+            node = node.parent
+
+    def _fw_changed(self, first, last, roles=()):
+        if first == last and first.isValid():
+            self._fw_forget_node(self.node(first))
+        else:
+            self._fw_forget()
+
     def _data(self, first, last, roles=()):
+        if first.column() == 0 and self.__dict__.get("_fw_memo"):
+            _parent = first.parent()      # FreeCAD changed these rows: their kept answers are old
+            for _row in range(first.row(), last.row() + 1):
+                for _node in self.by_id.get(self.src.index(_row, 0, _parent).internalId(), ()):
+                    self._fw_forget_node(_node)
         # FreeCAD's tree sends a change for every row it touches, thousands of times in a big
         # recompute or a batch of inserts; the rows are gathered and repainted once when events
         # run again (each row and its parents once), not once per change (profile 11-12: 15k calls)
@@ -1738,7 +2227,7 @@ class FeatureTree(QtWidgets.QTreeView):
             if fm.part is None or self.state() == QtWidgets.QAbstractItemView.EditingState and \
                     self.currentIndex() == index:
                 return
-            if fm.index_of(fm.part) != index:
+            if fm.node(index) is not fm.part:
                 return
             suffix = part_suffix(getattr(fm, "doc", None) or App.ActiveDocument)
             if not suffix:
@@ -1772,6 +2261,7 @@ class FeatureTree(QtWidgets.QTreeView):
         self.shell = shell
         self.tree = tree
         self.fm = Model(tree, self)
+        _hold_watch(self)           # fh268: held, not painted again and again, while a rebuild runs
         self.setModel(self.fm)
         self.setHeaderHidden(True)
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
@@ -1905,8 +2395,13 @@ class FeatureTree(QtWidgets.QTreeView):
             self._pull()
         finally:
             self._syncing = False
-        if getattr(self, "_filter_text", ""):
-            self.fm_filter(self._filter_text)
+        try:
+            from . import hierarchyonly      # hieronly-1127
+            _hier = hierarchyonly.on()
+        except Exception:
+            _hier = False
+        if getattr(self, "_filter_text", "") or _hier:
+            self.fm_filter(getattr(self, "_filter_text", ""))
         scroll = getattr(self, "_scroll", None)
         if scroll is not None:
             QtCore.QTimer.singleShot(0, lambda: self.verticalScrollBar().setValue(scroll))
@@ -1952,6 +2447,11 @@ class FeatureTree(QtWidgets.QTreeView):
         part = self.fm.index_of(self.fm.part) if self.fm.part is not None else QtCore.QModelIndex()
         if part.isValid():
             visit(part)
+        try:        # hieronly-1127: Show Hierarchy Only (top assembly row) keeps only the component rows
+            from . import hierarchyonly
+            hierarchyonly.apply(self)
+        except Exception as _fw_err:
+            _fw_log("fmtree.py:hierarchy only", _fw_err)
         return [index.data(Qt.DisplayRole) for index in self.fm_shown()]
 
     def fm_shown(self):

@@ -34,6 +34,71 @@ from PySide import QtCore, QtGui, QtWidgets
 from . import asmcore as ac
 from . import asmtools
 
+
+import re as _fw_re
+_ONE_PICK = _fw_re.compile(r"^(Edge|Face|Vertex)\d+@(.+)$")
+
+
+def shown_pick(raw):
+    ""
+
+    m = _ONE_PICK.match(raw or "")
+    if m is None:
+        return raw or ""
+    from . import asmpm
+    return "%s<1>@%s" % (m.group(1), asmpm.instance_name(m.group(2)))
+
+
+def show_pick(box, raw):
+    """Only the box's text changes: the document's name, which the page saves and reads back, is kept
+    on the box (pick_raw)."""
+    box.setProperty("swRaw", raw or "")
+    box.setText(shown_pick(raw))
+
+
+def pick_raw(box):
+    raw = box.property("swRaw")
+    return raw if raw and box.text() == shown_pick(raw) else box.text()
+
+
+def mark_active(box, on=True):
+    """pmboxes' active-box mark (the box the next pick goes into; Enter and Esc work from the view while
+    it is empty) on a box that keeps its own pick colours (PM thread 11-27)."""
+    try:
+        from . import pmboxes
+        own = box.styleSheet()
+        pmboxes.mark(box, on)
+        if own and box.styleSheet() != own:
+            box.setStyleSheet(own)
+    except Exception as _fw_err:
+        __import__("FreeCAD").Console.PrintLog("FreeCAD asmpattern.mark_active: %s\n" % _fw_err)
+
+def click_box(panel, key, widget):
+    ""
+
+
+    panel.__dict__.setdefault("_fw_boxes", []).append(widget)
+
+    class F(QtCore.QObject):
+        def eventFilter(self, obj, ev):
+            try:
+                if isinstance(ev, QtCore.QEvent) and ev.type() == QtCore.QEvent.MouseButtonPress:
+                    panel._user_box = key
+                    for w in list(panel._fw_boxes):
+                        mark_active(w, w is widget)
+            except Exception as _fw_err:
+                __import__("FreeCAD").Console.PrintLog("FreeCAD asmpattern.click_box: %s\n" % _fw_err)
+            return False
+    f = F(widget)
+    widget.installEventFilter(f)
+    if hasattr(widget, "viewport"):
+        widget.viewport().installEventFilter(f)
+    panel.__dict__.setdefault("_fw_filters", []).append(f)
+
+
+def user_box(panel):
+    return panel.__dict__.get("_user_box") if hasattr(panel, "__dict__") else None
+
 V = App.Vector
 PLANES = (("Front Plane", V(0, 0, 0), V(0, 0, 1)), ("Top Plane", V(0, 0, 0), V(0, 1, 0)),
           ("Right Plane", V(0, 0, 0), V(1, 0, 0)))
@@ -529,6 +594,8 @@ class _Panel:
         self.list.setStyleSheet(asmpm.PICK_STYLE)
         self.list.setFixedHeight(asmpm._rows(self.list, 3))
         lay.addWidget(self.list)
+        mark_active(self.list)        # the box the picks go into at open
+        click_box(self, "comps", self.list)
 
         box.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
         return box
@@ -597,6 +664,7 @@ class CircularPatternPanel(_Panel):
         self.reverse = asmpm.reverse_button("FW_PatternReverse")
         row.addWidget(self.reverse)
         row.addWidget(self.axis_box, 1)
+        click_box(self, "axis", self.axis_box)
         lay.addLayout(row)
         self.angle = QtWidgets.QDoubleSpinBox()
         self.angle.setObjectName("FW_PatternAngle")
@@ -676,7 +744,7 @@ class CircularPatternPanel(_Panel):
             if self._preview_due:
                 return
             self._preview_due = True
-            QtCore.QTimer.singleShot(0, self.refresh_preview)
+            from . import safe_later as _sl; _sl.later(0, self.refresh_preview, self, "angle")
         except Exception as error:
             self._preview_due = False
             App.Console.PrintLog("FreeCAD: circular pattern preview: %s\n" % error)
@@ -755,7 +823,7 @@ class CircularPatternPanel(_Panel):
             except Exception as error:
                 App.Console.PrintLog("FreeCAD: pattern axis: %s\n" % error)
             self.axis = (V(*v["axis_point"]), V(*v["axis"]), v["axis_label"])
-            self.axis_box.setText(v["axis_label"])
+            show_pick(self.axis_box, v["axis_label"])
         self.reverse.setChecked(bool(v.get("reverse")))
         self.equal.blockSignals(True)
         self.equal.setChecked(v.get("equal", True))
@@ -777,10 +845,13 @@ class CircularPatternPanel(_Panel):
         found = axis_of(shape)
         if found is None:
             return False
-        if self.comps and ref[0] in self.comps and self.axis is not None:
+        user = user_box(self)
+        if user == "comps":
+            return False        # asmpkg364: Components to Pattern clicked: the pick adds its component
+        if user != "axis" and self.comps and ref[0] in self.comps and self.axis is not None:
             return False
         self.axis = (found[0], found[1], "%s@%s" % (ref[1].split(".")[-1], ref[0].Label))
-        self.axis_box.setText(self.axis[2])
+        show_pick(self.axis_box, self.axis[2])
         self.update_preview()
         return True
 
@@ -791,7 +862,7 @@ class CircularPatternPanel(_Panel):
         if kind != "axis":
             return
         self.axis = (V(point), V(direction), label)
-        self.axis_box.setText(label)
+        show_pick(self.axis_box, label)
         self.update_preview()
 
     def pattern_axis(self):
@@ -889,6 +960,8 @@ class MirrorPanel(_Panel):
         drop.triggered.connect(self._drop_current)
         self.sel_list.addAction(drop)
         lay.addWidget(self.sel_list)
+        click_box(self, "plane", self.plane_box)
+        click_box(self, "comps", self.sel_list)
         # Step 2
         seeds = self._components_box("Orient Components")
         self.list.setToolTip("A checked component gets an opposite hand version; pick one to set its orientation")
@@ -991,7 +1064,11 @@ class MirrorPanel(_Panel):
             self._add(comp)
         self.form = [head, box, seeds, orient, files, imp, prop]
         self._files_shown()
-        QtCore.QTimer.singleShot(0, lambda: self.go(0))
+
+        mark_active(self.plane_box, self.plane is None)
+        mark_active(self.sel_list, self.plane is not None)
+        mark_active(self.list, False)
+        from . import safe_later as _sl; _sl.later(0, lambda: self.go(0), self, "step_label")
         Gui.Selection.addObserver(self, 0)
 
     # --- steps
@@ -1024,6 +1101,7 @@ class MirrorPanel(_Panel):
         self.step_label.setText(self.STEPS[step])
         self.back.setVisible(step > 0)          # no step there: the arrow is not shown (no greyed control)
         self.next.setVisible(step < self.steps() - 1)
+        mark_active(self.list, step == 1)      # Orient Components takes the picks in step 2
         if step == 1:
             self._show_orient()
 
@@ -1065,7 +1143,7 @@ class MirrorPanel(_Panel):
     def _files_shown(self, *args):
         """Filenames matter only for opposite hand versions; the folder and Break link only for new files."""
         if getattr(self, "pages", None) and self.step >= self.steps():
-            QtCore.QTimer.singleShot(0, lambda: self.go(self.steps() - 1))
+            from . import safe_later as _sl; _sl.later(0, lambda: self.go(self.steps() - 1), self, "step_label")
         on = bool(self.opposite_set())
         files = self.new_files.isChecked()
         # the files step shows only with an opposite hand version (steps()); in it, what does not
@@ -1120,7 +1198,7 @@ class MirrorPanel(_Panel):
 
     def values(self):
         point, normal = self.mirror_plane() or (None, None)
-        return {"plane": self.plane_box.text(), "point": list(point) if point else None,
+        return {"plane": pick_raw(self.plane_box), "point": list(point) if point else None,
                 "normal": list(normal) if normal else None,
                 "opposite": [c.Name for c in self.opposite_set()],
                 "flips": {c.Name: list(f) for c, f in self.flips.items()},
@@ -1135,7 +1213,7 @@ class MirrorPanel(_Panel):
     def load(self, v):
         if v.get("point") and v.get("normal"):
             self.plane = (V(*v["point"]), V(*v["normal"]))
-            self.plane_box.setText(v.get("plane") or "")
+            show_pick(self.plane_box, v.get("plane") or "")
         names = set(v.get("opposite", []))
         for i, c in enumerate(self.comps):
             self.list.item(i).setCheckState(QtCore.Qt.Checked if c.Name in names else QtCore.Qt.Unchecked)
@@ -1165,6 +1243,8 @@ class MirrorPanel(_Panel):
         found = plane_of(shape)
         if found is None or (self.comps and ref[0] in self.comps) or self.step != 0:
             return False
+        if user_box(self) == "comps":
+            return False        # asmpkg364: Components to Mirror clicked: a flat face adds its component
         self.set_plane(found, "%s@%s" % (ref[1].split(".")[-1], ref[0].Label))
         return True
 
@@ -1175,7 +1255,10 @@ class MirrorPanel(_Panel):
 
     def set_plane(self, plane, label):
         self.plane = plane
-        self.plane_box.setText(label)
+        show_pick(self.plane_box, label)
+        mark_active(self.plane_box, False)
+        mark_active(self.sel_list, True)
+        self._user_box = "comps"                # asmpkg364: so the next flat face is a component, not the plane
         if hasattr(self, "preview_changed"):
             self.preview_changed()
 
@@ -1467,9 +1550,12 @@ def chain_moves(comp, wire, spacing, count, fill=False, kind="Distance", links=N
         seeds = [comp] + [g for g in group2] if kind == "Connection Linkage" and group2 else [comp]
         for i in range(1, n):
             if linkage and pins is not None:
+                s = _chord_step(path, s, pitch, sign)      # asmpkg368: this link's first pin on the last one's second
                 a = path.at(s)[0]
-                s = _chord_step(path, s, pitch, sign)
-                b = path.at(s)[0]
+                s2 = _chord_step(path, s, pitch, sign)     # (it was on the seed's own first pin: a copy on the seed)
+                if not path.closed and not (-1e-6 <= s2 <= path.length + 1e-6):
+                    break                                   # its second pin is off the path: the link does not fit
+                b = path.at(s2)[0]
                 t = (b - a).normalize()
                 p = a
             else:
@@ -1480,7 +1566,7 @@ def chain_moves(comp, wire, spacing, count, fill=False, kind="Distance", links=N
                 break
             turn = _frame(t, up).multiply(r0.inverted()) if up is not None else App.Rotation(t0, t)
             src = seeds[i % len(seeds)]
-            base = p0 if src is comp else (path.at(path.nearest(centroid(src)))[0])
+            base = p0 if src is comp else centroid(src) - (centroid(comp) - p0)    # asmpkg368: a Group 2 link sits on the path as the seed does
             move = App.Placement(p - base, App.Rotation()).multiply(App.Placement(V(), turn, base))
             out.append((src, move))
     return out
@@ -1675,6 +1761,9 @@ class _DrivenPanel(_Panel):
     def _route(self):
         for label, shape, sketch, whole, comp, src in _picked_geometry(self.asm):
             self._src = src
+            if user_box(self) == "comps" and comp is not None and sketch is None:
+                self._add(comp)     # asmpkg364: Components to Pattern clicked: a face or edge adds its component
+                continue
             if self.take_driving(label, shape, sketch, whole, comp):
                 continue
             if comp is not None:
@@ -1690,6 +1779,7 @@ class _DrivenPanel(_Panel):
         box.setReadOnly(True)
         box.setStyleSheet(asmpm.PICK_STYLE.replace("QListWidget", "QLineEdit"))
         box.setToolTip(tip)
+        click_box(self, name, box)      # asmpkg367: clicked, it takes the next pick (not Components to Pattern)
         return box
 
 
@@ -2109,28 +2199,37 @@ class ChainPatternPanel(_DrivenPanel):
         self.align = None
         seeds = self._components_box("Chain Group 1")
         lay1 = seeds.layout()
-        self.link_label = QtWidgets.QLabel("Path link 1 / Path link 2:")
+
+        self.link_label = QtWidgets.QLabel("Path link 1:")
         lay1.addWidget(self.link_label)
-        self.link_box = self._pick_box("FW_ChainLinks", "", "The link's two pins: pick a round face or circular edge for each")
+        self.link_box = self._pick_box("FW_ChainLinks", "", "Path link 1: a round face or circular edge of the link's first pin")
         lay1.addWidget(self.link_box)
+        self.link_label2 = QtWidgets.QLabel("Path link 2:")
+        lay1.addWidget(self.link_label2)
+        self.link_box2 = self._pick_box("FW_ChainLinks2", "", "Path link 2: a round face or circular edge of the link's second pin")
+        lay1.addWidget(self.link_box2)
         self.pins = []
+        self._slots = [None, None]
         group2, lay2g = asmpm._box("Chain Group 2")
         self.group2_list = QtWidgets.QListWidget()
         self.group2_list.setObjectName("FW_ChainGroup2")
         self.group2_list.setStyleSheet(asmpm.PICK_STYLE)
         self.group2_list.setFixedHeight(asmpm._rows(self.group2_list, 2))
         lay2g.addWidget(self.group2_list)
+        click_box(self, "group2", self.group2_list)     # asmpkg368: clicked, a pick of any part of a component adds it
         self.group2 = []
         self.group2_box = group2
         opts, olay = asmpm._box("Options")
         self.flip = QtWidgets.QCheckBox("Flip alignment direction")
         self.flip.setObjectName("FW_ChainFlip")
         olay.addWidget(self.flip)
+        self._options_lay = olay        # asmpkg371: Synchronize movement goes in this one Options group (there were two)
         self.comps = []
         for comp in comps:
             self._add(comp)
         self.form = [box, seeds, group2, opts]
         self._kind_changed()
+        from . import safe_later as _sl; _sl.later(0, self._kind_changed, self, "group2_list")    # asmpkg371: again once the groups have title bars
         Gui.Selection.addObserver(self, 0)
 
     def kind(self):
@@ -2145,16 +2244,36 @@ class ChainPatternPanel(_DrivenPanel):
         label = self._chain_form.labelForField(self.spacing) if hasattr(self, "_chain_form") else None
         if label is not None:
             label.setVisible(not linkage)
-        for w in (self.link_label, self.link_box):
+        for w in (self.link_label, self.link_box, self.link_label2, self.link_box2):
             w.setVisible(linkage)
-        self.group2_box.setVisible(k == "Connection Linkage")
+        from . import asmpm
+        try:
+            asmpm.group_visible(self.group2_box, k == "Connection Linkage")
+        except RuntimeError:                                                # Chain Group 2 for Connection Linkage only)
+            pass
+
+    def _set_pin(self, slot, point, label):
+        ""
+        self._slots[slot] = point
+        box = (self.link_box, self.link_box2)[slot]
+        show_pick(box, label)
+        self.pins = [p for p in self._slots if p is not None]
+        if len(self.pins) == 2:
+            tip = "Pitch %.2fmm" % (self.pins[1] - self.pins[0]).Length
+            for b in (self.link_box, self.link_box2):
+                b.setToolTip(tip)
+        if slot == 0 and self._slots[1] is None:
+            self._user_box = "FW_ChainLinks2"
+            for w in list(self.__dict__.get("_fw_boxes", [])):
+                mark_active(w, w is self.link_box2)
 
     def values(self):
         return {"kind": self.kind(), "wire": self.wire.exportBrepToString() if self.wire is not None else "",
                 "path": self.path_box.text(), "spacing": self.spacing.value(), "count": self.count.value(),
                 "fill": self.fill.isChecked(), "reverse": self.reverse.isChecked(), "flip": self.flip.isChecked(),
-                "align": list(self.align) if self.align is not None else None, "align_label": self.plane_box.text(),
+                "align": list(self.align) if self.align is not None else None, "align_label": pick_raw(self.plane_box),
                 "pins": [list(p) for p in self.pins], "group2": [c.Name for c in self.group2],
+                "pin_labels": [pick_raw(self.link_box), pick_raw(self.link_box2)],
                 "src": getattr(self, "src", None), "stamp": shape_stamp(self.wire) if self.wire is not None else []}
 
     def load(self, v):
@@ -2173,10 +2292,11 @@ class ChainPatternPanel(_DrivenPanel):
         self.flip.setChecked(bool(v.get("flip")))
         if v.get("align"):
             self.align = V(*v["align"])
-            self.plane_box.setText(v.get("align_label", ""))
-        self.pins = [V(*p) for p in v.get("pins", [])]
-        if len(self.pins) == 2:
-            self.link_box.setText("pitch %.2fmm" % (self.pins[1] - self.pins[0]).Length)
+            show_pick(self.plane_box, v.get("align_label", ""))
+        pins = [V(*p) for p in v.get("pins", [])]
+        labels = list(v.get("pin_labels") or []) + ["Path link 1", "Path link 2"][len(v.get("pin_labels") or []):]
+        for i, p in enumerate(pins[:2]):
+            self._set_pin(i, p, labels[i])
         doc = self.asm.Document
         for name in v.get("group2", []):
             c = doc.getObject(name)
@@ -2185,18 +2305,29 @@ class ChainPatternPanel(_DrivenPanel):
                 self.group2_list.addItem(c.Label)
 
     def take_driving(self, label, shape, sketch, whole, comp):
+        box = user_box(self)
+        if box == "group2" and comp is not None and sketch is None:
+            if comp not in self.comps and comp not in self.group2:
+                self.group2.append(comp)
+                self.group2_list.addItem(comp.Label)
+            return True
+        if box == "FW_ChainAlignPlane" and sketch is None and shape.ShapeType == "Face" and plane_of(shape) is not None:
+            self.align = plane_of(shape)[1]
+            show_pick(self.plane_box, label)
+            return True
         if self.wire is not None and sketch is None and shape.ShapeType == "Face" and plane_of(shape) is not None \
                 and (comp is None or comp not in self.comps):
             self.align = plane_of(shape)[1]
-            self.plane_box.setText(label)
+            show_pick(self.plane_box, label)
             return True
-        if self.kind() != "Distance" and comp is not None and comp in self.comps and len(self.pins) < 2:
+        if self.kind() != "Distance" and comp is not None and comp in self.comps:
             ax = axis_of(shape)
             if ax is not None and ac.geometry(shape)[0] == "axis":
-                self.pins.append(V(ax[0]))
-                self.link_box.setText("pin %d picked" % len(self.pins) if len(self.pins) < 2 else
-                                      "pitch %.2fmm" % (self.pins[1] - self.pins[0]).Length)
-                return True
+                slot = 1 if box == "FW_ChainLinks2" else 0 if box == "FW_ChainLinks" else \
+                    (0 if self._slots[0] is None else 1 if self._slots[1] is None else None)
+                if slot is not None:
+                    self._set_pin(slot, V(ax[0]), label)
+                    return True
         if self.kind() == "Connection Linkage" and comp is not None and self.comps and comp not in self.comps \
                 and self.wire is not None and comp not in self.group2 and shape.ShapeType != "Edge":
             self.group2.append(comp)
@@ -2251,6 +2382,7 @@ class PatternDrivenPanel(_DrivenPanel):
         self.driving_box = self._pick_box("FW_PatternDriving", "",
                                           "Pick a face of the driving pattern's seed: a hole the seed sits in, or a component of a component pattern")
         lay.addWidget(self.driving_box)
+        click_box(self, "driving", self.driving_box)
         self.count_label = QtWidgets.QLabel("")
         self.count_label.setObjectName("FW_PatternDrivingCount")
         lay.addWidget(self.count_label)

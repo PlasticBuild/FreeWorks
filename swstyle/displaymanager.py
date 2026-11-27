@@ -566,7 +566,7 @@ class Page(QtWidgets.QWidget):
         scene.setData(0, ROLE, ("scenefolder",))
         scene.setIcon(0, icons.family("DISPMGR_SCENE"))
         i = style.current_scene()
-        name = style.SCENES[i][0] if i >= 0 else "Theme Background"
+        name = style.scene_label(i)        # the theme's own scene reads 3 Point Faded where it is that
         child = QtWidgets.QTreeWidgetItem([name])
         child.setIcon(0, _scene_picture(i))
         child.setData(0, ROLE, ("scene",))
@@ -636,11 +636,28 @@ class Page(QtWidgets.QWidget):
             return scenepm.edit_scene()
         return None
 
+    @staticmethod
+    def looking_through(cam):
+        """True while the active view looks through cam (its Camera View is on)."""
+        try:
+            from . import cameras
+            view = Gui.ActiveDocument.ActiveView if Gui.ActiveDocument is not None else None
+            got = cameras._looking.get(id(view)) if view is not None and cameras.through(view) else None
+            return bool(cam is not None and got and got[0] == cam.Document.Name and got[1] == cam.Name)
+        except Exception:
+            return False
+
     def camera_view(self, cam):
+        ""
+
         from . import cameras
         if cam is None or Gui.ActiveDocument is None:
             return False
         view = Gui.ActiveDocument.ActiveView
+        if self.looking_through(cam):
+            cameras.leave(view)
+            view.redraw()
+            return True
         try:
             cameras.leave(view)
             cameras.look_through(view, cam)
@@ -720,7 +737,8 @@ class Page(QtWidgets.QWidget):
             out.append(("Apply Scene", lambda: self.scene_menu().popup(QtGui.QCursor.pos()), True))
         elif data[0] == "camera" and doc is not None:
             cam = doc.getObject(data[1])
-            out.append(("Camera View", lambda: self.camera_view(cam), cam is not None))
+
+            out.append(("Camera View", lambda: self.camera_view(cam), cam is not None, self.looking_through(cam)))
             out.append(("Edit Camera...", lambda: self.edit_camera(cam),
                         cam is not None and not Gui.Control.activeDialog()))
             out.append(("Add Camera", self.add_camera, Gui.ActiveDocument is not None))
@@ -788,10 +806,14 @@ class Page(QtWidgets.QWidget):
             return
         menu = QtWidgets.QMenu(self)
         menu.setObjectName("SWDisplayManagerMenu")
-        for text, run, enabled in entries:
+        for entry in entries:
+            text, run, enabled = entry[:3]
             if not enabled:
                 continue            # no greyed rows: what cannot act now is left out
             act = menu.addAction(text)
+            if len(entry) > 3:
+                act.setCheckable(True)
+                act.setChecked(bool(entry[3]))
             act.triggered.connect(lambda checked=False, run=run: run())
         if not menu.actions():
             return
@@ -813,21 +835,35 @@ def edit_decal(d):
     return decalpm.edit(d) is not None
 
 
+def _redraw_drawings(of):
+    """The shaded drawing views of a decal's model drawn again (the decal shown, hidden or taken off)."""
+    try:
+        if of is not None:
+            from . import drawshade
+            if drawshade.refresh_for(of):
+                of.Document.recompute()
+    except Exception as _fw_err:
+        _fw_log("displaymanager.py:drawings", _fw_err)
+
+
 def show_decal(d, on):
     if d is not None and d.ViewObject is not None:
         d.ViewObject.Visibility = bool(on)
+        _redraw_drawings(getattr(d, "DecalOf", None))
 
 
 def remove_decal(d):
     if d is None:
         return False
     doc = d.Document
+    of = getattr(d, "DecalOf", None)
     doc.openTransaction("Remove Decal")
     try:
         doc.removeObject(d.Name)
     finally:
         doc.commitTransaction()
     doc.recompute()
+    _redraw_drawings(of)
     return True
 
 

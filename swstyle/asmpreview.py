@@ -64,9 +64,49 @@ def open_preview(asm, comp):
     callback = _Clicks(viewport)
     viewport.installEventFilter(callback)
     _open = {"view": view, "comp": comp, "asm": asm, "callback": callback, "root": root,
-             "assembly_view": assembly_view}
+             "assembly_view": assembly_view, "fill": _fill_light(assembly_view, view, root)}
     _beside()
     return view
+
+
+def _fill_light(assembly_view, view, root):
+    """The assembly view's fill light in the preview (its viewer has the headlight only): same intensity and colour, the
+    same direction as seen from the camera, turned with the camera. Returns the sensor to detach, or None."""
+    try:
+        from pivy import coin
+        found = None
+        search = coin.SoSearchAction()
+        search.setType(coin.SoDirectionalLight.getClassTypeId())
+        search.setInterest(coin.SoSearchAction.ALL)
+        search.setSearchingAll(True)
+        search.apply(assembly_view.getViewer().getSoRenderManager().getSceneGraph())
+        paths = search.getPaths()
+        for i in range(paths.getLength()):
+            tail = paths[i].getTail()
+            if tail.getName().getString() == "filllight":
+                found = tail
+                break
+        camera = view.getCameraNode()
+        if found is None or camera is None or not found.on.getValue():
+            return None
+        light = coin.SoDirectionalLight()
+        light.intensity.setValue(found.intensity.getValue())
+        light.color.setValue(found.color.getValue())
+        local = found.direction.getValue()
+
+        def turn(*_args):
+            world = camera.orientation.getValue().multVec(local)
+            light.direction.setValue(world)
+
+        turn()
+        root.insertChild(light, 0)
+        sensor = coin.SoFieldSensor(turn, None)
+        sensor.setPriority(0)
+        sensor.attach(camera.orientation)
+        return (sensor, light)
+    except Exception as _fw_err:
+        _fw_log("asmpreview.py:fill light", _fw_err)
+        return None
 
 
 def _beside():
@@ -181,6 +221,11 @@ def close_preview():
     if _open is None:
         return
     state, _open = _open, None
+    try:
+        if state.get("fill"):
+            state["fill"][0].detach()
+    except Exception as _fw_err:
+        _fw_log("asmpreview.py:fill off", _fw_err)
     try:
         state["callback"].parent().removeEventFilter(state["callback"])
     except (RuntimeError, AttributeError) as _fw_err:

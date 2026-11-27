@@ -238,7 +238,23 @@ class ViewPalette(QtWidgets.QWidget):
         self.armed = None
 
     def sheet_move(self, p):
-        pass
+        ""
+        if self.armed is None or self.clicks is None:
+            return
+        try:
+            page, name = self.armed
+            if getattr(self, "_ghost_for", None) != self.armed:
+                self._ghost_for = self.armed
+                self._ghost_size = None
+                doc = self.document()
+                if doc is not None and name != FLAT and not name.startswith(CUT_ITEM):
+                    d, x = orientation(doc, "Isometric" if name.startswith(EXPLODED) else name)
+                    shapes = D.model_shapes(doc)
+                    self._ghost_size = D.ghost_size(shapes, d, x, D.placing_scale(page, shapes))
+            if self._ghost_size is not None:
+                self.clicks.ghost(p, self._ghost_size)
+        except Exception as _fw_err:
+            _fw_log("drawpalette.py:ghost", _fw_err)
 
     def sheet_click(self, p):
         if self.armed is None:

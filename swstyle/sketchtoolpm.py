@@ -53,6 +53,58 @@ def _shell():
         return None
 
 
+def after_click(fn):
+    ""
+
+
+
+    try:
+        held = QtWidgets.QApplication.mouseButtons() != QtCore.Qt.NoButton
+    except Exception:
+        held = False
+    if not held:
+        fn()
+        return
+    timer = QtCore.QTimer()
+    timer.setInterval(20)
+    state = {"left": 250}
+
+    def poll():
+        state["left"] -= 1
+        try:
+            still = QtWidgets.QApplication.mouseButtons() != QtCore.Qt.NoButton
+        except Exception:
+            still = False
+        if still and state["left"] > 0:
+            return
+        timer.stop()
+        _PENDING.discard(timer)
+        QtCore.QTimer.singleShot(0, fn)
+    timer.timeout.connect(poll)
+    _PENDING.add(timer)
+    timer.start()
+
+
+_PENDING = set()
+
+
+def _focus_left_on_press():
+    ""
+
+
+    try:
+        if QtWidgets.QApplication.mouseButtons() == QtCore.Qt.NoButton:
+            return False
+        w = QtWidgets.QApplication.focusWidget()
+        while w is not None:
+            if isinstance(w, (QtWidgets.QAbstractSpinBox, QtWidgets.QLineEdit)):
+                return False
+            w = w.parentWidget()
+        return True
+    except Exception:
+        return False
+
+
 def current():
     """The open page, else None."""
     return _host.page if _host is not None else None
@@ -151,6 +203,7 @@ class ToolPage(QtWidgets.QWidget):
         self.sketch = sketch
         self.doc = sketch.Document
         self._open = False
+        self._deferred = None   # fix284: (content, properties) while the page works outside history
         self.setObjectName("SWRelationsPM")     # the relations panel's style sheet
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFont(ui_font())
@@ -183,6 +236,26 @@ class ToolPage(QtWidgets.QWidget):
         self.note.setContentsMargins(10, 0, 8, 6)
         self.note.hide()
         self.column.addWidget(self.note)
+        own = getattr(type(self), "changed", None)
+        if own is not None:
+            # fix287: a typed value is taken when its field loses focus, on the press of the next click; the
+            # page's work then waits for that click to end, so the click is not swallowed (PC TC14)
+            def changed(*args, _own=own, _page=self):
+                if not _focus_left_on_press():
+                    return _own(_page, *args)
+                # fix287-v2: one waiting call per page, with the latest values (a held spin arrow
+                # repeats; queued calls must not pile up at the release)
+                _page._fw_wait_args = args
+                if getattr(_page, "_fw_waiting", False):
+                    return
+                _page._fw_waiting = True
+
+                def run_once(_p=_page):
+                    _p._fw_waiting = False
+                    if alive(_p) and current() is _p:
+                        _own(_p, *getattr(_p, "_fw_wait_args", ()))
+                after_click(run_once)
+            self.changed = changed
         self.build()
         try:
             _param_glyphs(self)             # toolglyph-1121
@@ -347,6 +420,15 @@ class ToolPage(QtWidgets.QWidget):
         """Opens the page's history entry (once)."""
         if not self._open:
             self._snapshot = _sketch_state(self.sketch)
+            self._deferred = None
+            if type(self).__name__ in KEEP_REDO_PAGES and not getattr(self, "_no_defer", False):
+                self._deferred = _deferred_start(self.sketch)
+            if self._deferred is not None:
+                # fix284 (item 8): with Redo waiting, any recorded change (even one aborted) wipes
+
+                # OK records the result as one step
+                self._open = True
+                return
             try:
                 # kept open past the command's own end: opened inside Activated (picks made first),
                 # FreeCAD closes a plain transaction when the command returns, so Cancel could not take it back
@@ -361,6 +443,14 @@ class ToolPage(QtWidgets.QWidget):
         history entry did not bring the sketch back (an edit committed it on the way: tester
         SK9-09 left a pattern, SK9-12 moved lines after Cancel), the sketch as it was when the
         work began is put back."""
+        if self._open and self._deferred is not None:
+            content, props = self._deferred
+            self._deferred = None
+            self._open = False
+            self._snapshot = None
+            _deferred_restore(self.sketch, content, props)
+            _refresh(self.sketch)
+            return
         if self._open:
             self.doc.abortTransaction()
             try:
@@ -406,6 +496,7 @@ class ToolPage(QtWidgets.QWidget):
         """Called by the check before the work is kept; a page may calculate here."""
 
     def accept(self):
+        self._deferred_commit()
         try:
             self.finish()
         except Exception as error:
@@ -421,6 +512,7 @@ class ToolPage(QtWidgets.QWidget):
 
     def leave(self):
         """The sketch closed under the page: keep its work, as the sketch's own edits are kept."""
+        self._deferred_commit()
         if self._open:
             try:
                 self.doc.commitTransaction()
@@ -437,6 +529,26 @@ class ToolPage(QtWidgets.QWidget):
     def closing(self):
         """The page goes away; subclasses drop their observers here."""
 
+    def _deferred_commit(self):
+        ""
+
+        if not (self._open and self._deferred is not None):
+            return
+        content, _props = self._deferred
+        try:
+            unchanged = self.sketch.dumpContent() == content[0]
+        except Exception:
+            unchanged = False
+        self._no_defer = True
+        try:
+            self.undo_work()                  # back as it was, unrecorded
+            if not unchanged:
+                type(self).changed(self)      # the same work again, now in the page's history step (at once: fix287)
+        except Exception as error:
+            App.Console.PrintWarning("FreeCAD: %s: %s\n" % (self.TITLE, error))
+        finally:
+            self._no_defer = False
+
 
 def _sketch_key(sketch):
     """What the sketch holds, to tell whether an undo brought it back."""
@@ -446,6 +558,78 @@ def _sketch_key(sketch):
                  for c in sketch.Constraints])
     except Exception:
         return None
+
+
+# fix284: the pages whose preview may work outside history while Redo waits (each rebuilds its work
+# in changed()): Esc in them leaves Undo and Redo as they were (tracker item 8)
+KEEP_REDO_PAGES = ("OffsetPage", "LinearPatternPage", "CircularPatternPage")
+
+
+def _deferred_start(sketch):
+    """fix284: (content, property names) of the sketch when the page may work outside history:
+    Redo is waiting and nothing is recorded yet. The command's own entry is closed first (it holds
+    nothing, so Redo stays). None: work in a history entry as before."""
+    try:
+        doc = sketch.Document
+        if not doc.RedoNames or doc.HasPendingTransaction:
+            return None
+        content = (sketch.dumpContent(), list(sketch.ExpressionEngine))
+        props = set(sketch.PropertiesList)
+        App.closeActiveTransaction()
+        if not doc.RedoNames:
+            return None
+        return content, props
+    except Exception as _fw_err:
+        _fw_log("sketchtoolpm.py:deferred", _fw_err)
+        return None
+
+
+def _restore_content(sketch, content, engine=None):
+    """restoreContent with the expression keeper (fwsketch.exprkeep) quiet: the content brings its own
+    expressions back, the keeper's re-mapping would be a stray "Delete" history step."""
+    try:
+        from .fwsketch import exprkeep
+        keeper = exprkeep._keeper
+    except Exception:
+        keeper = None
+    was = keeper.busy if keeper is not None else None
+    if keeper is not None:
+        keeper.busy = True
+    try:
+        want = dict(engine) if engine is not None else None
+        if want is not None:
+            # restoreContent leaves expressions set since the dump in place: take them out first,
+            # while the constraints they sit on are still there
+            for path, _expr in list(sketch.ExpressionEngine):
+                if path not in want:
+                    try:
+                        sketch.setExpression(path, None)
+                    except Exception as _fw_err:
+                        _fw_log("sketchtoolpm.py:deferred-expr", _fw_err)
+        sketch.restoreContent(content)
+        if want is not None:
+            have = dict(sketch.ExpressionEngine)
+            for path, expr in want.items():
+                if have.get(path) != expr:
+                    sketch.setExpression(path, expr)
+    finally:
+        if keeper is not None:
+            keeper.busy = was
+            keeper.before.pop(sketch, None)
+            keeper.pending.discard(sketch)
+
+
+def _deferred_restore(sketch, content, props):
+    """fix284: the sketch as it was when the page began, unrecorded (Redo stays)."""
+    try:
+        for name in set(sketch.PropertiesList) - set(props):
+            try:
+                sketch.removeProperty(name)                  # added by the preview (Edit Pattern's record)
+            except Exception as _fw_err:
+                _fw_log("sketchtoolpm.py:deferred-prop", _fw_err)
+        _restore_content(sketch, content[0], content[1])
+    except Exception as error:
+        App.Console.PrintWarning("FreeCAD: putting the sketch back: %s\n" % error)
 
 
 def _sketch_state(sketch):

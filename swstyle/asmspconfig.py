@@ -340,7 +340,7 @@ class ConfigSpeedPakPanel:
         if doc != self.doc.Name:
             return
         o = self.doc.getObject(obj)
-        QtCore.QTimer.singleShot(0, lambda: (self.pick(o, sub), Gui.Selection.clearSelection()))
+        from . import safe_later as _sl; _sl.later(0, lambda: (self.pick(o, sub), Gui.Selection.clearSelection()), self, "exclude_mode")
 
     def removeSelection(self, *a):
         pass

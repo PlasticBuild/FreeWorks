@@ -79,11 +79,14 @@ def guess(kinds):
 
 def _round_edge(obj, sub):
     """A circular (or elliptic) edge of a cylinder or cone face, for FreeCAD's axis of curvature."""
-    face = refplane.shape_of(obj, sub)
-    edges = [e for e in face.Edges if type(e.Curve).__name__ in ("Circle", "Ellipse")]
+    # one shape for the face and the edge list: an assembly component (App::Link) makes a new shape on
+    # each .Shape read, and isSame never matches across two of them (asmax-fix01)
+    whole = obj.Shape
+    face = whole.getElement(sub) if sub else None
+    edges = [e for e in face.Edges if type(e.Curve).__name__ in ("Circle", "Ellipse")] if face is not None else []
     if not edges or not sub:
         raise AxisError("The face has no round edge to take its axis from.")
-    for i, e in enumerate(obj.Shape.Edges):
+    for i, e in enumerate(whole.Edges):
         if any(e.isSame(x) for x in edges):
             return "Edge%d" % (i + 1)
     raise AxisError("The face has no round edge to take its axis from.")

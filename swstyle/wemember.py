@@ -532,7 +532,9 @@ def _custom_member(doc, obj, sketch, edge, row, group, off_start, off_end):
     label, _material, path, size = row
     face, points = custom_profile(path)
     face = face.copy()
-    face.translate(pierce_point(face, points, tuple(group.get("anchor", (1, 1)))) * -1)
+    pierce = group.get("pierce")
+    face.translate((App.Vector(pierce[0], pierce[1], 0) if pierce else
+                    pierce_point(face, points, tuple(group.get("anchor", (1, 1))))) * -1)
     src = doc.addObject("Part::Feature", "MemberProfile")
     src.Shape = face
     src.Label = "%s (%s)" % (label, src.Name)
@@ -797,10 +799,64 @@ def finish(doc):
             if m.TypeId != "Part::FeaturePython" or hasattr(m, "TrimmedBody") or hasattr(m, "Target"):
                 vo.Transparency = 0
                 vo.ShapeColor = (0.62, 0.65, 0.70)
+                _grey_later(m)
         except Exception as _fw_err:
             _fw_log("wemember.py:688", _fw_err)
     from . import wecutlist
     wecutlist.update(doc)
+
+
+def _grey_later(obj):
+    """Transfer material gives a tip the library material, whose appearance (Steel has no diffuse colour)
+    lands after the grey above and leaves the member black. The grey is put back once it has landed."""
+    name, docname = obj.Name, obj.Document.Name
+
+    def again():
+        try:
+            doc = App.getDocument(docname)
+            o = doc.getObject(name) if doc is not None else None
+            if o is not None and o.ViewObject is not None:
+                o.ViewObject.ShapeColor = (0.62, 0.65, 0.70)
+        except Exception as _fw_err:
+            _fw_log("wemember.py:grey_later", _fw_err)
+    try:
+        from PySide import QtCore
+        QtCore.QTimer.singleShot(0, again)
+    except Exception as _fw_err:
+        _fw_log("wemember.py:grey_later2", _fw_err)
+
+
+def _look(obj):
+    try:
+        return obj.ViewObject.ShapeAppearance if obj.ViewObject is not None else None
+    except Exception:
+        return None
+
+
+def _keep_look(obj, before):
+    """pkg448: a library material with no diffuse colour (Steel) turns the member black when it lands, now
+    or a moment later (a refresh after an End Cap or Gusset pick did it to every member): the look the
+    member had stays."""
+    if not before:
+        return
+    name, docname = obj.Name, obj.Document.Name
+
+    def back():
+        try:
+            doc = App.getDocument(docname)
+            o = doc.getObject(name) if doc is not None else None
+            vo = o.ViewObject if o is not None else None
+            if vo is not None and max(vo.ShapeAppearance[0].DiffuseColor[:3]) < 0.02 \
+                    and max(before[0].DiffuseColor[:3]) >= 0.02:
+                vo.ShapeAppearance = before
+        except Exception as _fw_err:
+            _fw_log("wemember.py:keep_look", _fw_err)
+    back()
+    try:
+        from PySide import QtCore
+        QtCore.QTimer.singleShot(0, back)
+    except Exception as _fw_err:
+        _fw_log("wemember.py:keep_look2", _fw_err)
 
 
 def _transfer(sm, body):
@@ -811,7 +867,9 @@ def _transfer(sm, body):
     mat = _library(material_of(sm, wetrim.base_of(body)))
     try:
         if mat is not None and body.ShapeMaterial.UUID != mat.UUID:
+            before = _look(body)
             body.ShapeMaterial = mat
+            _keep_look(body, before)       # pkg448
     except Exception as _fw_err:
         _fw_log("wemember.py:703", _fw_err)
 
@@ -1682,6 +1740,8 @@ class Panel:
         g["mirror"] = ("Horizontal", "Vertical")[max(0, self.mirror_axes.checkedId())] if self.mirror.isChecked() else ""
         g["rotation"] = self.rotation.value()
         a = max(0, self.anchors.checkedId())
+        if [a % 3, a // 3] != list(g.get("anchor", (1, 1))):
+            g.pop("pierce", None)       # a grid spot replaces a clicked sketch point
         g["anchor"] = [a % 3, a // 3]
         g["merge"] = self.merge.isChecked() and g["corner"] == "End Miter"
         g["merge_arcs"] = self.merge_arcs.isChecked()
@@ -1718,10 +1778,91 @@ class Panel:
 
     # ---------------------------------------------------------------- selection
     def addSelection(self, doc, name, sub, point):
+        if self.locate.isChecked() and point is not None:
+
+            p = App.Vector(*point)
+            QtCore.QTimer.singleShot(0, lambda: self._picked_locate(doc, name, sub, p))
+            return
         if self.active == "align":
             QtCore.QTimer.singleShot(0, lambda: self._picked_align(doc, name, sub))
         elif sub.startswith("Edge"):
             QtCore.QTimer.singleShot(0, lambda: self._picked(doc, name, sub))
+
+    def _picked_locate(self, doc_name, name, sub, point):
+        ""
+
+        try:
+            Gui.Selection.clearSelection()
+        except Exception as _fw_err:
+            _fw_log("wemember.py:locate-clear", _fw_err)
+        doc = App.getDocument(doc_name)
+        g = self.groups[self.current]
+        segs = {(s, e) for s, e in (tuple(x) for x in g["segments"])}
+        best = None
+        import Part
+        spot = Part.Vertex(point)
+        for o in doc.Objects:
+            try:
+                sup = o.AttachmentSupport if "AttachmentSupport" in o.PropertiesList else None
+                if not sup or o.TypeId != "Part::FeaturePython" or o.Shape.isNull():
+                    continue
+                key = (sup[0][0].Name, (sup[0][1] or ("",))[0])
+                if key not in segs:
+                    continue
+                d = o.Shape.distToShape(spot)[0]
+            except Exception:
+                continue
+            if best is None or d < best[0]:
+                best = (d, o)
+        if best is None or best[0] > 1.0:
+            return              # not on this group's members: wait for a click on the profile
+        o = best[1]
+        inv = o.Placement.inverse()
+        local = inv.multVec(point)
+        shape = o.Shape.copy()
+        shape.transformShape(inv.toMatrix(), True)
+        b = shape.BoundBox
+        if b.XLength < 1e-9 or b.YLength < 1e-9:
+            return
+        fx, fy = (local.x - b.XMin) / b.XLength, (local.y - b.YMin) / b.YLength
+        if g.get("mirror") == "Horizontal":
+            fx = 1 - fx
+        elif g.get("mirror") == "Vertical":
+            fy = 1 - fy
+        ax = min(2, max(0, int(round(2 * fx))))
+        ay = min(2, max(0, int(round(2 * fy))))
+        pierce = self._sketch_point(o, fx, fy)      # pkg462: a custom profile snaps to any of its sketch points
+        self.busy = True
+        try:
+            self.anchors.button(ay * 3 + ax).setChecked(True)
+            self.locate.setChecked(False)
+        finally:
+            self.busy = False
+        g["anchor"] = [ax, ay]
+        g.pop("pierce", None)
+        if pierce is not None:
+            g["pierce"] = pierce
+        self._settings_changed()
+
+    def _sketch_point(self, member, fx, fy):
+        """The custom profile's sketch point nearest the click (corners, arc centres, its named pierce points,
+        the sketch origin, the box spots), in the profile sketch's coordinates; None for a library profile."""
+        if getattr(member, "CustomProfile", None) is None:
+            return None
+        try:
+            row = find_size(self.obj.Standard, self.obj.Type, self.obj.Size)
+            face, points = custom_profile(row[2])
+        except Exception as _fw_err:
+            _fw_log("wemember.py:locate-custom", _fw_err)
+            return None
+        fb = face.BoundBox
+        x, y = fb.XMin + fx * fb.XLength, fb.YMin + fy * fb.YLength
+        spots = [(v.Point.x, v.Point.y) for v in face.Vertexes]
+        spots += [(e.Curve.Center.x, e.Curve.Center.y) for e in face.Edges if hasattr(e.Curve, "Center")]
+        spots += [tuple(p[:2]) for p in points.values()] + [(0.0, 0.0)]
+        spots += [(fb.XMin + fb.XLength * i / 2, fb.YMin + fb.YLength * j / 2) for i in range(3) for j in range(3)]
+        sx, sy = min(spots, key=lambda s: (s[0] - x) ** 2 + (s[1] - y) ** 2)
+        return [round(sx, 6), round(sy, 6)]
 
     def _picked_align(self, doc_name, name, sub):
         """Alignment: one straight edge, axis, plane or face; a second click on it takes it out."""

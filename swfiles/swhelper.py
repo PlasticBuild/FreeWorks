@@ -112,7 +112,7 @@ class _WindowHider:
                         self.seen.add(hwnd)
                         buf = ctypes.create_unicode_buffer(256)
                         user.GetWindowTextW(hwnd, buf, 256)
-                        stamp("hid SolidWorks window [%s]" % buf.value)
+                        stamp("hid the program window [%s]" % buf.value)
             except Exception:
                 pass
             time.sleep(0.015)
@@ -180,7 +180,7 @@ class Session:
         opts = 1 | (2 if read_only else 0)          # swOpenDocOptions_Silent | ReadOnly
         model = self.sw.OpenDoc6(path, 1, opts, "", err, warn)   # swDocPART
         if model is None:
-            raise RuntimeError("SolidWorks could not open %s (error %s)" % (os.path.basename(path), err.value))
+            raise RuntimeError("The other CAD program could not open %s (error %s)" % (os.path.basename(path), err.value))
         self.opened.append(model.GetTitle)
         return model, True
 
@@ -198,10 +198,10 @@ class Session:
     def save_as(self, model, out):
         err, warn = byref_int(), byref_int()
         if os.path.exists(out) and self.is_open(out):
-            raise RuntimeError("%s is open in SolidWorks; close it there first" % os.path.basename(out))
+            raise RuntimeError("%s is open in the other CAD program; close it there first" % os.path.basename(out))
         ok = model.Extension.SaveAs(out, 0, 1, NOTHING, err, warn)    # current version, silent
         if not ok or err.value:
-            raise RuntimeError("SolidWorks could not save %s (error %s)" % (os.path.basename(out), err.value))
+            raise RuntimeError("The other CAD program could not save %s (error %s)" % (os.path.basename(out), err.value))
         return warn.value
 
     def toggle_off(self, name):
@@ -239,10 +239,10 @@ class Session:
 
                 try:
                     os.kill(self.pid, 15)
-                    self.notes.append("SolidWorks stopped answering, so FreeCAD ended the hidden "
-                                      "SolidWorks it had started")
+                    self.notes.append("The other CAD program stopped answering, so FreeCAD ended the hidden "
+                                      "copy it had started")
                 except Exception as exc:
-                    self.notes.append("A hidden SolidWorks (process %s) may still be running: %s" % (self.pid, exc))
+                    self.notes.append("A hidden copy of the other CAD program (process %s) may still be running: %s" % (self.pid, exc))
 
 
 def _exited(pid, wait):
@@ -273,7 +273,7 @@ def job_tree(s, args):
     import sw_tree_export
     part = os.path.abspath(args[0])
     if s.is_open(part):
-        raise RuntimeError("%s is open in SolidWorks; its tree was not read" % os.path.basename(part))
+        raise RuntimeError("%s is open in the other CAD program; its tree was not read" % os.path.basename(part))
     tree = sw_tree_export.Exporter(s.sw).export(part)
     return {"tree": tree}
 
@@ -293,7 +293,7 @@ def _import_step(s, step):
         err = byref_int()
         model = s.sw.LoadFile4(step, "r", NOTHING, err)
         if model is None:
-            raise RuntimeError("SolidWorks could not import the shape (error %s)" % err.value)
+            raise RuntimeError("The other CAD program could not import the shape (error %s)" % err.value)
         s.opened.append(model.GetTitle)
         return model
     finally:
@@ -318,7 +318,7 @@ def save_part(s, step, out):
     model = _import_step(s, step)
     try:
         if model.GetType != 1:       # swDocPART: several solids can come in as an assembly
-            raise RuntimeError("the shape came into SolidWorks as an assembly, not a part")
+            raise RuntimeError("the shape came in as an assembly, not a part")
         _units_mm(s, model)
         model.ForceRebuild3(False)
         warnings = s.save_as(model, out)
@@ -344,7 +344,7 @@ def job_export_step(s, args):
         err, warn = byref_int(), byref_int()
         ok = model.Extension.SaveAs(step, 0, 1 | 2, NOTHING, err, warn)    # silent, copy
         if not ok or err.value or not os.path.isfile(step):
-            raise RuntimeError("SolidWorks could not write the shape of %s (error %s)"
+            raise RuntimeError("The other CAD program could not write the shape of %s (error %s)"
                                % (os.path.basename(part), err.value))
         return {"step": step}
     finally:
@@ -465,12 +465,12 @@ class Mater:
     def add(self, m):
         kind = m["kind"]
         if kind not in MATES:
-            return "SolidWorks has no %s mate here" % kind
+            return "This program has no %s mate here" % kind
         mtype = self.s.c(*MATES[kind])
         closest = self.s.c("swMateAlignCLOSEST", 2)
         dist = m.get("distance", 0.0) * M
         ang = math.radians(m.get("angle", 0.0))
-        why = "SolidWorks refused it"
+        why = "It was refused"
         for flip in ((False, True) if kind in ("Distance", "Angle") else (False,)):
             self.model.ClearSelection2(True)
             if kind == "Lock":
@@ -479,20 +479,20 @@ class Mater:
                 ok = all(self._select(r, i > 0) for i, r in enumerate(m["refs"]))
             if not ok:
                 self.model.ClearSelection2(True)
-                return "its faces or edges were not found in SolidWorks"
+                return "its faces or edges were not found in the model"
             err = byref_int()
             mate = self.model.AddMate5(mtype, closest, flip, dist, dist, dist, 1.0, 1.0, ang, ang, ang,
                                        False, bool(m.get("lock_rotation")), 0, err)
             self.model.ClearSelection2(True)
             if mate is None:
-                why = "SolidWorks refused it (error %s)" % err.value
+                why = "It was refused (error %s)" % err.value
                 continue
             value(self.model.EditRebuild3)
             if not self.moved():
                 return None
             self.model.EditUndo2(1)
             self.restore()
-            why = "SolidWorks would move a component to make it"
+            why = "It would need to move a component"
         return why
 
 
@@ -552,7 +552,7 @@ def job_save_asm(s, args):
     template = s.sw.GetUserPreferenceStringValue(s.c("swDefaultTemplateAssembly", 9))
     model = s.sw.NewDocument(template, 0, 0, 0)
     if model is None:
-        raise RuntimeError("SolidWorks could not make a new assembly (template %r)" % template)
+        raise RuntimeError("The other CAD program could not make a new assembly (template %r)" % template)
     s.opened.append(model.GetTitle)
     _units_mm(s, model)
     placed, loaded, comps = [], [], []
@@ -565,7 +565,7 @@ def job_save_asm(s, args):
                 loaded.append(doc)
             c = model.AddComponent5(comp["file"], 0, "", False, "", 0.0, 0.0, 0.0)
             if c is None:
-                raise RuntimeError("SolidWorks could not add %s" % os.path.basename(comp["file"]))
+                raise RuntimeError("The other CAD program could not add %s" % os.path.basename(comp["file"]))
             c.Transform2 = transform(s, comp["matrix"])
             placed.append(c.Name2)
             comps.append(c)
@@ -618,7 +618,7 @@ class TreeBuilder:
         template = s.sw.GetUserPreferenceStringValue(s.c("swDefaultTemplatePart", 8))
         self.model = s.sw.NewDocument(template, 0, 0, 0)
         if self.model is None:
-            raise RuntimeError("SolidWorks could not make a new part (template %r)" % template)
+            raise RuntimeError("The other CAD program could not make a new part (template %r)" % template)
         s.opened.append(self.model.GetTitle)
         _units_mm(s, self.model)
         self.planes = self._origin_planes()
@@ -1142,7 +1142,7 @@ class TreeBuilder:
             if got is True:
                 return self._named(feat, f)
             tried.append("outward %s: %s" % (outward, got))
-        raise TreeUnsupported("%s: SolidWorks' shell does not give FreeCAD's shape [%s]" % (f["name"], "; ".join(tried)))
+        raise TreeUnsupported("%s: the saved shell does not match FreeCAD's shape [%s]" % (f["name"], "; ".join(tried)))
 
     def _last_feature(self):
         try:
@@ -1174,7 +1174,7 @@ class TreeBuilder:
             if got is True:
                 return self._named(feat, f)
             tried.append("flip %s: %s" % (flip, got))
-        raise TreeUnsupported("%s: SolidWorks' draft does not give FreeCAD's shape [%s]" % (f["name"], "; ".join(tried)))
+        raise TreeUnsupported("%s: the saved draft does not match FreeCAD's shape [%s]" % (f["name"], "; ".join(tried)))
 
     def a_sweep(self, f):
         ""
@@ -1237,7 +1237,7 @@ class TreeBuilder:
         except Exception as exc:
             tried.append("definition: %s" % str(exc)[:80])
         self.debug.append("%s: %s" % (f["name"], "; ".join(tried)))
-        raise TreeUnsupported("SolidWorks did not make %s [%s]" % (f["name"], "; ".join(tried)))
+        raise TreeUnsupported("%s was not made [%s]" % (f["name"], "; ".join(tried)))
 
     def a_loft(self, f):
         """Additive/subtractive loft -> Lofted Boss/Cut through the profile sketches in order (mark 1)."""
@@ -1280,7 +1280,7 @@ class TreeBuilder:
             if got is True:
                 return self._named(feat, f)
             tried.append("flip %s: %s" % (flip, got))
-        raise TreeUnsupported("%s: SolidWorks' rib does not give FreeCAD's shape [%s]" % (f["name"], "; ".join(tried)))
+        raise TreeUnsupported("%s: the saved rib does not match FreeCAD's shape [%s]" % (f["name"], "; ".join(tried)))
 
     # ------------------------------------------------- dome, variable fillet, wrap, boundary
     def _new_feature(self, before):
@@ -1311,7 +1311,7 @@ class TreeBuilder:
             if got is True:
                 return self._named(feat, f)
             tried.append("reverse %s: %s" % (rev, got))
-        raise TreeUnsupported("%s: SolidWorks' dome does not give FreeCAD's shape [%s]" % (f["name"], "; ".join(tried)))
+        raise TreeUnsupported("%s: the saved dome does not match FreeCAD's shape [%s]" % (f["name"], "; ".join(tried)))
 
     @staticmethod
     def _cap_arc(r, h, elliptical):
@@ -1332,7 +1332,7 @@ class TreeBuilder:
         poly = f.get("polygon")
         if not poly or poly.get("continuous") or poly.get("point") or poly.get("direction") \
                 or f.get("reverse"):
-            raise TreeUnsupported("%s: SolidWorks' API cannot make this dome (a plain dome on one face only)"
+            raise TreeUnsupported("%s: this dome cannot be made through the API (a plain dome on one face only)"
                                   % f["name"])
         c, n, r, h = poly["center"], _unit(poly["normal"]), float(poly["radius"]), float(f["height"])
         if h <= 0 or r <= 0:
@@ -1368,8 +1368,8 @@ class TreeBuilder:
         feat = self.a_revolve({"name": f["name"] + "-Cap", "profile": cap, "angle": 360.0, "cut": True})
         got = self._attempt(feat, f)
         if got is True:
-            self.debug.append("%s: saved as an extrude and a revolved cut (SolidWorks' dome call stops "
-                              "SolidWorks)" % f["name"])
+            self.debug.append("%s: saved as an extrude and a revolved cut (the dome call stops "
+                              "the other CAD program)" % f["name"])
             return feat
         self._delete(boss)
         raise TreeUnsupported("%s: the dome extrude and cut do not give FreeCAD's shape (%s)" % (f["name"], got))
@@ -1379,7 +1379,7 @@ class TreeBuilder:
         if not disc and f.get("polygon"):
             return self._dome_polygon(f)
         if not disc:
-            raise TreeUnsupported("%s: SolidWorks' API cannot make this dome (only a round one, as a revolve)"
+            raise TreeUnsupported("%s: this dome cannot be made through the API (only a round one, as a revolve)"
                                   % f["name"])
         c, n, r, h = disc["center"], _unit(disc["normal"]), disc["radius"], float(f["height"])
         if h <= 0 or r <= 0:
@@ -1403,7 +1403,7 @@ class TreeBuilder:
         feat = self.a_revolve({"name": f["name"], "profile": name, "angle": 360.0, "cut": rev})
         got = self._attempt(feat, f)
         if got is True:
-            self.debug.append("%s: saved as a revolve (SolidWorks' dome call stops SolidWorks)" % f["name"])
+            self.debug.append("%s: saved as a revolve (the dome call stops the other CAD program)" % f["name"])
             return feat
         raise TreeUnsupported("%s: the dome revolve does not give FreeCAD's shape (%s)" % (f["name"], got))
 
@@ -1419,7 +1419,7 @@ class TreeBuilder:
             even = [100.0 * (k + 1) / (n_cp + 1) for k in range(n_cp)]
             if len(radii_cp) != n_cp or any(r <= 0 for r in radii_cp) or \
                     (where and (len(where) != n_cp or any(abs(a - b) > 0.5 for a, b in zip(sorted(where), even)))):
-                raise TreeUnsupported("%s: variable fillet control points SolidWorks cannot take (each point needs "
+                raise TreeUnsupported("%s: variable fillet control points the file cannot take (each point needs "
                                       "its own radius, evenly spaced)" % f["name"])
             points = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [r * M for r in radii_cp] * len(f["edges"]))
         rows = {"edges": [e["points"] for e in f["edges"]], "name": f["name"]}
@@ -1448,7 +1448,7 @@ class TreeBuilder:
                     raise
                 except Exception as exc:
                     tried.append("%s: %s" % (options, str(exc)[:60]))
-        raise TreeUnsupported("%s: SolidWorks' variable fillet does not give FreeCAD's shape [%s]"
+        raise TreeUnsupported("%s: the saved variable fillet does not match FreeCAD's shape [%s]"
                               % (f["name"], "; ".join(tried)))
 
     def _fillet_points(self, feat, f, n_cp, radii_cp):
@@ -1537,7 +1537,7 @@ class TreeBuilder:
                 if got is True:
                     return self._named(feat, f)
                 tried.append("marks %s rev %s: %s" % (marks, rev, got))
-        raise TreeUnsupported("%s: SolidWorks' wrap does not give FreeCAD's shape [%s]" % (f["name"], "; ".join(tried)))
+        raise TreeUnsupported("%s: the saved wrap does not match FreeCAD's shape [%s]" % (f["name"], "; ".join(tried)))
 
     def a_boundary(self, f):
         ""
@@ -1559,7 +1559,7 @@ class TreeBuilder:
                                                  0.0, 0, True, True, True, 0)
             got = self._attempt(feat, f)
             if got is True:
-                self.debug.append("%s: saved as a SolidWorks loft (no Boundary in the API)" % f["name"])
+                self.debug.append("%s: saved as a loft (no Boundary in the API)" % f["name"])
                 return self._named(feat, f)
             tried.append(str(got))
         raise TreeUnsupported("%s: a loft does not give FreeCAD's boundary shape [%s]" % (f["name"], "; ".join(tried)))
@@ -1572,7 +1572,7 @@ class TreeBuilder:
 
     def _named(self, feat, f):
         if feat is None:
-            raise TreeUnsupported("SolidWorks did not make %s" % f["name"])
+            raise TreeUnsupported("%s was not made" % f["name"])
         try:
             feat.Name = f["name"]
         except Exception:
@@ -1755,7 +1755,7 @@ class TreeBuilder:
                                 return self._named(feat, f)
                             tried.append("%s%s flip %d: %s (direction selected %s, %d selected)"
                                          % (d1[1], "/" + d2[1] if d2 else "", flip1, got, sel, count))
-            raise TreeUnsupported("%s: SolidWorks' linear pattern does not give FreeCAD's shape [%s]"
+            raise TreeUnsupported("%s: the saved linear pattern does not match FreeCAD's shape [%s]"
                                   % (f["name"], "; ".join(tried)))
         if kind == "circular":
             line = f.get("axis_line")
@@ -1774,7 +1774,7 @@ class TreeBuilder:
                     if got is True:
                         return self._named(feat, f)
                     tried.append("%s flip %d: %s (axis selected %s, %d selected)" % (label, flip, got, sel, count))
-            raise TreeUnsupported("%s: SolidWorks' circular pattern does not give FreeCAD's shape [%s]"
+            raise TreeUnsupported("%s: the saved circular pattern does not match FreeCAD's shape [%s]"
                                   % (f["name"], "; ".join(tried)))
         if kind == "mirror":
             plane = f.get("plane")
@@ -1795,7 +1795,7 @@ class TreeBuilder:
                 feat = fm.InsertMirrorFeature(whole, False, whole, False)
             got = self._attempt(feat, f)
             if got is not True:
-                raise TreeUnsupported("%s: SolidWorks' mirror does not give FreeCAD's shape [%s]" % (f["name"], got))
+                raise TreeUnsupported("%s: the saved mirror does not match FreeCAD's shape [%s]" % (f["name"], got))
             return self._named(feat, f)
         raise TreeUnsupported("%s: %s patterns are not made yet" % (f["name"], kind))
 
@@ -1804,10 +1804,10 @@ class TreeBuilder:
         for f in self.data["features"]:
             fn = getattr(self, "a_" + f.get("kind", "unsupported"), None)
             if fn is None:
-                raise TreeUnsupported("%s (%s) has no SolidWorks counterpart here" % (f["name"], f.get("type")))
+                raise TreeUnsupported("%s (%s) has no counterpart here" % (f["name"], f.get("type")))
             fn(f)
             if f.get("kind") not in ("sketch", "plane", "reference") and not self._volume_ok(f):
-                raise TreeUnsupported("after %s SolidWorks has %.1f mm3, FreeCAD %.1f"
+                raise TreeUnsupported("after %s the saved model has %.1f mm3, FreeCAD %.1f"
                                       % (f["name"], self.volume_mm3(), f["volume"]))
         self.model.ForceRebuild3(False)
 
@@ -1832,7 +1832,7 @@ def save_tree(s, data, step, out):
             tb.build()
             got = tb.volume_mm3()
             if want and abs(got - want) > 0.005 * want:
-                raise TreeUnsupported("SolidWorks' features give %.1f mm3, FreeCAD has %.1f" % (got, want))
+                raise TreeUnsupported("The saved features give %.1f mm3, FreeCAD has %.1f" % (got, want))
             warnings = s.save_as(tb.model, out)
             return {"file": out, "how": "tree", "warnings": warnings, "debug": tb.debug}
         finally:
@@ -1859,11 +1859,11 @@ def job_mates(s, args):
 
     path = os.path.abspath(args[0])
     if s.is_open(path):
-        raise RuntimeError("%s is open in SolidWorks; its mates were not read" % os.path.basename(path))
+        raise RuntimeError("%s is open in the other CAD program; its mates were not read" % os.path.basename(path))
     err, warn = byref_int(), byref_int()
     model = s.sw.OpenDoc6(path, 2, 1 | 2, "", err, warn)       # swDocASSEMBLY, silent + read-only
     if model is None:
-        raise RuntimeError("SolidWorks could not open %s (error %s)" % (os.path.basename(path), err.value))
+        raise RuntimeError("The other CAD program could not open %s (error %s)" % (os.path.basename(path), err.value))
     s.opened.append(model.GetTitle)
     types = _enum_names(s, "swMate", "[A-Z]+")
     refs = _enum_names(s, "swMateEntity2ReferenceType_")
@@ -1973,7 +1973,7 @@ def job_modify(s, args):
             row["new_mm"] = float(value(dim.SystemValue)) * 1000.0
         err, warn = byref_int(), byref_int()
         if not model.Save3(1, err, warn) or err.value:            # swSaveAsOptions_Silent
-            raise RuntimeError("SolidWorks could not save %s (error %s)" % (os.path.basename(path), err.value))
+            raise RuntimeError("The other CAD program could not save %s (error %s)" % (os.path.basename(path), err.value))
         if len(pairs) == 1 and "error" not in edits[0]:
             return {"feature": edits[0]["feature"], "old_mm": edits[0]["old_mm"], "new_mm": edits[0]["new_mm"]}
         return {"edits": edits}

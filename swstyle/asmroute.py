@@ -101,7 +101,7 @@ class ConnectionPoint:
                                 ("App::PropertyString", "PortID", "Port ID"),
                                 ("App::PropertyFloat", "Diameter", "Port diameter (mm)"),
                                 ("App::PropertyBool", "Flip", "Reverse the direction"),
-                                ("App::PropertyVector", "Position", "Centre (read only)"),
+                                ("App::PropertyVector", "Position", "Center (read only)"),
                                 ("App::PropertyVector", "Direction", "Outward direction (read only)")):
             if name not in props:
                 obj.addProperty(kind, name, "Connection Point", tip)
@@ -593,7 +593,7 @@ class ConnectionPointPanel(_Panel):
             return
         obj = self.doc.getObject(name)
         if obj is not None:
-            QtCore.QTimer.singleShot(0, lambda: self._add(obj, sub))
+            from . import safe_later as _sl; _sl.later(0, lambda: self._add(obj, sub), self, "pick")
 
     def _add(self, obj, sub):
         from . import refplane
@@ -803,7 +803,7 @@ class RoutePanel(_Panel):
             return
         obj = self.doc.getObject(name)
         if obj is not None:
-            QtCore.QTimer.singleShot(0, lambda: (self._add(obj, sub), self._show()))
+            from . import safe_later as _sl; _sl.later(0, lambda: (self._add(obj, sub), self._show()), self, "via_box")
 
     def _add(self, obj, sub):
         """A pick of a connection point's round edge (or the connection point in the tree)."""

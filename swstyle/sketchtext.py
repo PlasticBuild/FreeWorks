@@ -302,11 +302,29 @@ def _picked_point(sketch):
     return None
 
 
+def _text_picks(sketch):
+    ""
+
+    out = list(picked_geo_ids(sketch))
+    for sel in Gui.Selection.getSelectionEx():
+        if sel.Object != sketch:
+            continue
+        for sub in sel.SubElementNames:
+            if sub.startswith("Vertex"):
+                try:
+                    g, _pos = sketch.getGeoVertexIndex(int(sub[6:]) - 1)
+                except Exception:
+                    continue
+                if 0 <= g and g not in out:
+                    out.append(g)
+    return out
+
+
 def sketch_text():
     sketch = sketch_in_edit()
     if sketch is None:
         return None
-    picked = [block_of(sketch, i) for i in picked_geo_ids(sketch) if i < len(sketch.Geometry)]
+    picked = [block_of(sketch, i) for i in _text_picks(sketch) if i < len(sketch.Geometry)]
     block = next((b for b in picked if b is not None), None)
 
     try:
@@ -343,7 +361,7 @@ def dissolve_command():
     sketch = sketch_in_edit()
     if sketch is None:
         return 0
-    picked = [block_of(sketch, i) for i in picked_geo_ids(sketch) if i < len(sketch.Geometry)]
+    picked = [block_of(sketch, i) for i in _text_picks(sketch) if i < len(sketch.Geometry)]
     todo = []
     for b in picked:
         if b is not None and b not in todo:

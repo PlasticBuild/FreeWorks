@@ -168,8 +168,18 @@ def _along(view, target):
         return None
 
 
+def _mirrored(view, target, axis):
+    """True when view runs the other way along the aligned axis (a section seen from the far side): the model
+    origins of the two are not opposite each other, so the views are kept in line by their centres."""
+    try:
+        i = 2 if axis == "Horizontal" else 1
+        return D.view_frame(view)[i].dot(D.view_frame(target)[i]) < -0.5
+    except Exception:
+        return False
+
+
 def _offset(view, target, axis, by):
-    if by == "Origin":
+    if by == "Origin" and not _mirrored(view, target, axis):
         p, q = model_centre_on_sheet(view), model_centre_on_sheet(target)
     else:
         p, q = view_centre(view), view_centre(target)

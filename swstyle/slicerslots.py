@@ -52,7 +52,7 @@ class Slots(QtWidgets.QWidget):
         self.colours = [DEFAULT_COLOURS[0]]
         row = QtWidgets.QHBoxLayout()
         self.first = self._swatch(0)
-        row.addWidget(QtWidgets.QLabel("Colour of filament 1"))
+        row.addWidget(QtWidgets.QLabel("Color of filament 1"))
         row.addStretch(1)
         row.addWidget(self.first)
         self.lay.addLayout(row)
@@ -63,7 +63,7 @@ class Slots(QtWidgets.QWidget):
         self.add_button.setToolTip("Another filament slot, as the slicers' + beside the filament list")
         self.add_button.clicked.connect(lambda: self.add())
         self.ams_button = QtWidgets.QPushButton("Sync from AMS")
-        self.ams_button.setToolTip("Take the filaments and colours from the AMS of the printer connected in the Device tab")
+        self.ams_button.setToolTip("Take the filaments and colors from the AMS of the printer connected in the Device tab")
         self.ams_button.clicked.connect(self.sync_ams)
         buttons.addWidget(self.add_button)
         buttons.addWidget(self.ams_button)
@@ -98,7 +98,7 @@ class Slots(QtWidgets.QWidget):
         b = QtWidgets.QToolButton()
         b.setObjectName("SWStyle_SlicerSwatch")
         b.setFixedSize(26, 18)
-        b.setToolTip("Colour of this filament (click to change)")
+        b.setToolTip("Color of this filament (click to change)")
         b.clicked.connect(lambda _=False, i=index: self.pick_colour(i))
         self._paint(b, self.colours[index] if index < len(self.colours) else "#cccccc")
         return b
@@ -108,7 +108,7 @@ class Slots(QtWidgets.QWidget):
         button.setStyleSheet("QToolButton{background:%s;border:1px solid #666;}" % colour)
 
     def pick_colour(self, index):
-        c = QtWidgets.QColorDialog.getColor(QtGui.QColor(self.colours[index]), self, "Filament colour")
+        c = QtWidgets.QColorDialog.getColor(QtGui.QColor(self.colours[index]), self, "Filament color")
         if c.isValid():
             self.set_colour(index, c.name())
 

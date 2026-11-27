@@ -974,7 +974,7 @@ class _Command:
                    "inside, to the left what the box touches.")
         else:
             tip = ("Drag in the graphics area to pick with a free loop: clockwise picks what is wholly "
-                   "inside, anticlockwise what the loop touches.")
+                   "inside, counterclockwise what the loop touches.")
         return {"MenuText": "%s Selection" % self.kind, "ToolTip": tip, "Checkable": bulk() == self.kind,
                 "CmdType": "ForEdit"}
 

@@ -18,6 +18,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -57,7 +58,7 @@ def _alive(w):
 def _edited():
     try:
         vp = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument is not None else None
-        return vp.Object if vp is not None else None
+        return editobj.of(vp) if vp is not None else None
     except Exception:
         return None
 
@@ -353,17 +354,17 @@ class DirectionPick(QtCore.QObject):
 
     def waiting(self):
         return _alive(self.combo) and self.combo.currentIndex() == 1 and \
-            self.combo.currentText().startswith("Select reference")
+            self.combo.currentText().endswith(("\u2026", "..."))
 
     def sync(self, *args):
         if not (_alive(self.combo) and _alive(self.box)):
             return
         # FreeCAD shows its X/Y/Z direction and "Length along sketch normal" while it waits for
 
-        QtCore.QTimer.singleShot(0, self._hide_extras)
+        from . import safe_later as _sl; _sl.later(0, self._hide_extras, self, "box")
         QtCore.QTimer.singleShot(0, self._repair)
         text = self.combo.currentText()
-        normal = self.combo.currentIndex() == 0
+        normal = self.combo.currentIndex() == 0 or text.endswith(":N_Axis")     # dirbox-1127: the profile's normal
         self.box.setText("" if normal or self.waiting() else text)
         self.box.setStyleSheet(self.ACTIVE if self.waiting() else "")
 
@@ -458,7 +459,7 @@ def arrange(view):
 def _editing_type():
     try:
         edit = Gui.ActiveDocument.getInEdit()
-        return edit.Object.TypeId if edit is not None else None
+        return editobj.type_id(edit) if edit is not None else None
     except Exception:
         return None
 

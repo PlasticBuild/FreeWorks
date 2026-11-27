@@ -44,7 +44,7 @@ TIPS = {
         ("Round off edges", ("Fillet",)),
         ("Drill a hole", ("Hole",)),
         ("Hollow the part out", ("Shell",)),
-        ("Change the colour", ("EditAppearance",)),
+        ("Change the color", ("EditAppearance",)),
     ]),
     "sketch": ("Sketching", [
         ("Draw lines", ("Line",)),
@@ -231,7 +231,10 @@ class QuickTips(QtCore.QObject):
         if bar is None:
             return
         x = b.geometry().x()
+        # qmark-1127: the bar's own size grip always sits right of the ?: it does not count (it made the ? go
+        # and come back on every tick, moving the items left of it)
         if any(w is not b and w.isVisible() and w.parentWidget() is bar and w.geometry().x() > x
+               and not isinstance(w, QtWidgets.QSizeGrip)
                for w in bar.findChildren(QtWidgets.QWidget, options=Qt.FindDirectChildrenOnly)):
             bar.removeWidget(b)
             bar.addPermanentWidget(b)
@@ -265,6 +268,7 @@ class QuickTips(QtCore.QObject):
 def button():
     b = QtWidgets.QToolButton()
     b.setObjectName("SWQuickTipsButton")
+    b.setFocusPolicy(QtCore.Qt.ClickFocus)      # statusfocus-1127
     b.setAutoRaise(True)
     b.setCheckable(True)
     b.setText("?")

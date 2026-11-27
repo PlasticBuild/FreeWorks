@@ -13,6 +13,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -166,6 +167,8 @@ def _first_point(obj, sub, sketch):
 
 def start_on_face(obj, sub, spec=None):
     doc = obj.Document
+    if spec is not None:
+        _start[doc.Name] = len(doc.UndoNames)   # pkg463: the wizard's steps from here undo as one
     Gui.Selection.clearSelection()
     if obj.TypeId == SKETCH and not sub:
         # Positions with a sketch picked first: that sketch opens (its points are the holes)
@@ -199,17 +202,85 @@ def start_on_face(obj, sub, spec=None):
                 from . import holeposition
                 if _editing() is s:
                     holeposition.open_for(s, sp)
+
+
+                    Gui.runCommand("FreeWorks_Point", 0)
             except Exception as error:
                 App.Console.PrintWarning("FreeCAD: Hole Position page: %s\n" % error)
         QtCore.QTimer.singleShot(500, page)
+
+
+_start = {}     # pkg463: document name -> undo depth when the Hole Wizard's position sketch started
+_groups = {}    # document name -> {"hole", "extra", "state"}: the last Hole Wizard and its sketch steps
+
+
+def _one_step(doc, hole, extra):
+    ""
+
+
+    if extra <= 0 or not doc.UndoNames or doc.UndoNames[0] != "Hole Wizard":
+        _groups.pop(doc.Name, None)
+        return
+    _groups[doc.Name] = {"hole": hole.Name, "extra": extra, "state": "done"}
+    if not _observer:
+        _observer.append(_UndoWatch())
+        App.addDocumentObserver(_observer[0])
+
+
+_observer = []
+_busy = []
+
+
+def _steps(doc_name, kind, count):
+    doc = App.listDocuments().get(doc_name)
+    if doc is None:
+        return
+    _busy.append(1)
+    try:
+        for _i in range(count):
+            names = doc.UndoNames if kind == "undo" else doc.RedoNames
+            if not names:
+                break
+            doc.undo() if kind == "undo" else doc.redo()
+    except Exception as _fw_err:
+        _fw_log("holewizard.py:one-step", _fw_err)
+    finally:
+        _busy.pop()
+    try:
+        doc.recompute()
+    except Exception as _fw_err:
+        _fw_log("holewizard.py:one-step-recompute", _fw_err)
+
+
+class _UndoWatch:
+    def slotUndoDocument(self, doc):
+        g = _groups.get(doc.Name)
+        if _busy or g is None or g["state"] != "done":
+            return
+        if not doc.RedoNames or doc.RedoNames[0] != "Hole Wizard" or doc.getObject(g["hole"]) is not None:
+            _groups.pop(doc.Name, None)     # another step was undone: the group is gone
+            return
+        g["state"] = "undone"
+        QtCore.QTimer.singleShot(0, lambda n=doc.Name, k=g["extra"]: _steps(n, "undo", k))
+
+    def slotRedoDocument(self, doc):
+        g = _groups.get(doc.Name)
+        if _busy or g is None or g["state"] != "undone":
+            return
+        g["state"] = "done"
+        QtCore.QTimer.singleShot(0, lambda n=doc.Name, k=g["extra"]: _steps(n, "redo", k))
+
+    def slotDeletedDocument(self, doc):
+        _groups.pop(doc.Name, None)
+        _start.pop(doc.Name, None)
 
 
 def _editing():
     try:
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
-        if edit is not None and edit.Object.TypeId == SKETCH:
-            return edit.Object
+        if edit is not None and editobj.type_id(edit) == SKETCH:
+            return editobj.of(edit)
     except Exception as _fw_err:
         _fw_log("holewizard.py:204", _fw_err)
     return None
@@ -254,6 +325,9 @@ def _tick():
             _fw_log("holewizard.py:244", _fw_err)
         if spec is not None:
             hole = holespec.make(sketch, spec)
+            base = _start.pop(doc.Name, None)
+            if hole is not None and base is not None:
+                _one_step(doc, hole, len(doc.UndoNames) - 1 - base)
             if hole is not None:
                 Gui.Selection.clearSelection()
                 Gui.Selection.addSelection(hole)

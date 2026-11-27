@@ -543,7 +543,7 @@ class Panel:
     def addSelection(self, doc, name, sub, point):
         if sub.startswith("Face"):
             at = App.Vector(*point) if point else None
-            QtCore.QTimer.singleShot(0, lambda: self._picked(doc, name, sub, at))
+            from . import safe_later as _sl; _sl.later(0, lambda: self._picked(doc, name, sub, at), self, "auto")
 
     def _picked(self, doc_name, name, sub, at):
         try:

@@ -534,7 +534,7 @@ class SmartFeaturesPanel(_Panel):
             return
         obj = self.asm.Document.getObject(name)
         if obj is not None:
-            QtCore.QTimer.singleShot(0, lambda: self.pick(obj, sub))
+            from . import safe_later as _sl; _sl.later(0, lambda: self.pick(obj, sub), self, "auto")
 
     def _sync_auto(self):
         on = self.smart is not None and bool(sizes_of(self.smart))

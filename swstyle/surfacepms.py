@@ -9,6 +9,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -788,7 +789,7 @@ class SurfaceRevolve(_Feature):
         centre = base + d * r.dot(d)
         radius = (c - centre).Length
         if radius < 1e-9:
-            raise ValueError("The profile's centre is on the axis.")
+            raise ValueError("The profile's center is on the axis.")
         circle = Part.makeCircle(radius, centre, d)
         points = [v.Point for v in face.section(circle).Vertexes]
         angles = [self._turn(c, p, base, d) for p in points]
@@ -814,6 +815,28 @@ def centerline(links):
             a, b = pl.multVec(lines[0].StartPoint), pl.multVec(lines[0].EndPoint)
             return a, (b - a).normalize()
     return None
+
+
+def _sharp_corner(edges, angle=1.0):
+    """True when the path turns at a point (a 3D sketch route with square corners): there the
+    sweep needs a corner transition or the profile crosses itself."""
+    import math
+    limit = math.cos(math.radians(angle))
+    for a, b in zip(edges, edges[1:]):
+        try:
+            ends = [(pa, pb) for pa in (a.FirstParameter, a.LastParameter) for pb in (b.FirstParameter, b.LastParameter)
+                    if (a.valueAt(pa) - b.valueAt(pb)).Length < 1e-6]
+            if not ends:
+                continue
+            pa, pb = ends[0]
+            ta, tb = a.tangentAt(pa), b.tangentAt(pb)
+            if ta.Length < 1e-12 or tb.Length < 1e-12:
+                continue
+            if abs(ta.normalize().dot(tb.normalize())) < limit:
+                return True
+        except Exception as _fw_err:
+            _fw_log("surfacepms.py:sharp", _fw_err)
+    return False
 
 
 class SurfaceSweep(_Feature):
@@ -886,6 +909,8 @@ class SurfaceSweep(_Feature):
             # Start/End tangency Path Tangent: the profile is turned square to the path where it starts
 
             square = "Path Tangent" in (obj.StartTangency, obj.EndTangency)
+            if _sharp_corner(edges):
+                maker.setTransitionMode(1)      # right corner: a mitred turn, not a self-crossing twist
             maker.add(profile, False, square)
             maker.build()
             shape = maker.shape()
@@ -2112,8 +2137,8 @@ class SurfaceRuled(_Feature):
         _prop(obj, "App::PropertyBool", "AlternateFace", "Alternate Face: measure from the other face at each edge", False)
         _prop(obj, "App::PropertyLinkSubList", "Vector", "Reference Vector: an edge, axis or face normal")
         _prop(obj, "App::PropertyAngle", "Angle", "Angle to the reference vector (Tapered to Vector)", 10.0)
-        _prop(obj, "App::PropertyBool", "TrimKnit", "Trim and knit the surfaces of neighbouring edges", True)
-        _prop(obj, "App::PropertyBool", "Connecting", "Connecting surface: fill the corner between neighbouring strips", True)
+        _prop(obj, "App::PropertyBool", "TrimKnit", "Trim and knit the surfaces of neighboring edges", True)
+        _prop(obj, "App::PropertyBool", "Connecting", "Connecting surface: fill the corner between neighboring strips", True)
 
     def execute(self, obj):
         picks = [(o, sub) for o, sub in items(obj.Edges) if sub]
@@ -2267,6 +2292,12 @@ for _cls in FEATURES.values():
         _cls.execute = _waiting_execute(_cls.execute)
 ICONS = {"SurfaceRuled": "Part_RuledSurface", "SurfaceExtrude": "Part_Extrude", "SurfaceRevolve": "Part_Revolve", "SurfaceSweep": "Part_Sweep",
          "SurfaceLoft": "Part_Loft", "SurfaceKnit": "Part_Shapebuilder", "SurfaceOffset": "Part_Offset"}
+
+# FW_<key>), not FreeCAD's command icon: with no pack Part_Loft and the like resolve to nothing and the header fell back
+# to a lettered tile ("SL")
+PM_ICONS = {"SurfaceRuled": "FW_RuledSurface", "SurfaceExtrude": "FW_ExtrudedSurface", "SurfaceRevolve": "FW_RevolvedSurface",
+            "SurfaceSweep": "FW_SweptSurface", "SurfaceLoft": "FW_LoftedSurface", "SurfaceKnit": "FW_KnitSurface",
+            "SurfaceOffset": "FW_OffsetSurface"}
 # the links whose whole sketches the feature uses up: hidden on OK and shown under it in the tree
 CONSUMED = {"SurfaceExtrude": ("Profile",), "SurfaceRevolve": ("Profile",), "SurfaceSweep": ("Profile", "Path"),
             "SurfaceLoft": ("Profiles",), "SurfaceKnit": ("Surfaces",), "SurfaceOffset": (), "SurfaceRuled": ()}
@@ -2435,7 +2466,7 @@ class Panel:
             p.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
         first = self.pages[0]
         first.setProperty("swstyle_pm_title", self.TITLE)
-        first.setProperty("swstyle_pm_icon", ICONS[self.KIND])
+        first.setProperty("swstyle_pm_icon", PM_ICONS.get(self.KIND, ICONS[self.KIND]))
         self.note = QtWidgets.QLabel("")
         self.note.setObjectName("SWSurfNote")
         self.note.setWordWrap(True)
@@ -3025,6 +3056,21 @@ class SweepPanel(Panel):
         self.boxes["DirectionVector"].setVisible(o.Twist == "Specify Direction Vector")
 
 
+def _SurfaceDragSketch(box, obj, base):
+    """loftsweep's Drag Sketch on a Surface-Loft: its profile sketches are the Profiles list (its Sections
+    property is the centerline section count, not a list of profiles)."""
+    class Drag(base):
+        def profiles(self):
+            f = self.feature()
+            out = []
+            for item in (getattr(f, "Profiles", None) or []) if f is not None else []:
+                o = item[0] if isinstance(item, tuple) else item
+                if o is not None and o.TypeId == "Sketcher::SketchObject" and o not in out:
+                    out.append(o)
+            return out
+    return Drag(box, obj)
+
+
 class LoftPanel(SweepPanel):
     TITLE = "Surface-Loft"
     KIND = "SurfaceLoft"
@@ -3111,6 +3157,14 @@ class LoftPanel(SweepPanel):
         spin.valueChanged.connect(lambda v: self.set("Sections", int(v)))
         lay.addWidget(spin)
         self.fields["Sections"], self.fields["SectionsLabel"] = spin, label
+
+        # Undo sketch drag), between Centerline Parameters and Options
+        lay = self.page("Sketch Tools")
+        try:
+            from . import loftsweep
+            self.drag_sketch = _SurfaceDragSketch(lay.parentWidget(), self.obj, loftsweep._DragSketch)
+        except Exception as _fw_err:
+            _fw_log("surfacepms.py:loft sketch tools", _fw_err)
         lay = self.page("Options")
         self.check(lay, "MergeTangent", "Merge tangent faces")
         self.check(lay, "Close", "Close loft")
@@ -3537,6 +3591,28 @@ def _solid_features(body):
     return [o for o in body.Group if o.TypeId.startswith("PartDesign::") and o.TypeId not in skip]
 
 
+def _hide_row(obj):
+    """ShowInTree off, now and once the tree has made the row (set before that, FreeCAD's tree still
+    listed the row)."""
+    if not App.GuiUp:
+        return
+
+    def hide(doc=obj.Document.Name, name=obj.Name):
+        try:
+            o = App.getDocument(doc).getObject(name)
+            if o is not None and o.ViewObject is not None and o.ViewObject.ShowInTree:
+                o.ViewObject.ShowInTree = False
+        except Exception as _fw_err:
+            _fw_log("surfacepms.py:hide_row", _fw_err)
+    hide()
+    try:
+        from PySide import QtCore
+        QtCore.QTimer.singleShot(0, hide)
+        QtCore.QTimer.singleShot(500, hide)
+    except Exception as _fw_err:
+        _fw_log("surfacepms.py:hide_row", _fw_err)
+
+
 def solid_into_body(obj):
     ""
 
@@ -3563,6 +3639,16 @@ def solid_into_body(obj):
     try:
         body.BaseFeature = obj
         doc.recompute()
+
+        # solid in Solid Bodies is named after it (surface run 11-27). The base row takes the knit's
+        # name (invisible spaces keep it unique) and leaves the tree.
+        for base in [o for o in body.Group if o.TypeId == "PartDesign::FeatureBase"]:
+            try:
+                from . import multibody
+                multibody._set_label(base, obj.Label)
+                _hide_row(base)
+            except Exception as _fw_err:
+                _fw_log("surfacepms.py:knit_base", _fw_err)
         if App.GuiUp:
             try:
                 Gui.ActiveDocument.ActiveView.setActiveObject("pdbody", body)
@@ -3694,8 +3780,8 @@ def _open_sketch():
     try:
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
-        if edit is not None and edit.Object.TypeId == "Sketcher::SketchObject":
-            return edit.Object
+        if edit is not None and editobj.type_id(edit) == "Sketcher::SketchObject":
+            return editobj.of(edit)
     except Exception as _fw_err:
         _fw_log("surfacepms.py:3141", _fw_err)
     return None

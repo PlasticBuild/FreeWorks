@@ -477,6 +477,17 @@ class PathLengthPage(sketchtoolpm.ToolPage):
         self.entities = []               # nothing more for the check to make
         self.accept()
 
+    def closing(self):
+        """fix286: the pick observer goes with the page (one leaked per Path Length use before)."""
+        observer = getattr(self, "observer", None)
+        if observer is not None:
+            try:
+                Gui.Selection.removeObserver(observer)
+            except Exception as _fw_err:
+                _fw_log("pathlength.py:closing", _fw_err)
+            observer.page = None
+        super().closing()
+
     def finish(self):
         value = None if self.driven.isChecked() else self.value.value()
         if self.existing is not None:

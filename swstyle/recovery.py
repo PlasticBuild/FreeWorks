@@ -112,6 +112,11 @@ class _Observer:
     def slotDeletedDocument(self, doc):
         _state["dirty"].discard(doc.Name)
         _state["written"].pop(doc.Name, None)
+        try:
+            from . import optionsextras2        # fh230: its Auto-recover folder copy goes with it
+            optionsextras2.drop_recovery_copy(doc.Name)
+        except Exception as _fw_err:
+            _fw_log("recovery.py:drop_copy", _fw_err)
 
 
 def own_saver_needed():
@@ -122,8 +127,23 @@ def own_saver_needed():
     return start is None or start != (True, minutes())
 
 
+def busy():
+    """fh259: a document is being opened or rebuilt. FreeCAD lets timers run then (not clicks): a recovery
+    copy written mid-open held half the document, and closing or reloading one then ended FreeCAD."""
+    try:
+        restoring = getattr(App, "isRestoring", None)
+        if restoring is not None and restoring():
+            return True     # fh259-v2: the application is restoring (a document may still say idle)
+        return any(getattr(d, "Restoring", False) or getattr(d, "Recomputing", False)
+                   for d in App.listDocuments().values())
+    except Exception:
+        return True         # fh259-v2: state unknown: the timer work waits for a later pass
+
+
 def tick():
     """One pass of the saver: the documents changed since their last write, if their interval passed."""
+    if busy():
+        return []           # fh259: written on a later pass, once the open or the rebuild is over
     if not own_saver_needed():
         _state["active"] = False
         return []
@@ -226,7 +246,41 @@ def candidates(temp=None):
             continue
         out.append({"folder": folder, "label": meta["label"] or n, "file": meta["file"], "data": data,
                     "time": os.path.getmtime(data), "status": meta["status"], "held": meta.get("held", False)})
+    out += _folder_candidates(out)
     out.sort(key=lambda c: -c["time"])
+    return out
+
+
+def _folder_candidates(found):
+    ""
+
+    out = []
+    try:
+        from . import optionsextras2
+        root = optionsextras2.recover_folder()
+        session_file = optionsextras2.SESSION_FILE
+    except Exception:
+        return out
+    if not root:
+        return out
+    have = {(c["label"], os.path.normcase(c["file"] or "")) for c in found}
+    for n in sorted(os.listdir(root)):
+        folder = os.path.join(root, n)
+        try:
+            pid = int(open(os.path.join(folder, session_file)).read().strip())
+        except (OSError, ValueError):
+            continue                  # not a copy this add-on wrote (or one written before fh230)
+        if _pid_alive(pid):
+            continue                  # a FreeCAD still running (this one too)
+        meta = _meta(folder)
+        data = _data(folder)
+        if meta is None or data is None:
+            continue
+        label = meta["label"] or n
+        if (label, os.path.normcase(meta["file"] or "")) in have:
+            continue                  # the same work is still in the temp folder
+        out.append({"folder": folder, "label": label, "file": meta["file"], "data": data,
+                    "time": os.path.getmtime(data), "status": meta["status"], "held": meta.get("held", False)})
     return out
 
 
@@ -236,6 +290,18 @@ def hold_for_task_pane(temp=None):
 
 
     n = 0
+    for c in candidates(temp):
+        if c["status"] == "Recovered":
+            # fh199: recovered in an earlier session. FreeCAD's own recovery box took the unknown status for
+            # Corrupted at the next start; saved since: the data goes; not saved: it is offered again
+            try:
+                saved = c["file"] and os.path.isfile(c["file"]) and os.path.getmtime(c["file"]) > c["time"]
+            except OSError:
+                saved = False
+            if saved:
+                remove(c)
+            else:
+                _set_status(c["folder"], "Created")
     for c in candidates(temp):
         if c["status"] == "Created" and not c.get("held"):
             _set_status(c["folder"], HELD, held=True)
@@ -291,6 +357,15 @@ def recover(c):
         doc.recompute()
         for o in doc.Objects[:1]:
             o.touch()                 # the work is not saved yet
+        if App.GuiUp:
+            # fh199: and the window says so (title *, Save, the close prompt). cleanopen clears the modified
+            # mark a file gets while it opens: this document is left to the user
+            from . import cleanopen
+            for watcher in Gui.getMainWindow().findChildren(QtCore.QObject):
+                if isinstance(watcher, cleanopen.CleanOpen):
+                    watcher.made.add(doc.Name)
+                    watcher.watch.pop(doc.Name, None)
+            Gui.getDocument(doc.Name).Modified = True
     except Exception as error:
         App.Console.PrintLog("FreeCAD: recovered %s: %s\n" % (c["label"], error))
     _set_status(c["folder"], "Recovered")
@@ -317,6 +392,15 @@ class Page(QtWidgets.QWidget):
         self.list.setObjectName("SWDocumentRecoveryList")
         self.list.setHeaderLabels(["Document", "Saved", "Status"])
         self.list.setRootIsDecorated(False)
+        try:
+            # fh199: Saved and Status whole in the narrow pane ("Not recovered" was cut off), the name takes the rest
+            head = self.list.header()
+            head.setStretchLastSection(False)
+            head.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
+            for col in (1, 2):
+                head.setSectionResizeMode(col, QtWidgets.QHeaderView.ResizeToContents)
+        except Exception as _fw_err:
+            _fw_log("recovery.py:columns", _fw_err)
         self.list.itemDoubleClicked.connect(lambda *_: self.open_selected())
         self.list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._menu)
@@ -347,7 +431,7 @@ class Page(QtWidgets.QWidget):
         if self.items:
             self.list.setCurrentItem(self.list.topLevelItem(0))
         for b in (self.open_button, self.remove_button):
-            b.setEnabled(bool(self.items))
+            b.setVisible(bool(self.items))      # no greyed buttons: with nothing to recover there are none
 
     def _picked(self):
         rows = sorted({self.list.indexOfTopLevelItem(i) for i in self.list.selectedItems()})

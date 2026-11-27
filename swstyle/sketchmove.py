@@ -26,6 +26,7 @@ def _fw_log(site, err):
 
 import FreeCAD as App
 import FreeCADGui as Gui
+import Part
 from PySide import QtCore, QtWidgets
 from . import unitbox
 
@@ -184,12 +185,63 @@ def move(sketch, entities, placement, keep_relations=False):
                                    lambda g, pos: _geo_point(new[g], pos) if g in new else None)
         for i in reversed(own):
             sketch.delConstraint(i)
+    ties = _outside_ties(sketch, entities) if keep_relations else []
     geos = geomkeep.read(sketch)
     for g, geo in new.items():
         geos[g] = geo
     sketch.Geometry = geos
     _add_relations(sketch, turned)
+    _follow_ties(sketch, new, ties)
     sketch.solve()
+
+
+def _outside_ties(sketch, entities):
+    """fix302: (inside geo, pos, outside geo, pos) for each Coincident from a moved entity's point to an
+    entity not moved (the origin and axes stay put)."""
+    inside, out = set(entities), []
+    for c in sketch.Constraints:
+        if c.Type != "Coincident" or c.First is None or c.Second is None:
+            continue
+        a, b = (c.First, c.FirstPos), (c.Second, c.SecondPos)
+        if a[0] in inside and b[0] not in inside and b[0] >= 0:
+            out.append(a + b)
+        elif b[0] in inside and a[0] not in inside and a[0] >= 0:
+            out.append(b + a)
+    return out
+
+
+def _follow_ties(sketch, new, ties):
+    ""
+
+    if not ties:
+        return
+    geos = geomkeep.read(sketch)
+    moved = False
+    for g_in, p_in, g_out, p_out in ties:
+        try:
+            at = _geo_point(new[g_in], p_in) if g_in in new else None
+            geo = geos[g_out]
+            if at is None:
+                continue
+            at = App.Vector(at.x, at.y, 0)
+            if isinstance(geo, Part.LineSegment) and p_out in (1, 2):
+                a, b = (at, geo.EndPoint) if p_out == 1 else (geo.StartPoint, at)
+                if (a - b).Length > 1e-9:
+                    geo = geo.clone()
+                    if p_out == 1:
+                        geo.StartPoint = at
+                    else:
+                        geo.EndPoint = at
+                    geos[g_out] = geo
+                    moved = True
+            elif isinstance(geo, Part.Point):
+                geo = geo.clone(); geo.X, geo.Y = at.x, at.y
+                geos[g_out] = geo
+                moved = True
+        except Exception as _fw_err:
+            _fw_log("sketchmove.py: follow", _fw_err)
+    if moved:
+        sketch.Geometry = geos
 
 
 def copy(sketch, entities, placement, keep_relations=False):
@@ -197,19 +249,31 @@ def copy(sketch, entities, placement, keep_relations=False):
 
 
 
+
+
     C = dimtools._constraint
     from .fwsketch import helpers as _helpers
-    if keep_relations:
-        entities = _helpers.with_helpers(sketch, entities)
+    entities = _helpers.with_helpers(sketch, entities)
     first_geo = sketch.GeometryCount
     new = _turned(sketch, entities, placement)
     mapping = {g: sketch.addGeometry(geo, sketch.getConstruction(g)) for g, geo in new.items()}
     cons = []
+    outside = []
     for c in list(sketch.Constraints):
         refs = _refs(c)
         if not refs or not any(r in mapping for r in refs) or c.Type in ("InternalAlignment", "Block"):
             continue
-        if not keep_relations or any(r not in mapping for r in refs):
+        if any(r not in mapping for r in refs):
+            if keep_relations and c.Type in _OUTSIDE_KEEP and not (c.Name or "").startswith("SWBlock:"):
+                args = [c.Type]
+                for geo, pos in ((c.First, c.FirstPos), (c.Second, c.SecondPos), (c.Third, c.ThirdPos)):
+                    if geo is None or geo <= -2000:
+                        break
+                    args += [mapping.get(geo, geo), pos]
+                try:
+                    outside.append(C(*_tidy(args)))
+                except Exception as _fw_err:
+                    _fw_log("sketchmove.py:copy outside", _fw_err)
             continue
         if (c.Name or "").startswith("SWBlock:"):      # a block's hidden hold: not the copy's (reviewer 11-19)
             continue
@@ -226,8 +290,7 @@ def copy(sketch, entities, placement, keep_relations=False):
             cons.append((C(*_tidy(args)), c.Driving, ""))
         except Exception as _fw_err:
             _fw_log("sketchmove.py:115", _fw_err)
-    if keep_relations:
-        cons += _block_hv(sketch, mapping)
+    cons += _block_hv(sketch, mapping)
     if cons and _quarter(placement)[0] != 0:
         copies = set(mapping.values())
         turning = [x for x in cons if x[0].Type in _TURNING and all(r in copies for r in _refs(x[0]))]
@@ -236,7 +299,53 @@ def copy(sketch, entities, placement, keep_relations=False):
     _add_relations(sketch, cons)
     _helpers.hide_new(sketch, first_geo)
     sketch.solve()
+    if outside:
+        _add_if_copy_only(sketch, outside, set(mapping.values()))
     return mapping
+
+
+_OUTSIDE_KEEP = ("Coincident", "PointOnObject", "Tangent", "Parallel", "Perpendicular", "Equal", "Collinear",
+                 "Horizontal", "Vertical", "Symmetric")
+
+
+def _where(geo):
+    out = []
+    for name in ("StartPoint", "EndPoint", "Center"):
+        v = getattr(geo, name, None)
+        if v is not None:
+            out += [v.x, v.y]
+    for name in ("X", "Y", "Radius", "MajorRadius", "MinorRadius"):
+        v = getattr(geo, name, None)
+        if isinstance(v, float):
+            out.append(v)
+    return out
+
+
+def _add_if_copy_only(sketch, items, copies):
+    """fix310: each relation from the copy to the rest of the sketch stays only when, solved, nothing but
+    the copy moved (and the sketch still solves)."""
+    def bad():
+        return len(sketch.ConflictingConstraints) + len(sketch.RedundantConstraints)
+    sketch.solve()
+    base = bad()
+    for c in items:
+        before = {g: _where(geo) for g, geo in enumerate(sketch.Geometry) if g not in copies}
+        try:
+            i = sketch.addConstraint(c)
+        except Exception as _fw_err:
+            _fw_log("sketchmove.py:copy keep", _fw_err)
+            continue
+        ok = sketch.solve() == 0 and bad() <= base
+        if ok:
+            geos = sketch.Geometry
+            ok = all(len(v) == len(_where(geos[g])) and all(abs(a - b) < 1e-6 for a, b in zip(v, _where(geos[g])))
+                     for g, v in before.items())
+        if not ok:
+            try:
+                sketch.delConstraint(i)
+                sketch.solve()
+            except Exception as _fw_err:
+                _fw_log("sketchmove.py:copy drop", _fw_err)
 
 
 def _block_hv(sketch, mapping):
@@ -528,16 +637,15 @@ class _FreeClick(QtCore.QObject):
             return point
 
     def _on_point(self):
-        """The pointer is over a sketch point: the selection hands that one over exactly. A page
-        with a picked() of its own (Stretch) takes a line's end from the selection as well."""
+        """The pointer is over a sketch point: the selection hands that one over exactly."""
         try:
             pre = Gui.Selection.getPreselection()
             subs = [sub.split(".")[-1] for sub in getattr(pre, "SubElementNames", ())]
         except Exception:
             return False
-        own_lines = type(self.page).picked is not _EntitiesPage.picked
-        return any(sub.startswith("Vertex") or sub == "RootPoint" or (own_lines and sub.startswith("Edge"))
-                   for sub in subs)
+        # fix288: a line under the pointer gives the point under the pointer on every page (Stretch
+        # took the line's start for its base point)
+        return any(sub.startswith("Vertex") or sub == "RootPoint" for sub in subs)
 
     def eventFilter(self, obj, event):
         if not isinstance(event, QtCore.QEvent):
@@ -685,9 +793,9 @@ class CopyPage(MovePage):
     def build(self):
         super().build()
 
-        # Never the relations to the rest of the sketch (coordinator decision 11-19)
-        self.keep.setToolTip("On: the relations among the copied entities are copied. "
-                             "Off: the copy has no relations")
+        # those to the rest of the sketch that move only the copy
+        self.keep.setToolTip("On: the copy also keeps its relations to the rest of the sketch that move only the copy. "
+                             "Off: only the relations among the copied entities are copied")
 
 
 class RotatePage(_EntitiesPage):
@@ -698,15 +806,17 @@ class RotatePage(_EntitiesPage):
     TRANSACTION = "Rotate Entities"
 
     def parameters(self, g):
-        self.centre_note = QtWidgets.QLabel("Center of rotation: pick a point, or type it.", g.body)
+        self.centre_note = QtWidgets.QLabel("Center of rotation: pick a point.", g.body)
         self.centre_note.setWordWrap(True)
         g.content.addWidget(self.centre_note)
         form = QtWidgets.QFormLayout()
+
+        # starting at 0 (16-minute guide 8:20); the centre boxes stay as hidden holders
         self.cx = self.number(g, 0.0, " mm", -1e6, 1e6, "Center X")
         self.cy = self.number(g, 0.0, " mm", -1e6, 1e6, "Center Y")
-        self.angle = self.number(g, _params().GetFloat("Angle", 90.0), "°", -360.0, 360.0, "Angle")
-        form.addRow("Center X:", self.cx)
-        form.addRow("Center Y:", self.cy)
+        self.cx.hide()
+        self.cy.hide()
+        self.angle = self.number(g, 0.0, "°", -360.0, 360.0, "Angle")
         form.addRow("Angle:", self.angle)
         g.content.addLayout(form)
         self._centre_picked = False
@@ -735,6 +845,13 @@ class RotatePage(_EntitiesPage):
         self._filling = False
         self.centre_note.setText("Rotate Point Defined")
         self.changed()
+
+        QtCore.QTimer.singleShot(0, self._angle_focus)
+
+    def _angle_focus(self):
+        if alive(self.angle):
+            self.angle.setFocus(QtCore.Qt.OtherFocusReason)
+            self.angle.selectAll()
 
     def placement(self):
         return App.Placement(App.Vector(), App.Rotation(App.Vector(0, 0, 1), self.angle.value()),
@@ -834,11 +951,25 @@ def scale(sketch, entities, centre, factor, copies=0):
         break_outside_relations(sketch, entities)
         scale_in_place(sketch, list(entities), centre, factor)
         return {}
-    made = {}
-    for k in range(1, copies + 1):
-        mapping = copy(sketch, entities, App.Placement(), False)
-        scale_in_place(sketch, list(mapping.values()), centre, factor ** k)
-        made[k] = mapping
+    # every copy first, then all of them scaled in one Geometry write: a Geometry write reads back
+    # stale until the next recompute, so scaling copy by copy put the first copy back at full size
+    # (fix282: Scale Copy x0.5, 2 copies gave R10 and R2.5)
+    made = {k: copy(sketch, entities, App.Placement(), False) for k in range(1, copies + 1)}
+    c = App.Vector(centre[0], centre[1], 0)
+    out = geomkeep.read(sketch)
+    for k, mapping in made.items():
+        for g in mapping.values():
+            out[g] = _scaled_geo(out[g], c, factor ** k)
+        # fix310: the copy keeps its own relations; its length dimensions scale with it (as scale_in_place)
+        mine = set(mapping.values())
+        for i, d in enumerate(sketch.Constraints):
+            if d.Type in _LENGTHS and d.Driving and _refs(d) and all(r in mine for r in _refs(d)):
+                try:
+                    sketch.setDatum(i, App.Units.Quantity(d.Value * factor ** k, App.Units.Length))
+                except Exception as _fw_err:
+                    _fw_log("sketchmove.py:scale copy dims", _fw_err)
+    sketch.Geometry = out
+    sketch.solve()
     return made
 
 

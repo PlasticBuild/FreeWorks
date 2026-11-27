@@ -297,6 +297,84 @@ def notes(fp):
     return out
 
 
+NOTE_INK = (0.1, 0.1, 0.1)
+NOTE_INK_DARK = (0.82, 0.82, 0.82)  # off the part on a dark viewport, or on a dark face
+_ink_hooked = False
+
+
+def _lum(rgb):
+    def lin(c):
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (lin(float(c)) for c in tuple(rgb)[:3])
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _ground(fp, at):
+    """The colour under a note: the flat face's when the note sits on the part, else None."""
+    try:
+        if fp is None or at is None or fp.ViewObject is None:
+            return None
+        shape = fp.Shape
+        if shape.isNull():
+            return None
+        box = shape.BoundBox
+        box.enlarge(0.5)
+        if not box.isInside(at):
+            return None
+        try:
+            if shape.Faces and min(f.distToShape(Part.Vertex(at))[0] for f in shape.Faces) > 0.5:
+                return None         # inside the box but over a cut-out
+        except Exception:
+            pass                    # OCC could not measure: the box says it is on the part
+        vo = fp.ViewObject
+        if "ShapeAppearance" in vo.PropertiesList and vo.ShapeAppearance:
+            return tuple(vo.ShapeAppearance[0].DiffuseColor)[:3]
+        return tuple(vo.ShapeColor)[:3]
+    except Exception as _fw_err:
+        _fw_log("smflatdisplay.py:ground", _fw_err)
+        return None
+
+
+def note_ink(fp=None, at=None):
+    ""
+
+
+    try:
+        ground = _ground(fp, at)
+        if ground is not None:
+            return NOTE_INK if _lum(ground) > 0.18 else NOTE_INK_DARK
+        from . import style
+        return NOTE_INK_DARK if style.viewport_dark() else NOTE_INK
+    except Exception as _fw_err:
+        _fw_log("smflatdisplay.py:note_ink_pick", _fw_err)
+        return NOTE_INK
+
+
+def _reink(*_args):
+    """Theme or scene switched: every bend note takes the ink for what it stands on."""
+    for doc in App.listDocuments().values():
+        for o in doc.Objects:
+            try:
+                vo = o.ViewObject if "SWBendNoteOf" in o.PropertiesList else None
+                ink = note_ink(doc.getObject(o.SWBendNoteOf), o.Position) if vo is not None else None
+                if vo is not None and "TextColor" in vo.PropertiesList and tuple(vo.TextColor)[:3] != ink:
+                    vo.TextColor = ink
+            except Exception as _fw_err:
+                _fw_log("smflatdisplay.py:reink", _fw_err)
+
+
+def _hook_ink():
+    global _ink_hooked
+    if _ink_hooked:
+        return
+    try:
+        from . import style
+        style.signals.theme_changed.connect(_reink)
+        _ink_hooked = True
+    except Exception as _fw_err:
+        _fw_log("smflatdisplay.py:hook_ink", _fw_err)
+
+
 def _notes(fp, doc):
     rows = notes(fp)
     old = [o for o in doc.Objects if getattr(o, "SWBendNoteOf", "") == fp.Name]
@@ -317,6 +395,14 @@ def _notes(fp, doc):
         a.Label = "Bend Note%d" % (k + 1)
         if a.ViewObject is not None:
             a.ViewObject.Visibility = fp.ViewObject.Visibility if fp.ViewObject is not None else True
+            try:
+
+                _hook_ink()
+                ink = note_ink(fp, at)
+                if "TextColor" in a.ViewObject.PropertiesList and tuple(a.ViewObject.TextColor)[:3] != ink:
+                    a.ViewObject.TextColor = ink
+            except Exception as _fw_err:
+                _fw_log("smflatdisplay.py:note_ink", _fw_err)
         a.purgeTouched()
 
 

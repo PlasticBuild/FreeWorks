@@ -28,7 +28,7 @@ def read(asm, links, path):
         from swstyle import asmcore
     except Exception:
         return 0, 0, ["mates not made: FreeCAD's assemblies (swstyle) are not installed"]
-    res = swapp.run("mates", [path], "Reading the mates from SolidWorks...")
+    res = swapp.run("mates", [path], "Reading the mates...")
     notes = list(res.get("errors", []))
     made = 0
     total = len(res.get("mates", []))
@@ -57,10 +57,10 @@ def make(asmcore, asm, links, row):
     if kind is None:
         return "%s mates are not made in FreeCAD yet" % row["type"].title()
     if row.get("suppressed"):
-        return "suppressed in SolidWorks, so it was left out"
+        return "suppressed in the file, so it was left out"
     ents = row["entities"]
     if len(ents) != 2:
-        return "SolidWorks gave %d sides for it" % len(ents)
+        return "The other CAD program gave %d sides for it" % len(ents)
     refs = []
     for e in ents:
         link = _link(links, e["component"])

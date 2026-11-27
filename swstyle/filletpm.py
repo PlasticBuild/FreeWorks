@@ -115,6 +115,8 @@ PARAMS = paths.PARAM_PATH + "/FilletChamfer"     # shared with filletchamfer.py 
 FILLET, CHAMFER = "PartDesign::Fillet", "PartDesign::Chamfer"
 SHELL, DRAFT = "PartDesign::Thickness", "PartDesign::Draft"
 PREVIEWS = ("Full preview", "Partial preview", "No preview")
+
+PARTIAL_SHOWN = (("Distance Offset", "Distance"), ("Distance Offset Percentage", "Percentage"))
 FILLET_TYPES = (    # (tooltip, icon family, command): Constant Size is this page
     ("Constant Size Fillet", "FEATURES_FILLET", None),
     ("Variable Size Fillet", "FEATURES_VARIABLE_FILLET", "SWStyle_VariableFillet"),
@@ -922,6 +924,22 @@ LIGHT_TOGGLE = ("QToolButton { color: #1e1e1e; background: #ffffff; border: 1px 
                 " QToolButton:disabled { color: #9a9a9a; background: transparent; border-color: transparent; }")
 
 
+def _xpert_title(tabs, index):
+    ""
+
+    try:
+        page = tabs
+        while page is not None and not page.property("swstyle_pm_title"):
+            page = page.parentWidget()
+        if page is None:
+            return
+        manual = page.property("fw_manual_title") or page.property("swstyle_pm_title")
+        page.setProperty("fw_manual_title", manual)
+        page.setProperty("swstyle_pm_title", tabs.tabText(index) if index == 1 else manual)
+    except Exception as _fw_err:
+        _fw_log("filletpm.py:xpert-title", _fw_err)
+
+
 def _xpert_tabs(tabs):
     """Manual | FilletXpert (DraftXpert): two joined buttons centred under the check and cross, the
     current one pressed (fillettypes-1121, desktop recording 2026-10-25)."""
@@ -938,6 +956,7 @@ def _xpert_tabs(tabs):
         " QTabBar::tab:first:!selected { border-left: 1px solid %s; }"
         " QTabBar::tab:selected:!first { border-left: 0px; }" % (text, back, line, down, line))
     tabs.setProperty("fw_xpert_tabs", True)
+    tabs.currentChanged.connect(lambda index, tabs=tabs: _xpert_title(tabs, index))
     bar = tabs.parentWidget()
     if bar is not None:
         bar.setFixedHeight(tabs.sizeHint().height() + 8)     # right under the check and cross, no gap
@@ -1011,8 +1030,8 @@ class _LengthSpin(QtWidgets.QDoubleSpinBox):
             return None
         try:
             return float(text) * _LengthSpin._unit()[0]
-        except ValueError as _fw_err:
-            _fw_log("filletpm.py:853", _fw_err)
+        except ValueError:
+            pass            # "0.00mm": not a bare number, a quantity with its unit (next)
         try:
             q = App.Units.Quantity(text)
             if q.Unit == App.Units.Length:
@@ -1150,6 +1169,19 @@ class DressUpPanel:
     """What Fillet and Chamfer share: the items, the feature, the preview, check and cross."""
 
     TYPE = None
+    NUMBERED_TITLE = False
+
+    def _new_title(self, doc):
+        ""
+        if not self.NUMBERED_TITLE:
+            return self.TITLE
+        try:
+            from . import naming
+            return naming.next_label(doc, self.TITLE)
+        except Exception as _fw_err:
+            _fw_log("filletpm.py:new-title", _fw_err)
+            return self.TITLE
+
     TITLE = None
     ICON = None
     ITEMS = None
@@ -1195,7 +1227,7 @@ class DressUpPanel:
             doc.openTransaction("Edit " + feature.Label if feature is not None else self.UNDO)
         self.form = self.make_boxes()
         first = self.form[0]
-        first.setProperty("swstyle_pm_title", feature.Label if feature is not None else self.TITLE)
+        first.setProperty("swstyle_pm_title", feature.Label if feature is not None else self._new_title(doc))
         first.setProperty("swstyle_pm_icon", self.ICON)
         self.message = QtWidgets.QLabel("", first)
         self.message.setObjectName("SWDressUpMessage")
@@ -1801,7 +1833,7 @@ class DressUpPanel:
         self._preview_cancelled = True
         try:
             self.overlay.show_preview([])
-            Gui.getMainWindow().statusBar().showMessage("Preview cancelled", 3000)
+            Gui.getMainWindow().statusBar().showMessage("Preview canceled", 3000)
         except Exception as _fw_err:
             _fw_log("filletpm.py:1543", _fw_err)
 
@@ -1982,7 +2014,16 @@ class DressUpPanel:
         if self.converted:
             return True
         self._take_typed()
-        if self.missing():
+        need = self.missing()
+        if need:
+
+            # in its red message (OK with nothing picked said nothing here)
+            try:
+                self.message.setText(need)
+                self.message.setStyleSheet("color: #c00000;")
+                self.message.setVisible(True)
+            except Exception as _fw_err:
+                _fw_log("filletpm.py:accept_missing", _fw_err)
             return False
         if not self.ok and getattr(self, "_brep_fail", False) and self.try_passes(self.feature):
             self.update()       # OpenCascade refused the edges in one go: made in passes (multiradius)
@@ -2371,31 +2412,48 @@ class FilletPanel(DressUpPanel):
     def _partial_box(self):
         from . import setbackfillet
         e = self.edit if self.edit is not None and setbackfillet.is_setback_fillet(self.edit) else None
-        box = _box("Partial Edge Parameters", collapsed=e is None or (getattr(e, "PartialStart", "None") == "None"
-                                                                       and getattr(e, "PartialEnd", "None") == "None"))
+
+        box = _box("Partial Edge Parameters", collapsed=False)
         self.partial = {}
+        self.partial_tick = QtWidgets.QCheckBox("Partial Edge Parameters", box)
+        self.partial_tick.setObjectName("SWFilletPartialOn")   # pmlayout puts it in the group title
+        self.partial_tick.setToolTip("Partial Edge Parameters: the fillet runs only part of the edge")
+        self.partial_tick.setChecked(e is not None and (getattr(e, "PartialStart", "None") != "None"
+                                                        or getattr(e, "PartialEnd", "None") != "None"))
+        self.partial_tick.toggled.connect(self._partial_ticked)
+        box.layout().addWidget(self.partial_tick)
+
+        # condition list (Distance Offset first) over its value; the feature keeps FreeCAD's names
+
         for end in ("Start", "End"):
-            row = QtWidgets.QHBoxLayout()
+            label = QtWidgets.QLabel("%s condition:" % end, box)
+            label.setObjectName("SWFilletPartial%sLabel" % end)
+            box.layout().addWidget(label)
             kind = QtWidgets.QComboBox(box)
             kind.setObjectName("SWFilletPartial%s" % end)
-            kind.addItems(list(setbackfillet.PARTIAL_CONDITIONS))
-            kind.setToolTip("%s condition" % end)
-            kind.setCurrentText(str(getattr(e, "Partial" + end, "None")) if e is not None else "None")
+            kind.addItems([shown for shown, _stored in PARTIAL_SHOWN])
+            kind.setToolTip("%s condition: an offset from the %s of the edge, in mm or in %% of its length"
+                            % (end, "start" if end == "Start" else "end"))
+            stored = str(getattr(e, "Partial" + end, "None")) if e is not None else "None"
+            kind.setCurrentIndex(1 if stored == "Percentage" else 0)
             value = QtWidgets.QDoubleSpinBox(box)
             value.setObjectName("SWFilletPartial%sValue" % end)
             value.setRange(0.0, 1e6)
             value.setDecimals(2)
+            value.setKeyboardTracking(False)      # taken when the typing ends (Enter, Tab, OK)
             value.setValue(float(getattr(e, "Partial%sValue" % end, 0.0)) if e is not None else 0.0)
-            row.addWidget(kind, 1)
-            row.addWidget(value, 1)
-            box.layout().addLayout(row)
+            box.layout().addWidget(kind)
+            box.layout().addWidget(value)
             self.partial[end] = (kind, value)
             kind.activated.connect(lambda i: self._partial_changed())
-            value.valueChanged.connect(lambda v: self._partial_changed())
+            typed = set()       # the user typed in it (the value arrives once the focus has gone); used once
+            value.lineEdit().textEdited.connect(lambda text, s=typed: s.add(1))
+            value.valueChanged.connect(lambda v, w=value, s=typed: self._partial_value(w, s))
+            value.editingFinished.connect(lambda s=typed: QtCore.QTimer.singleShot(0, s.clear))
         self.partial_flip = QtWidgets.QCheckBox("Flip edge direction", box)
         self.partial_flip.setObjectName("SWFilletPartialFlip")
         self.partial_flip.setChecked(bool(getattr(e, "PartialFlip", False)) if e is not None else False)
-        self.partial_flip.toggled.connect(lambda on: self._partial_changed())
+        self.partial_flip.toggled.connect(lambda on: self._partial_changed(self.partial_flip.hasFocus()))
         box.layout().addWidget(self.partial_flip)
         self.partial_note = QtWidgets.QLabel("Pick one edge for a partial edge fillet.", box)
         self.partial_note.setWordWrap(True)
@@ -2403,24 +2461,55 @@ class FilletPanel(DressUpPanel):
         self._partial_rows()
         return box
 
+    def partial_kind(self, end):
+        """The stored condition of one end (FreeCAD's name): None while the title box is off."""
+        parts = getattr(self, "partial", None) or {}
+        tick = getattr(self, "partial_tick", None)
+        if end not in parts or tick is None or not alive(tick) or not tick.isChecked():
+            return "None"
+        return PARTIAL_SHOWN[max(0, parts[end][0].currentIndex())][1]
+
     def _partial_rows(self):
         for kind, value in self.partial.values():
-            value.setVisible(kind.currentText() != "None")
-            value.setSuffix(" %" if kind.currentText() == "Percentage" else " mm")
+            value.setSuffix(" %" if kind.currentIndex() == 1 else " mm")
         on = self.partial_on(False)
-        self.partial_flip.setVisible(on)
         self.partial_note.setVisible(on and not self.partial_on())
 
-    def _partial_changed(self):
+    def _partial_value(self, w, typed):
+        """A value changed: by the user (the field has the focus, or its typing just ended) or by code
+        (pmlast's last OK'd values, an edit opening). The typing counts once, then is forgotten."""
+        by_user = w.hasFocus() or bool(typed)
+        typed.clear()
+        self._partial_changed(by_user)
+
+    def _partial_changed(self, typed=False):
+        """A condition or a value changed. Never greyed (NO DEAD CONTROLS): a value the user types
+        while the title box is off ticks it, as they clearly want a partial edge (typed: the field
+        had the focus; the last OK'd values put back by pmlast do not tick it)."""
+        tick = getattr(self, "partial_tick", None)
+        if typed and tick is not None and alive(tick) and not tick.isChecked() and any(
+                v.value() > 0 for _k, v in self.partial.values()):
+            self._partial_syncing = True
+            try:
+                tick.setChecked(True)
+            finally:
+                self._partial_syncing = False
         self._partial_rows()
         self.update()
+
+    def _partial_ticked(self, on):
+        """The title check box: on runs the fillet between the two offsets, off along the whole edge."""
+        parts = getattr(self, "partial", None) or {}
+        if getattr(self, "_partial_syncing", False) or any(not alive(k) for k, _v in parts.values()):
+            return
+        self._partial_changed()
 
     def partial_on(self, one_edge=True):
         """A start or end condition is set (and, with one_edge, the items are a single edge)."""
         parts = getattr(self, "partial", None)
         if not parts or any(not alive(k) for k, _v in parts.values()):
             return False
-        if all(k.currentText() == "None" for k, _v in parts.values()):
+        if all(self.partial_kind(end) == "None" for end in parts):
             return False
         if not one_edge:
             return True
@@ -2959,7 +3048,7 @@ class FilletPanel(DressUpPanel):
             if "PartialStart" in f.PropertiesList and getattr(self, "partial", None):
                 on = self.partial_on()
                 for end, (kind, value) in self.partial.items():
-                    setattr(f, "Partial" + end, kind.currentText() if on else "None")
+                    setattr(f, "Partial" + end, self.partial_kind(end) if on else "None")
                     setattr(f, "Partial%sValue" % end, float(value.value()))
                 f.PartialFlip = self.partial_flip.isChecked()
             return
@@ -3504,6 +3593,7 @@ class ShellPanel(DressUpPanel):
 
     TYPE = SHELL
     TITLE = "Shell"
+    NUMBERED_TITLE = True
     ICON = "FEATURES_SHELL"
     UNDO = "Shell"
     FACES_ONLY = True
@@ -3799,6 +3889,7 @@ class _MultiList(QtWidgets.QListWidget):
         self.setFixedHeight(70)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._menu)
+        self.setProperty("swpickbox", True)
 
     def _menu(self, pos):
         try:
@@ -3929,6 +4020,7 @@ class DraftPanel(DressUpPanel):
 
     TYPE = DRAFT
     TITLE = "Draft"
+    NUMBERED_TITLE = True
     ICON = "FEATURES_DRAFT"
     UNDO = "Draft"
     FACES_ONLY = True

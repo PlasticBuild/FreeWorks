@@ -91,6 +91,12 @@ def dependents(objs, page):
         for d in o.InListRecursive:
             if d in items and d not in out:
                 out.append(d)
+
+    # their view (SWView / SWHatchView) instead of linking it, so InList misses them (bug hunt round 15)
+    names = {o.Name for o in out if _is_view(o)}
+    for d in items:
+        if d not in out and (getattr(d, "SWView", "") in names or getattr(d, "SWHatchView", "") in names):
+            out.append(d)
     return out
 
 
@@ -389,6 +395,8 @@ def _owned(event):
             return "delete"
         if k == Qt.Key_Escape:
             return "escape"
+        if k == Qt.Key_T:
+            return "overgeometry"
     if ctrl and k == Qt.Key_A:
         return "all"
     if ctrl and k == Qt.Key_C:
@@ -465,6 +473,10 @@ class SheetKeys(QtCore.QObject):
             if t in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseMove, QtCore.QEvent.MouseButtonRelease):
                 gv = obj.parent() if isinstance(obj, QtWidgets.QWidget) else None
                 if isinstance(gv, QtWidgets.QGraphicsView) and obj is gv.viewport() and _page_of(gv) is not None:
+                    if id(gv) not in RULERS and rulers_on():
+                        add_rulers(gv)
+                    if OVER["on"]:
+                        return self.over_event(gv, event)
                     if PAN["on"]:
                         return self.pan_event(gv, event)
                     return _drag().handle(obj, event)
@@ -496,6 +508,36 @@ class SheetKeys(QtCore.QObject):
             App.Console.PrintWarning("FreeCAD: sheet key: %s\n" % error)
             return False
 
+    def over_event(self, gv, event):
+        """Select over Geometry (T): the next drag draws a selection box even when it starts on a view or an
+        annotation (left to right: the items wholly inside; right to left: the items it touches)."""
+        t = event.type()
+        pos = event.pos() if hasattr(event, "pos") else event.position().toPoint()
+        if t == QtCore.QEvent.MouseButtonPress:
+            if event.button() != Qt.LeftButton:
+                set_over(False)
+                return True
+            OVER["from"] = pos
+            band = QtWidgets.QRubberBand(QtWidgets.QRubberBand.Rectangle, gv.viewport())
+            band.setGeometry(QtCore.QRect(pos, QtCore.QSize()))
+            band.show()
+            OVER["band"] = band
+            return True
+        if t == QtCore.QEvent.MouseMove and OVER.get("from") is not None:
+            if OVER.get("band") is not None:
+                OVER["band"].setGeometry(QtCore.QRect(OVER["from"], pos).normalized())
+            return True
+        if t == QtCore.QEvent.MouseButtonRelease and OVER.get("from") is not None:
+            a = D.to_sheet(gv.mapToScene(OVER["from"]))
+            b = D.to_sheet(gv.mapToScene(pos))
+            page = _page_of(gv)
+            if page is not None:
+                box_select(page, a, b, crossing=pos.x() < OVER["from"].x(),
+                           add=bool(event.modifiers() & (Qt.ControlModifier | Qt.ShiftModifier)))
+            set_over(False)
+            return True
+        return False
+
     def pan_event(self, gv, event):
         t = event.type()
         if t == QtCore.QEvent.MouseButtonPress:
@@ -503,11 +545,16 @@ class SheetKeys(QtCore.QObject):
                 set_pan(False)                     # a right-click ends Pan, as Esc does
                 return True
             PAN["from"] = event.globalPos() if hasattr(event, "globalPos") else event.globalPosition().toPoint()
+            if PAN.get("mode") == "zoom":
+                remember(gv)                       # Previous View goes back to the zoom before the drag
             return True
         if t == QtCore.QEvent.MouseMove and PAN.get("from") is not None:
             now = event.globalPos() if hasattr(event, "globalPos") else event.globalPosition().toPoint()
             d = now - PAN["from"]
             PAN["from"] = now
+            if PAN.get("mode") == "zoom":
+                zoom_drag(gv, d.y())
+                return True
             gv.horizontalScrollBar().setValue(gv.horizontalScrollBar().value() - d.x())
             gv.verticalScrollBar().setValue(gv.verticalScrollBar().value() - d.y())
             return True
@@ -523,10 +570,19 @@ class SheetKeys(QtCore.QObject):
                 pan(gv, dx, -dy)
         elif name == "delete":
             delete(page)
+        elif name == "overgeometry":
+            set_over(not OVER["on"])
         elif name == "escape":
-            if PAN["on"]:
+            if OVER["on"]:
+                set_over(False)
+            elif PAN["on"]:
                 set_pan(False)
             else:
+                try:        # a dimension moved by code would write a "Drag Dimension" step as it is let go
+                    from . import drawdimtools
+                    drawdimtools.settle_labels(page)
+                except Exception as _fw_err:
+                    _fw_log("drawkeys.py:escsettle", _fw_err)
                 Gui.Selection.clearSelection()
         elif name == "all":
             select_all(page)
@@ -547,22 +603,319 @@ class SheetKeys(QtCore.QObject):
             drawdocprops.release(page.Document)
 
 
-PAN = {"on": False, "from": None}
+PAN = {"on": False, "from": None, "mode": "pan"}
 
 
-def set_pan(on):
-    PAN["on"], PAN["from"] = bool(on), None
+def set_pan(on, mode="pan"):
+    ""
+
+    PAN["on"], PAN["from"], PAN["mode"] = bool(on), None, mode if on else "pan"
     page = D.active_page()
     gv = D.page_view(page) if page is not None else None
     if gv is not None:
         if on:
-            gv.viewport().setCursor(Qt.OpenHandCursor)
+            gv.viewport().setCursor(Qt.SizeVerCursor if mode == "zoom" else Qt.OpenHandCursor)
         else:
             gv.viewport().unsetCursor()
 
 
+OVER = {"on": False, "from": None, "band": None}
+
+
+def set_over(on):
+    """Select over Geometry (T) on a sheet: on for the next drag."""
+    OVER["on"], OVER["from"] = bool(on), None
+    band = OVER.get("band")
+    OVER["band"] = None
+    if band is not None:
+        try:
+            band.hide()
+            band.deleteLater()
+        except Exception as _fw_err:
+            _fw_log("drawkeys.py:over band", _fw_err)
+    page = D.active_page()
+    gv = D.page_view(page) if page is not None else None
+    if gv is not None:
+        if on:
+            gv.viewport().setCursor(Qt.CrossCursor)
+        else:
+            gv.viewport().unsetCursor()
+
+
+def box_select(page, a, b, crossing=False, add=False):
+    """The sheet's views and annotations in the box from a to b (sheet mm): wholly inside, or touching it when
+    crossing. Returns the items picked."""
+    from . import drawmenu
+    x0, x1 = sorted((a[0], b[0]))
+    y0, y1 = sorted((a[1], b[1]))
+    got = []
+    for o in sheet_items(page):
+        try:
+            bb = drawmenu.view_box(o)
+        except Exception:
+            bb = None
+        if not bb:
+            continue
+        inside = x0 <= bb[0] and bb[2] <= x1 and y0 <= bb[1] and bb[3] <= y1
+        touch = not (bb[2] < x0 or bb[0] > x1 or bb[3] < y0 or bb[1] > y1)
+        if inside or (crossing and touch):
+            got.append(o)
+    if not add:
+        Gui.Selection.clearSelection()
+    for o in got:
+        Gui.Selection.addSelection(page.Document.Name, o.Name)
+    return got
+
+
+def set_zoom(on):
+    set_pan(on, "zoom")
+
+
+def zoom_drag(gv, dy):
+    """Zoom In/Out by a drag of dy pixels (up: in), about the middle of the window."""
+    k = 1.01 ** (-dy)
+    anchor = gv.transformationAnchor()
+    gv.setTransformationAnchor(QtWidgets.QGraphicsView.AnchorViewCenter)
+    gv.scale(k, k)
+    gv.setTransformationAnchor(anchor)
+    return k
+
+
 def zoom_about_center():
     return App.ParamGet(PARAM).GetBool("ZoomAboutScreenCenter", False)
+
+
+# =========================================================================== View > User Interface > Rulers
+RULER_W = 18
+UNIT_MM = {"mm": 1.0, "cm": 10.0, "m": 1000.0, "in": 25.4, "ft": 304.8, "um": 0.001}
+RULERS = {}                  # id(page view) -> (top ruler, left ruler, viewport filter, margins used)
+
+
+def rulers_on():
+    return App.ParamGet(PARAM).GetBool("Rulers", False)
+
+
+def ruler_unit():
+    ""
+    try:
+        from . import customprops
+        u = customprops._doc_unit("length") or "mm"
+    except Exception:
+        u = "mm"
+    return u if u in UNIT_MM else "mm"
+
+
+def ruler_step(px_per_unit):
+    """The tick step in units: the smallest of 1, 2, 5 x 10^n that keeps major ticks >= 50 px apart."""
+    import math
+    if px_per_unit <= 0:
+        return 1.0
+    want = 50.0 / px_per_unit
+    e = math.floor(math.log10(want))
+    for m in (1, 2, 5, 10):
+        if m * 10 ** e >= want:
+            return float(m * 10 ** e)
+    return float(10 ** (e + 1))
+
+
+class _Ruler(QtWidgets.QWidget):
+    """One ruler along the top (horizontal) or the left (vertical) of a sheet window: sheet coordinates from
+    the sheet's origin (bottom left), in the document's units, with a mark where the pointer is."""
+
+    def __init__(self, gv, horizontal):
+        super().__init__(gv)
+        self.gv, self.horizontal = gv, horizontal
+        self.setObjectName("SWRulerTop" if horizontal else "SWRulerLeft")
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.pointer = None
+
+    def span(self):
+        """(first value, last value, pixels per unit) along the ruler, in document units."""
+        vp = self.gv.viewport()
+        mm = UNIT_MM[ruler_unit()]
+        if self.horizontal:
+            a, b = self.gv.mapToScene(QtCore.QPoint(0, 0)), self.gv.mapToScene(QtCore.QPoint(vp.width(), 0))
+            v0, v1, n = a.x() / D.REZ / mm, b.x() / D.REZ / mm, vp.width()
+        else:
+            a, b = self.gv.mapToScene(QtCore.QPoint(0, 0)), self.gv.mapToScene(QtCore.QPoint(0, vp.height()))
+            v0, v1, n = -a.y() / D.REZ / mm, -b.y() / D.REZ / mm, vp.height()
+        return v0, v1, (n / abs(v1 - v0)) if v1 != v0 else 0.0
+
+    def ticks(self):
+        """[(pixel along the ruler, value, major)] for the ruler's span."""
+        import math
+        v0, v1, ppu = self.span()
+        step = ruler_step(ppu)
+        minor = step / 5.0
+        lo, hi = sorted((v0, v1))
+        out = []
+        k = math.ceil(lo / minor)
+        while k * minor <= hi and len(out) < 2000:
+            v = k * minor
+            px = (v - v0) / (v1 - v0) * (self.width() if self.horizontal else self.height()) if v1 != v0 else 0
+            out.append((px, round(v, 6), k % 5 == 0))
+            k += 1
+        return out
+
+    def paintEvent(self, event):
+        p = QtGui.QPainter(self)
+        try:
+            pal = self.palette()
+            p.fillRect(self.rect(), pal.color(QtGui.QPalette.Window))
+            p.setPen(pal.color(QtGui.QPalette.WindowText))
+            f = p.font()
+            f.setPointSizeF(7)
+            p.setFont(f)
+            w = RULER_W
+            for px, v, major in self.ticks():
+                t = w * (0.6 if major else 0.25)
+                text = ("%g" % v) if major else ""
+                if self.horizontal:
+                    p.drawLine(QtCore.QPointF(px, w), QtCore.QPointF(px, w - t))
+                    if text:
+                        p.drawText(QtCore.QPointF(px + 2, 8), text)
+                else:
+                    p.drawLine(QtCore.QPointF(w, px), QtCore.QPointF(w - t, px))
+                    if text:
+                        p.save()
+                        p.translate(8, px - 2)
+                        p.rotate(-90)
+                        p.drawText(QtCore.QPointF(0, 0), text)
+                        p.restore()
+            if self.pointer is not None:
+                p.setPen(QtGui.QPen(pal.color(QtGui.QPalette.Highlight), 1))
+                if self.horizontal:
+                    p.drawLine(QtCore.QPointF(self.pointer, 0), QtCore.QPointF(self.pointer, w))
+                else:
+                    p.drawLine(QtCore.QPointF(0, self.pointer), QtCore.QPointF(w, self.pointer))
+            p.setPen(pal.color(QtGui.QPalette.Mid))
+            if self.horizontal:
+                p.drawLine(0, w - 1, self.width(), w - 1)
+            else:
+                p.drawLine(w - 1, 0, w - 1, self.height())
+        finally:
+            p.end()
+
+
+class _RulerSync(QtCore.QObject):
+    """Keeps a sheet window's rulers in step: repainted with the sheet (pan, zoom), the pointer mark moved."""
+
+    def __init__(self, gv):
+        super().__init__(gv)
+        self.gv = gv
+
+    def eventFilter(self, obj, event):
+        try:
+            got = RULERS.get(id(self.gv))
+            if got is None or not isinstance(event, QtCore.QEvent):
+                return False
+            top, left = got[0], got[1]
+            t = event.type()
+            if t == QtCore.QEvent.Paint:
+                top.update()
+                left.update()
+            elif t == QtCore.QEvent.MouseMove:
+                pos = event.pos() if hasattr(event, "pos") else event.position().toPoint()
+                top.pointer, left.pointer = pos.x(), pos.y()
+                top.update()
+                left.update()
+            elif t == QtCore.QEvent.Leave:
+                top.pointer = left.pointer = None
+                top.update()
+                left.update()
+            elif t == QtCore.QEvent.Resize:
+                place_rulers(self.gv)
+        except Exception as _fw_err:
+            _fw_log("drawkeys.py:ruler sync", _fw_err)
+        return False
+
+
+def place_rulers(gv):
+    got = RULERS.get(id(gv))
+    if got is None:
+        return
+    top, left, _sync, margins = got
+    vg = gv.viewport().geometry()
+    if margins:
+        top.setGeometry(vg.x(), vg.y() - RULER_W, vg.width(), RULER_W)
+        left.setGeometry(vg.x() - RULER_W, vg.y(), RULER_W, vg.height())
+    else:                        # over the sheet's top and left edges
+        top.setGeometry(vg.x() + RULER_W, vg.y(), vg.width() - RULER_W, RULER_W)
+        left.setGeometry(vg.x(), vg.y() + RULER_W, RULER_W, vg.height() - RULER_W)
+    top.show()
+    left.show()
+    top.raise_()
+    left.raise_()
+
+
+def add_rulers(gv):
+    ""
+    if gv is None or id(gv) in RULERS:
+        return RULERS.get(id(gv))
+    margins = True
+    try:
+        gv.setViewportMargins(RULER_W, RULER_W, 0, 0)
+    except Exception:
+        margins = False
+    top, left = _Ruler(gv, True), _Ruler(gv, False)
+    if not margins:
+        top.pointer = left.pointer = None
+    sync = _RulerSync(gv)
+    gv.viewport().installEventFilter(sync)
+    RULERS[id(gv)] = (top, left, sync, margins)
+    place_rulers(gv)
+    gv.destroyed.connect(lambda *_a, k=id(gv): RULERS.pop(k, None))
+    return RULERS[id(gv)]
+
+
+def remove_rulers(gv):
+    got = RULERS.pop(id(gv), None)
+    if got is None:
+        return
+    top, left, sync, margins = got
+    try:
+        gv.viewport().removeEventFilter(sync)
+        if margins:
+            gv.setViewportMargins(0, 0, 0, 0)
+        for w in (top, left):
+            w.hide()
+            w.deleteLater()
+        sync.deleteLater()
+    except Exception as _fw_err:
+        _fw_log("drawkeys.py:remove rulers", _fw_err)
+
+
+def _sheet_views():
+    out = []
+    try:
+        for doc in App.listDocuments().values():
+            for o in doc.Objects:
+                if o.isDerivedFrom("TechDraw::DrawPage"):
+                    gv = D.page_view(o)
+                    if gv is not None:
+                        out.append(gv)
+    except Exception as _fw_err:
+        _fw_log("drawkeys.py:sheet views", _fw_err)
+    return out
+
+
+def set_rulers(on):
+    """View > User Interface > Rulers: on or off for every sheet window (kept for the next session)."""
+    App.ParamGet(PARAM).SetBool("Rulers", bool(on))
+    try:
+        from . import swmenus
+        action = swmenus._native_action("FreeWorks_DrawRulers")
+        if action is not None and action.isCheckable() and action.isChecked() != bool(on):
+            action.blockSignals(True)
+            action.setChecked(bool(on))
+            action.blockSignals(False)
+    except Exception as _fw_err:
+        _fw_log("drawkeys.py:rulers check", _fw_err)
+    for gv in _sheet_views():
+        if on:
+            add_rulers(gv)
+        else:
+            remove_rulers(gv)
 
 
 # =========================================================================== commands (Edit and View > Modify)
@@ -575,6 +928,13 @@ COMMANDS = {
     "FreeWorks_DrawPreviousView": ("Previous View", "Goes back to the previous zoom of the sheet (Ctrl+Shift+Z).",
                                    "zoom-selection"),
     "FreeWorks_DrawPan": ("Pan", "Drag to move the sheet; Esc or a right-click ends it.", "zoom-border"),
+    "FreeWorks_DrawSelectOverGeometry": ("Select over Geometry",
+                                         "The next box selection may start on a view or an annotation (T).",
+                                         "Std_BoxSelection"),
+    "FreeWorks_DrawZoomInOut": ("Zoom In/Out", "Drag up to zoom in, down to zoom out; Esc or a right-click ends it.",
+                                "Std_ViewZoomIn"),
+    "FreeWorks_DrawRulers": ("Rulers", "Shows or hides the rulers along the top and left of the sheet.",
+                             "TechDraw_LengthDimension"),
     "FreeWorks_DrawZoomAboutCenter": ("Zoom About Screen Center",
                                       "The wheel zooms about the middle of the window instead of the pointer.",
                                       "zoom-in"),
@@ -590,6 +950,8 @@ class _Command:
         r = {"MenuText": self.text, "ToolTip": self.tip, "Pixmap": D.pixmap(self.icon)}
         if self.name == "FreeWorks_DrawZoomAboutCenter":
             r["Checkable"] = zoom_about_center()
+        elif self.name == "FreeWorks_DrawRulers":
+            r["Checkable"] = rulers_on()
         return r
 
     def IsActive(self):
@@ -628,9 +990,15 @@ class _Command:
             previous_view(gv)
         elif n == "FreeWorks_DrawPan":
             set_pan(True)
+        elif n == "FreeWorks_DrawZoomInOut":
+            set_zoom(True)
+        elif n == "FreeWorks_DrawSelectOverGeometry":
+            set_over(True)
         elif n == "FreeWorks_DrawZoomAboutCenter":
             on = (not zoom_about_center()) if checked is None else bool(checked)
             App.ParamGet(PARAM).SetBool("ZoomAboutScreenCenter", on)
+        elif n == "FreeWorks_DrawRulers":
+            set_rulers(not rulers_on())          # a toggle from any route (menu, toolbar, macro)
 
 
 # --------------------------------------------------------------------------- dragging a view
@@ -903,11 +1271,15 @@ class ViewDrag:
     @staticmethod
     def commit(o, dx, dy, at=None):
         doc = o.Document
+
+        # (TechDraw marks the view to rebuild on any X/Y change; that hidden-line run took 0.8 s on a 50-part view)
+        quiet = "Touched" not in o.State
         doc.openTransaction("Move")
         try:
             for g in o.InList:
                 if g.TypeId == "TechDraw::DrawProjGroup" and getattr(g, "AutoDistribute", False):
                     g.AutoDistribute = False        # a projected view placed by hand stays where it is dropped
+                    quiet = False
             if at is not None:
                 o.X, o.Y = at
             else:
@@ -915,7 +1287,13 @@ class ViewDrag:
                 o.Y = float(o.Y) + dy
         finally:
             doc.commitTransaction()
-        doc.recompute()
+        if quiet:
+            try:
+                o.purgeTouched()
+            except Exception as _fw_err:
+                _fw_log("drawkeys.py:commit", _fw_err)
+        if any("Touched" in x.State for x in doc.Objects):
+            doc.recompute()
 
 
 _FILTER = []

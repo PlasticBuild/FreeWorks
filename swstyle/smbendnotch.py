@@ -165,11 +165,14 @@ class ViewProviderBendNotch:
         fp = vobj.Object.FlatPattern
         if fp is None:
             return False
-        if not fp.SWFlattened:
+        flattened = not fp.SWFlattened
+        if flattened:
             smflatten.set_flat(fp.Body, True)
         vobj.Object.Document.openTransaction("Edit " + TITLE)
         try:
-            Gui.Control.showDialog(Panel(vobj.Object, False))
+            panel = Panel(vobj.Object, False)
+            panel.flattened_here = flattened and fp.SWFlattened
+            Gui.Control.showDialog(panel)
         except BaseException:
             try:
                 vobj.Object.Document.abortTransaction()
@@ -311,7 +314,10 @@ class Panel:
         fp = o.FlatPattern
         fp.touch()
         fp.Document.recompute()
-        self.error.setText("" if self.list.count() else "Select bend lines, or click Collect All Bends.")
+        if "Invalid" in o.State or "Invalid" in fp.State:
+            self.error.setText(naming.status_text(o if "Invalid" in o.State else fp, "The bend notch"))
+        else:
+            self.error.setText("" if self.list.count() else "Select bend lines, or click Collect All Bends.")
 
     def getStandardButtons(self):
         return QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
@@ -327,6 +333,9 @@ class Panel:
         if not self.list.count():
             self.error.setText("Select bend lines, or click Collect All Bends.")
             return False
+        if "Invalid" in self.obj.State:
+            self.error.setText(naming.status_text(self.obj, "The bend notch"))
+            return False
         self.obj.Document.commitTransaction()
         self._close()
         return True
@@ -334,6 +343,14 @@ class Panel:
     def reject(self):
         doc = self.obj.Document
         doc.abortTransaction()
+        if getattr(self, "flattened_here", False):
+
+            # open as its own "Flatten" step; that step is taken back (the part folds again)
+            try:
+                if doc.UndoNames and doc.UndoNames[0] == "Flatten":
+                    doc.undo()
+            except Exception as _fw_err:
+                _fw_log("smbendnotch.py:unflatten", _fw_err)
         doc.recompute()
         self._close()
         return True
@@ -344,7 +361,8 @@ def start():
     if body is None or smflatten.root(body) is None:
         return
     picked = [(s.ObjectName, n) for s in Gui.Selection.getSelectionEx() for n in s.SubElementNames]
-    if not smflatten.is_flat():
+    flattened = not smflatten.is_flat()
+    if flattened:
         smflatten.set_flat(body, True)       # the notches are cut in the flat pattern
     fp = smflatten.flat_pattern(body)
     if fp is None:
@@ -354,6 +372,7 @@ def start():
     try:
         obj = make(fp)
         panel = Panel(obj, True)
+        panel.flattened_here = flattened and bool(fp.SWFlattened)
         Gui.Control.showDialog(panel)
     except BaseException:
         try:

@@ -34,45 +34,52 @@ PREFS = "User parameter:BaseApp/Preferences/Mod/FreeWorks/CommandManager"
 DEFAULT_HIDDEN = ("Mold Tools", "Mesh Modeling", "Data Migration", "Direct Editing", "Render Tools")
 
 
+SW_HIDDEN = ("Basic Modeling Tools", "Freeshape", "Sketch Ink", "Surfaces", "Sheet Metal", "Structure System",
+             "Weldments", "CircuitWorks", "Flow Simulation", "Flow (CFD)")
+DEFAULT_HIDDEN = DEFAULT_HIDDEN + SW_HIDDEN
+DEFAULT_SET = 2          # a tab choice saved before swtabs-1127 gets SW_HIDDEN hidden once
+
+
 ORDER = ("Features", "Freeshape", "Sketch", "Sketch Ink", "3D Slicer", "Surfaces", "Sheet Metal",
          "Structure System", "Weldments", "Mold Tools", "Mesh Modeling", "Data Migration", "Direct Editing",
          "Markup", "Evaluate", "MBD Dimensions", "MBD", "Render Tools", "Add-Ins")
 
 # (key, label, commands, tip, caption, icon family) for buttons whose command has no catalog entry yet;
 # the families are original drawings in resources\icons\png (interface land228)
+# fstips-1126: the tips are sentences, worded as the Insert menu rows (tooltips-1126)
 KEYS = (
-    ("FS_Extrude", "Extrude", "SWStyle_FreeshapeExtrude", "Freeshape Extrude", None, "FREESHAPE_EXTRUDE"),
-    ("FS_Revolve", "Revolve", "SWStyle_FreeshapeRevolve", "Freeshape Revolve", None, "FREESHAPE_REVOLVE"),
-    ("FS_Sweep", "Sweep", "SWStyle_FreeshapeSweep", "Freeshape Sweep", None, "FREESHAPE_SWEEP"),
-    ("FS_Box", "Box", "SWStyle_FreeshapeBox", "A box cage", None, "FREESHAPE_BOX"),
-    ("FS_QuadBall", "QuadBall", "SWStyle_FreeshapeQuadBall", "A ball cage", None, "FREESHAPE_QUADBALL"),
-    ("FS_Cylinder", "Cylinder", "SWStyle_FreeshapeCylinder", "A cylinder cage", None, "FREESHAPE_CYLINDER"),
-    ("FS_Torus", "Torus", "SWStyle_FreeshapeTorus", "A torus cage", None, "FREESHAPE_TORUS"),
-    ("FS_Rectangle", "Rectangle", "SWStyle_FreeshapeRectangle", "A flat rectangle cage", None, "FREESHAPE_RECTANGLE"),
-    ("FS_Disk", "Disk", "SWStyle_FreeshapeDisk", "A flat disk cage", None, "FREESHAPE_DISK"),
-    ("FS_Ring", "Ring", "SWStyle_FreeshapeRing", "A flat ring cage", None, "FREESHAPE_RING"),
-    ("FS_Merge", "Merge", "SWStyle_FreeshapeMerge", "Merges Freeshape bodies", None, "FREESHAPE_MERGE"),
-    ("FS_EditMerge", "Edit Merge", "SWStyle_FreeshapeEditMerge", "Opens the Merge again", None, "FREESHAPE_EDIT_MERGE"),
-    ("FS_Symmetry", "Symmetry", "SWStyle_FreeshapeSymmetry", "Makes the body symmetric about a plane", None, "FREESHAPE_SYMMETRY"),
-    ("FS_ExtrudeFace", "Extrude Face", "SWStyle_FreeshapeExtrudeFace", "Pulls faces out", "Extrude\nFace", "FREESHAPE_EXTRUDE_FACE"),
-    ("FS_Subdivide", "Subdivide", "SWStyle_FreeshapeSubdivide", "Smooths the body one level", None, "FREESHAPE_SUBDIVIDE"),
-    ("FS_Crease", "Crease", "SWStyle_FreeshapeCrease", "Keeps the picked edges sharp", None, "FREESHAPE_CREASE"),
-    ("FS_InsertLoop", "Insert Loop", "SWStyle_FreeshapeInsertLoop", "Adds edge loops", None, "FREESHAPE_INSERT_LOOP"),
-    ("FS_FillHole", "Fill Hole", "SWStyle_FreeshapeFillHole", "Fills a hole", None, "FREESHAPE_FILL_HOLE"),
-    ("FS_DeleteLoops", "Delete Loop / Face", "SWStyle_FreeshapeDeleteLoops", "Deletes faces and heals", None, "FREESHAPE_DELETE_LOOPS"),
-    ("FS_Align", "Align", "SWStyle_FreeshapeAlign", "Moves the body onto a face", None, "FREESHAPE_ALIGN"),
-    ("ImportedGeometry", "Imported Geometry", "SWStyle_InsertImported", "Brings a body in from a file", "Imported\nGeometry", "DATA_MIGRATION_IMPORTED_GEOMETRY"),
-    ("RecognizeFeatures", "Recognize Features", "SWStyle_RecognizeFeatures", "Finds features on an imported body",
+    ("FS_Extrude", "Extrude", "SWStyle_FreeshapeExtrude", "Starts a Freeshape body by extruding a sketch.", None, "FREESHAPE_EXTRUDE"),
+    ("FS_Revolve", "Revolve", "SWStyle_FreeshapeRevolve", "Starts a Freeshape body by turning a sketch about an axis.", None, "FREESHAPE_REVOLVE"),
+    ("FS_Sweep", "Sweep", "SWStyle_FreeshapeSweep", "Starts a Freeshape body by moving a sketch along a path.", None, "FREESHAPE_SWEEP"),
+    ("FS_Box", "Box", "SWStyle_FreeshapeBox", "Starts a Freeshape body from a box-shaped cage.", None, "FREESHAPE_BOX"),
+    ("FS_QuadBall", "QuadBall", "SWStyle_FreeshapeQuadBall", "Starts a Freeshape body from a ball-shaped cage.", None, "FREESHAPE_QUADBALL"),
+    ("FS_Cylinder", "Cylinder", "SWStyle_FreeshapeCylinder", "Starts a Freeshape body from a cylinder-shaped cage.", None, "FREESHAPE_CYLINDER"),
+    ("FS_Torus", "Torus", "SWStyle_FreeshapeTorus", "Starts a Freeshape body from a ring-shaped solid cage.", None, "FREESHAPE_TORUS"),
+    ("FS_Rectangle", "Rectangle", "SWStyle_FreeshapeRectangle", "Starts a flat Freeshape body from a rectangle.", None, "FREESHAPE_RECTANGLE"),
+    ("FS_Disk", "Disk", "SWStyle_FreeshapeDisk", "Starts a flat Freeshape body from a disk.", None, "FREESHAPE_DISK"),
+    ("FS_Ring", "Ring", "SWStyle_FreeshapeRing", "Starts a flat Freeshape body from a ring.", None, "FREESHAPE_RING"),
+    ("FS_Merge", "Merge", "SWStyle_FreeshapeMerge", "Joins two or more Freeshape bodies into one.", None, "FREESHAPE_MERGE"),
+    ("FS_EditMerge", "Edit Merge", "SWStyle_FreeshapeEditMerge", "Opens the Merge feature again to change its bodies.", None, "FREESHAPE_EDIT_MERGE"),
+    ("FS_Symmetry", "Symmetry", "SWStyle_FreeshapeSymmetry", "Makes the Freeshape body the same on both sides of a plane.", None, "FREESHAPE_SYMMETRY"),
+    ("FS_ExtrudeFace", "Extrude Face", "SWStyle_FreeshapeExtrudeFace", "Pulls the picked faces of the cage out.", "Extrude\nFace", "FREESHAPE_EXTRUDE_FACE"),
+    ("FS_Subdivide", "Subdivide", "SWStyle_FreeshapeSubdivide", "Smooths the Freeshape body by one level.", None, "FREESHAPE_SUBDIVIDE"),
+    ("FS_Crease", "Crease", "SWStyle_FreeshapeCrease", "Keeps the picked edges of the cage sharp.", None, "FREESHAPE_CREASE"),
+    ("FS_InsertLoop", "Insert Loop", "SWStyle_FreeshapeInsertLoop", "Adds a loop of edges across the cage.", None, "FREESHAPE_INSERT_LOOP"),
+    ("FS_FillHole", "Fill Hole", "SWStyle_FreeshapeFillHole", "Closes an open hole in the cage with faces.", None, "FREESHAPE_FILL_HOLE"),
+    ("FS_DeleteLoops", "Delete Loop / Face", "SWStyle_FreeshapeDeleteLoops", "Deletes the picked loops or faces and closes the gap.", None, "FREESHAPE_DELETE_LOOPS"),
+    ("FS_Align", "Align", "SWStyle_FreeshapeAlign", "Moves the Freeshape body onto a face.", None, "FREESHAPE_ALIGN"),
+    ("ImportedGeometry", "Imported Geometry", "SWStyle_InsertImported", "Brings a body in from a file.", "Imported\nGeometry", "DATA_MIGRATION_IMPORTED_GEOMETRY"),
+    ("RecognizeFeatures", "Recognize Features", "SWStyle_RecognizeFeatures", "Finds holes, fillets and other features on an imported body and makes them features you can edit.",
      "Recognize\nFeatures", "DATA_MIGRATION_RECOGNIZE_FEATURES"),
-    ("DecimateMesh", "Decimate Mesh Body", "SWStyle_DecimateMesh", "Takes facets out of a mesh body", "Decimate\nMesh Body", "MESH_DECIMATE"),
-    ("MK_Color", "Color", "SWStyle_MarkupColor", "The markup colour", None, "MARKUP_COLOR"),
-    ("MK_Draw", "Draw", "SWStyle_MarkupDraw", "Draws freehand marks", None, "MARKUP_DRAW"),
-    ("MK_Erase", "Erase", "SWStyle_MarkupErase", "Erases the mark you click", None, "MARKUP_ERASE"),
-    ("MK_Select", "Select", "SWStyle_MarkupSelect", "Picks the model while marking up", None, "MARKUP_SELECT"),
-    ("MK_Touch", "Touch", "SWStyle_MarkupTouch", "Draws with a finger or pen", None, "MARKUP_TOUCH"),
-    ("MK_Note", "Note", "SWStyle_MarkupNote", "Puts a note where you click", None, "MARKUP_NOTE"),
-    ("EditDecal", "Edit Decal", "SWStyle_EditDecal", "Puts a picture on a face", "Edit\nDecal", "RENDER_EDIT_DECAL"),
-    ("MarkupFile", "Markup File", "SWStyle_MarkupFile", "Brings marks in from a markup file", None, "MARKUP_FILE"),
+    ("DecimateMesh", "Decimate Mesh Body", "SWStyle_DecimateMesh", "Takes facets out of a mesh body.", "Decimate\nMesh Body", "MESH_DECIMATE"),
+    ("MK_Color", "Color", "SWStyle_MarkupColor", "Sets the color the markup marks are drawn in.", None, "MARKUP_COLOR"),
+    ("MK_Draw", "Draw", "SWStyle_MarkupDraw", "Draws freehand marks on the view.", None, "MARKUP_DRAW"),
+    ("MK_Erase", "Erase", "SWStyle_MarkupErase", "Erases the mark you click.", None, "MARKUP_ERASE"),
+    ("MK_Select", "Select", "SWStyle_MarkupSelect", "Picks the model while you mark up.", None, "MARKUP_SELECT"),
+    ("MK_Touch", "Touch", "SWStyle_MarkupTouch", "Draws with a finger or pen.", None, "MARKUP_TOUCH"),
+    ("MK_Note", "Note", "SWStyle_MarkupNote", "Puts a note where you click.", None, "MARKUP_NOTE"),
+    ("EditDecal", "Edit Decal", "SWStyle_EditDecal", "Puts a picture on a face.", "Edit\nDecal", "RENDER_EDIT_DECAL"),
+    ("MarkupFile", "Markup File", "SWStyle_MarkupFile", "Brings marks in from a markup file.", None, "MARKUP_FILE"),
 )
 
 
@@ -164,7 +171,8 @@ OVERRIDE = {
         L("ExtrudedSurface"), L("RevolvedSurface"), L("SweptSurface"), L("LoftedSurface"), L("BoundarySurface"),
         L("FilledSurface"), L("Freeform"),
         SEP,
-        ST("PlanarSurface", "OffsetSurface", "RuledSurface"), L("SurfaceFlatten"), L("SurfaceFillet"),
+        ST("PlanarSurface", "OffsetSurface", "RuledSurface"), L("SurfaceFlatten"),
+        L("SurfaceFillet", ("SurfaceFillet", "Chamfer")),
         SEP,
         ST("DeleteFace", "ReplaceFace", "DeleteHole"),
         SEP,
@@ -172,9 +180,10 @@ OVERRIDE = {
         SEP,
         ST("Thicken", "ThickenedCut", "CutWithSurface"),
         SEP,
-        L("ReferenceGeometry", ("Plane", "Axis", "CoordinateSystem", "Point", "CenterOfMass", "BoundingBox")),
+        L("ReferenceGeometry", ("Plane", "Axis", "CoordinateSystem", "Point", "CenterOfMass", "BoundingBox",
+                                "MateReference")),
         L("Curves", ("SplitLine", "ProjectedCurve", "CompositeCurve", "CurveThroughXYZPoints",
-                     "CurveThroughReferencePoints", "HelixSpiral", "Slicing")),
+                     "CurveThroughReferencePoints", "HelixSpiral")),   # Slicing stays in the Insert and Tools menus
     ),
 }
 
@@ -185,13 +194,45 @@ def hidden():
     if not p.GetBool("Saved", False):
         return list(DEFAULT_HIDDEN)
     text = p.GetString("HiddenTabs", "")
-    return [t for t in text.split("|") if t]
+    out = [t for t in text.split("|") if t]
+    if p.GetInt("DefaultSet", 1) < DEFAULT_SET:
+        out += [t for t in SW_HIDDEN if t not in out]
+        p.SetString("HiddenTabs", "|".join(out))
+        p.SetInt("DefaultSet", DEFAULT_SET)
+    return out
+
+
+def tab_order():
+    """tabdrag-1126: the tab order the user made by dragging tabs (titles, first to last)."""
+    return [t for t in App.ParamGet(PREFS).GetString("TabOrder", "").split("|") if t]
+
+
+def remember_order(titles):
+    """The row now reads titles; they go first in the saved order, tabs of other kinds of document keep theirs."""
+    titles = [t for t in titles if t]
+    old = [t for t in tab_order() if t not in titles]
+    App.ParamGet(PREFS).SetString("TabOrder", "|".join(titles + old))
+
+
+def ordered(pages):
+    """The pages with the tabs the user placed in their saved order. The saved tabs take each other's slots,
+    so a tab that is not in the saved order (a new one) stays where it is."""
+    rank = {t: i for i, t in enumerate(tab_order())}
+    slots = [i for i, p in enumerate(pages) if p.title in rank]
+    if len(slots) < 2:
+        return list(pages)
+    moved = sorted((pages[i] for i in slots), key=lambda p: rank[p.title])
+    out = list(pages)
+    for i, p in zip(slots, moved):
+        out[i] = p
+    return out
 
 
 def set_hidden(titles):
     p = App.ParamGet(PREFS)
     p.SetString("HiddenTabs", "|".join(titles))
     p.SetBool("Saved", True)
+    p.SetInt("DefaultSet", DEFAULT_SET)                  # swtabs-1127: the user's own choice from now on
 
 
 # --------------------------------------------------------------------- catalog
@@ -265,8 +306,11 @@ def all_tabs():
 
 def apply(rebuild=True):
     """catalog.TABS = the shown tabs; rebuilds the CommandManager when it is up."""
-    from . import catalog
+    from . import catalog, smengine
+
     off = set(hidden()) | set(addin_off())
+    if not smengine.enabled():
+        off.add("Sheet Metal")
     every = all_tabs()
     shown = tuple(t for t in every if t[0] not in off) or tuple(every[:1])
     catalog.TABS = shown

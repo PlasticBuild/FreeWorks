@@ -300,7 +300,7 @@ class Watch(QtCore.QObject):
             hits = collisions(self.asm, check, among, **flags)
             if hits:
                 lo, hi = float(i - 1) / n, f
-                for _ in range(6):
+                for _ in range(16):         # asmpkg354: to a few hundredths of a micron, the faces touch
                     mid = (lo + hi) / 2.0
                     put(mid)
                     if collisions(self.asm, check, among, **flags):

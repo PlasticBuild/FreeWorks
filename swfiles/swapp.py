@@ -123,7 +123,7 @@ def setup_helper_python(ask=True):
             warn("setting up the SolidWorks helper failed:\n%s" % r.stdout.decode(errors="replace")[-2000:])
             return None
     except Exception as exc:
-        warn("setting up the SolidWorks helper failed: %s" % exc)
+        warn("setting up the helper failed: %s" % exc)
         return None
     return python if _can_drive(python) else None
 
@@ -145,7 +145,7 @@ class HelperError(RuntimeError):
     pass
 
 
-def run(command, args, label="Working with SolidWorks...", timeout=900):
+def run(command, args, label="Working with the other CAD program...", timeout=900):
     """Runs `swhelper.py command args...` and returns its JSON result. Shows a progress box
     with Cancel in the GUI. Raises HelperError with the helper's message on failure."""
     python = com_python()
@@ -180,7 +180,7 @@ def run(command, args, label="Working with SolidWorks...", timeout=900):
         finally:
             os.remove(out)
     if result is None or not result.get("ok"):
-        why = (result or {}).get("error") or (text.strip().splitlines() or ["no answer from SolidWorks"])[-1]
+        why = (result or {}).get("error") or (text.strip().splitlines() or ["no answer from the other CAD program"])[-1]
         App.Console.PrintLog("FreeCAD swhelper %s:\n%s\n" % (command, text))
         raise HelperError(why)
     return result
@@ -207,7 +207,7 @@ def _wait(proc, label, timeout):
                     return True
             if time.time() - start > timeout:
                 proc.kill()
-                warn("SolidWorks did not answer within %d s" % timeout)
+                warn("The other CAD program did not answer within %d s" % timeout)
                 return True
             time.sleep(0.05)
     finally:

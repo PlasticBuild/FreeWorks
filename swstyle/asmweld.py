@@ -243,6 +243,7 @@ class WeldPanel:
         box, lay = asmpm._box("Weld Path", "Weld Bead", "WELDMENTS_WELD_BEAD")
         self.path_list = QtWidgets.QListWidget()
         self.path_list.setObjectName("FW_AsmWeldPaths")
+        self.path_list.setProperty("swpickbox", True)
         self.path_list.setFixedHeight(asmpm._rows(self.path_list, 2))
         lay.addWidget(self.path_list)
         row = QtWidgets.QHBoxLayout()
@@ -326,6 +327,7 @@ class WeldPanel:
         from . import asmpm
         lst = QtWidgets.QListWidget()
         lst.setObjectName(name)
+        lst.setProperty("swpickbox", True)      # a selection box (Weld From / Weld To / edges): its colour strip
         lst.setFixedHeight(asmpm._rows(lst, 2))
         panel = self
 

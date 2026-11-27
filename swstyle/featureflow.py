@@ -19,6 +19,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -96,8 +97,8 @@ def editing_sketch():
     try:
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
-        if edit is not None and edit.Object.TypeId == "Sketcher::SketchObject":
-            return edit.Object
+        if edit is not None and editobj.type_id(edit) == "Sketcher::SketchObject":
+            return editobj.of(edit)
     except Exception as _fw_err:
         _fw_log("featureflow.py:96", _fw_err)
     return None

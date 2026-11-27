@@ -344,6 +344,7 @@ if Gui is not None:
         if bar is not None and BUTTON[0] is None:
             button = QtWidgets.QToolButton(bar)
             button.setObjectName("SWStatusTags")
+            button.setFocusPolicy(QtCore.Qt.ClickFocus)      # statusfocus-1127
             button.setAutoRaise(True)
             button.setIcon(_tag_icon(16))
             button.setToolTip("Tags: add keywords to the picked items")

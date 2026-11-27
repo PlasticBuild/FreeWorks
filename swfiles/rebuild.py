@@ -324,7 +324,7 @@ class Rebuilder:
         order = sorted(self.m["features"], key=lambda f: f.get("ordinal", 0))
         for f in order:
             if f.get("suppressed"):
-                self.note(f["name"], "skipped (suppressed in SolidWorks)")
+                self.note(f["name"], "skipped (suppressed in the file)")
                 continue
             kind = f["definition"]["definition"]
             fn = getattr(self, "f_" + kind, None)

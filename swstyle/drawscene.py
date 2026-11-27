@@ -223,25 +223,51 @@ def tidy(scene, doc=None):
 
 
 class _Tidier(QtCore.QObject):
-    def __init__(self, scene, doc=None):
+    """Runs tidy shortly after the sheet is painted (a view drawn again shows as a paint of the sheet window).
+    Not QGraphicsScene.changed: with that signal connected Qt works out the bounding box of the whole view
+    for each line TechDraw adds to it, so drawing a view cost the square of its line count (a 50-part view
+    with 1000 lines: 25 s instead of 1 s; Draft quality, 5000 lines: 5 minutes). After a pass that changed
+    nothing the next one waits ten times as long as that pass took, so hovering a big sheet stays light."""
+    def __init__(self, scene, doc=None, gv=None):
         super().__init__(scene)
         self.scene = scene
         self.doc = doc
+        self.rest = 0.0
+        self.last = 0.0
         self.timer = QtCore.QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.setInterval(60)
         self.timer.timeout.connect(self.run)
-        scene.changed.connect(self.poke)
+        if gv is not None:
+            try:
+                gv.viewport().installEventFilter(self)
+            except Exception as _fw_err:
+                _fw_log("drawscene.py:filter", _fw_err)
+
+    def eventFilter(self, obj, event):
+        try:
+            if event.type() == QtCore.QEvent.Paint:
+                self.poke()
+        except Exception as _fw_err:
+            _fw_log("drawscene.py:paint", _fw_err)
+        return False
 
     def poke(self, *args):
         if not self.timer.isActive():
-            self.timer.start()
+            import time
+            wait = self.last + self.rest - time.perf_counter()
+            self.timer.start(max(60, int(wait * 1000)))
 
     def run(self):
+        import time
+        t0 = time.perf_counter()
         try:
-            tidy(self.scene, self.doc)
+            n = tidy(self.scene, self.doc)
         except Exception as _fw_err:
             _fw_log("drawscene.py:run", _fw_err)
+            n = 0
+        self.last = time.perf_counter()
+        self.rest = 0.0 if n else 10.0 * (self.last - t0)
 
 
 def regroup(doc):
@@ -284,7 +310,7 @@ def hook(gv, page=None):
         return False
     if scene is None or id(scene) in _HOOKED:
         return False
-    _HOOKED[id(scene)] = _Tidier(scene, page.Document if page is not None else None)
+    _HOOKED[id(scene)] = _Tidier(scene, page.Document if page is not None else None, gv)
     try:
         scene.destroyed.connect(lambda *a, k=id(scene): _HOOKED.pop(k, None))
     except Exception as _fw_err:

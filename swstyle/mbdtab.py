@@ -81,6 +81,45 @@ def surface_finish(doc, ref, symbol="Machining required", roughness="3.2", metho
     return mbd.make(doc, "SurfaceFinish", [ref], text, 0.0, 0.0, 0.0)
 
 
+
+SF_FIELDS = (("max", "Maximum roughness"), ("min", "Minimum roughness"),
+             ("allowance", "Material removal allowance"), ("method", "Production method/treatment"),
+             ("sampling", "Sampling length"), ("other", "Other roughness values"),
+             ("spacing", "Roughness spacing"))
+SF_LAY = (("", "None"), ("=", "Parallel"), ("⟂", "Perpendicular"), ("X", "Angular in both directions"),
+          ("M", "Multidirectional"), ("C", "Circular"), ("R", "Radial"), ("P", "Particulate"))
+
+
+def surface_finish_text(symbol, fields, lay="", all_around=False):
+    ""
+
+
+    f = {k: str(fields.get(k, "") or "").strip() for k, _label in SF_FIELDS}
+    sym = ("○" if all_around else "") + SURFACE.get(symbol, "√")
+    rough = f["max"] + ("/" + f["min"] if f["min"] else "")
+    line = " ".join(x for x in (f["allowance"], sym, rough, lay) if x)
+    under = " ".join(x for x in (f["sampling"], f["other"], f["spacing"]) if x)
+    return "\n".join(x for x in (f["method"], line, under) if x)
+
+
+def surface_finish_sw(doc, ref, symbol="Machining required", fields=None, lay="", all_around=False):
+    ""
+    obj = mbd.make(doc, "SurfaceFinish", [ref], surface_finish_text(symbol, fields or {}, lay, all_around), 0.0, 0.0, 0.0)
+    try:
+        if "SurfaceSymbol" not in obj.PropertiesList:
+            obj.addProperty("App::PropertyString", "SurfaceSymbol", "Surface Finish", "Basic, Machining required or prohibited")
+            obj.addProperty("App::PropertyMap", "SurfaceLayout", "Surface Finish", "Symbol Layout values")
+            obj.addProperty("App::PropertyString", "SurfaceLay", "Surface Finish", "Lay direction")
+            obj.addProperty("App::PropertyBool", "SurfaceAllAround", "Surface Finish", "All around")
+        obj.SurfaceSymbol = symbol
+        obj.SurfaceLayout = {k: str(v) for k, v in (fields or {}).items() if v}
+        obj.SurfaceLay = lay
+        obj.SurfaceAllAround = bool(all_around)
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: surface finish values: %s\n" % error)
+    return obj
+
+
 def weld_symbol(doc, ref, kind="Fillet", size="5", both=False, all_around=False, field=False):
     sym = WELDS.get(kind, kind)
     text = "%s%s %s" % ("○" if all_around else "", sym + ("/" + sym if both else ""), size)
@@ -504,7 +543,9 @@ if Gui is not None:
                     it.setFlags(it.flags() | QtCore.Qt.ItemIsUserCheckable)
                     it.setCheckState(QtCore.Qt.Checked if o.ViewObject.Visibility else QtCore.Qt.Unchecked)
                     self.annots.addItem(it)
-            lay.addRow("Annotations to capture", self.annots)
+            # the list under its label, the width of the page (beside it the names were cut off: "LocationDimens")
+            lay.addRow(QtWidgets.QLabel("Annotations to capture"))
+            lay.addRow(self.annots)
 
         def getStandardButtons(self):
             return QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
@@ -533,19 +574,89 @@ if Gui is not None:
         lay.addRow("Text", e)
         return e
 
+    class _SFPage:
+        ""
+
+
+        def __init__(self):
+            self.symbol = QtWidgets.QWidget()
+            self.symbol.setWindowTitle("Symbol")
+            self.symbol.setObjectName("SWSurfaceSymbol")
+            row = QtWidgets.QHBoxLayout(self.symbol)
+            row.setContentsMargins(6, 2, 6, 4)
+            self.buttons = QtWidgets.QButtonGroup(self.symbol)
+            self.buttons.setExclusive(True)
+            for name, tip in (("Basic", "Basic"), ("Machining required", "Machining Required"),
+                              ("Machining prohibited", "Machining Prohibited")):
+                b = QtWidgets.QToolButton(self.symbol)
+                b.setText(SURFACE[name])
+                b.setToolTip(tip)
+                b.setObjectName("SWSurfaceSymbol_" + name.replace(" ", ""))
+                b.setCheckable(True)
+                b.setProperty("sw_symbol", name)
+                self.buttons.addButton(b)
+                row.addWidget(b)
+                if name == "Machining required":
+                    b.setChecked(True)
+            self.around = QtWidgets.QToolButton(self.symbol)
+            self.around.setText("○")
+            self.around.setToolTip("All Around")
+            self.around.setObjectName("SWSurfaceAllAround")
+            self.around.setCheckable(True)
+            row.addWidget(self.around)
+            row.addStretch(1)
+            self.layout_page = QtWidgets.QWidget()
+            self.layout_page.setWindowTitle("Symbol Layout")
+            self.layout_page.setObjectName("SWSurfaceLayout")
+            form = QtWidgets.QFormLayout(self.layout_page)
+            form.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
+            self.fields = {}
+            for key, label in SF_FIELDS:
+                e = QtWidgets.QLineEdit(self.layout_page)
+                e.setObjectName("SWSurface_" + key)
+                form.addRow(label + ":", e)
+                self.fields[key] = e
+            self.lay = QtWidgets.QComboBox(self.layout_page)
+            self.lay.setObjectName("SWSurfaceLay")
+            for sym, name in SF_LAY:
+                self.lay.addItem(("%s  %s" % (sym, name)).strip(), sym)
+            form.addRow("Lay direction:", self.lay)
+            self.groups = [self.symbol, self.layout_page]
+            self.last = None
+            self.buttons.buttonClicked.connect(lambda _b: self.follow())
+            self.around.toggled.connect(lambda _on: self.follow())
+            for e in self.fields.values():
+                e.textChanged.connect(lambda _t: self.follow())
+            self.lay.currentIndexChanged.connect(lambda _i: self.follow())
+
+        def chosen(self):
+            b = self.buttons.checkedButton()
+            return b.property("sw_symbol") if b is not None else "Machining required"
+
+        def values(self):
+            return self.chosen(), {k: e.text() for k, e in self.fields.items()}, self.lay.currentData() or "", \
+                self.around.isChecked()
+
+        def make(self, ref):
+            symbol, fields, lay, around = self.values()
+            self.last = surface_finish_sw(_doc(), ref, symbol, fields, lay, around)
+            return self.last
+
+        def follow(self):
+            obj = self.last
+            try:
+                if obj is None or obj.Document is None or obj.Document.getObject(obj.Name) is None:
+                    return
+                symbol, fields, lay, around = self.values()
+                obj.Text = obj.AutoText = surface_finish_text(symbol, fields, lay, around)
+                obj.SurfaceSymbol, obj.SurfaceLay, obj.SurfaceAllAround = symbol, lay, bool(around)
+                obj.SurfaceLayout = {k: str(v) for k, v in fields.items() if v}
+                obj.Document.recompute()
+            except Exception as error:
+                App.Console.PrintLog("FreeCAD: surface finish follows the page: %s\n" % error)
+
     def _sf_extra(lay):
-        sym = QtWidgets.QComboBox()
-        sym.addItems(list(SURFACE))
-        sym.setCurrentText("Machining required")
-        ra = QtWidgets.QLineEdit("3.2")
-        method = QtWidgets.QLineEdit()
-        lay_ = QtWidgets.QComboBox()
-        lay_.addItems(["", "=", "⟂", "X", "M", "C", "R"])
-        lay.addRow("Symbol", sym)
-        lay.addRow("Roughness (Ra)", ra)
-        lay.addRow("Production method", method)
-        lay.addRow("Lay direction", lay_)
-        return sym, ra, method, lay_
+        return _SFPage()
 
     def _weld_extra(lay):
         kind = QtWidgets.QComboBox()
@@ -566,8 +677,7 @@ if Gui is not None:
             _doc(), p[0], p[1]), None, "Pick the two items"),
         "SWStyle_MBDNote": ("Note", 1, lambda pm, p: note(_doc(), pm.extra.toPlainText() or "NOTE", p[0]),
                             _note_extra, "Type the note, then pick where its leader goes"),
-        "SWStyle_MBDSurfaceFinish": ("Surface Finish", 1, lambda pm, p: surface_finish(
-            _doc(), p[0], pm.extra[0].currentText(), pm.extra[1].text(), pm.extra[2].text(), pm.extra[3].currentText()),
+        "SWStyle_MBDSurfaceFinish": ("Surface Finish", 1, lambda pm, p: pm.extra.make(p[0]),
             _sf_extra, "Pick the face"),
         "SWStyle_MBDWeldSymbol": ("Weld Symbol", 1, lambda pm, p: weld_symbol(
             _doc(), p[0], pm.extra[0].currentText(), pm.extra[1].text(), pm.extra[2].isChecked(),
@@ -588,7 +698,11 @@ if Gui is not None:
 
         def Activated(self):
             title, need, run, extra, hint = SPECS[self.name]
-            Gui.Control.showDialog(mbd.PickPM(title, need, run, extra, hint))
+            pm = mbd.PickPM(title, need, run, extra, hint)
+            groups = getattr(pm.extra, "groups", None)
+            if groups:
+                pm.form = [pm.form] + list(groups)
+            Gui.Control.showDialog(pm)
 
     class _Simple:
         def __init__(self, text, tip, run, active=None):

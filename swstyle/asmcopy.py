@@ -252,8 +252,8 @@ class CopyPanel:
         self.count = 0          # copies placed in this PropertyManager
         step1, lay = asmpm._box("Step 1: Select Component", "Copy with Mates", "ASSEMBLIES_COPY_WITH_MATES")
         msg1 = QtWidgets.QLabel("Select components to copy with mates")
+        msg1.setObjectName("FW_CopySelectMessage")     # the shared Message look (pmmessage), PM thread 11-27
         msg1.setWordWrap(True)
-        msg1.setStyleSheet(MSG_STYLE % "#fff8b0")
         lay.addWidget(msg1)
         lay.addWidget(QtWidgets.QLabel("Selected Components"))
         self.list = QtWidgets.QListWidget()
@@ -264,15 +264,13 @@ class CopyPanel:
         self.next = QtWidgets.QPushButton("Next")
         self.next.setObjectName("FW_CopyNext")
         self.next.setToolTip("Next (Step 2: Mates)")
-        self.next.setEnabled(False)
         self.next.clicked.connect(self.go_next)
         lay.addWidget(self.next, 0, QtCore.Qt.AlignRight)
         step2, self.mlay = asmpm._box("Step 2: Mates")
         self.mates_box = step2
         self.message = QtWidgets.QLabel(YELLOW)
         self.message.setObjectName("FW_CopyMessage")
-        self.message.setWordWrap(True)
-        self.message.setStyleSheet(MSG_STYLE % "#fff8b0")
+        self.message.setWordWrap(True)      # the shared Message look (pmmessage); green only once placed
         self.mlay.addWidget(self.message)
         self.hint = QtWidgets.QLabel("Click Next to list the components' mates.")
         self.hint.setWordWrap(True)
@@ -401,11 +399,15 @@ class CopyPanel:
             return
         self.comps.append(comp)
         self.list.addItem(comp.Label)
-        self.next.setEnabled(True)
 
     # ---------------------------------------------------------------- step 2
     def go_next(self):
-        if not self.comps or self.listed:
+        if not self.comps and not self.listed:
+            # never greyed: Next before a pick says what to do first (asmpkg356)
+            QtWidgets.QToolTip.showText(self.next.mapToGlobal(self.next.rect().bottomLeft()),
+                                        "Select the components to copy first, in the graphics area or the tree.", self.next)
+            return
+        if self.listed:
             return
         from .asmpm import instance_name, sw_icon
         self.listed = True
@@ -463,7 +465,6 @@ class CopyPanel:
             entity.installEventFilter(self._focus_filter(row))
             self.mlay.insertWidget(self.mlay.count() - 1, box)
             self.rows.append(row)
-        self.next.setEnabled(False)
         first = next((r for r in self.rows if self._needs(r)), None)
         if first is not None:
             self._focus(first)
@@ -543,7 +544,7 @@ class CopyPanel:
         """After OK: the next copy, the same mates, new entities to pick."""
         self.placed = None
         self.message.setText(YELLOW)
-        self.message.setStyleSheet(MSG_STYLE % "#fff8b0")
+        self.message.setStyleSheet("")      # back to the shared Message look
         for r in self.rows:
             r["new"] = []
             r["entity"].clear()

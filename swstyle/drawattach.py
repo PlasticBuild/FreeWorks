@@ -80,6 +80,11 @@ def attach_new(o):
     if page is None or not attachable(o) or "SWAttachedTo" in o.PropertiesList:
         return None
     view = DV.focus_view(page, (float(o.X), float(o.Y)), margin=0.0)
+    tip = getattr(o, "SWTip", None)
+    if view is None and tip is not None and tip.z >= 0 and not getattr(page, "FWLockSheetFocus", False):
+
+        # that view and moves with it
+        view = DV.view_at(page, (float(tip.x), float(tip.y)), 3.0)     # an edge on the view's outline counts
     attach(o, view)
     return view
 
@@ -102,6 +107,9 @@ def follow(doc):
             if abs(dx) > 1e-6 or abs(dy) > 1e-6:
                 o.X, o.Y = float(o.X) + dx, float(o.Y) + dy
                 o.SWAttachAt = App.Vector(float(v.X), float(v.Y), 0)
+                tip = getattr(o, "SWTip", None)
+                if tip is not None and tip.z >= 0:      # its leader point went with it (drawn in its symbol)
+                    o.SWTip = App.Vector(tip.x + dx, tip.y + dy, 0)
                 moved.append(o)
         except Exception as _fw_err:
             _fw_log("drawattach.py:106", _fw_err)

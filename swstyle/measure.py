@@ -379,6 +379,50 @@ def measure(shapes, units=None, arc_mode=ARC_MODES[0], xyz=False, projection=Non
     return lines, draw
 
 
+REF_REACH = 1.0e5      # mm: the size a reference plane or axis is measured over (it has no edges of its own)
+
+
+def _reference(shape):
+    """("plane", point, normal) or ("axis", point, direction) for a reference plane or axis (an origin or
+    datum plane or axis: an unbounded face or line, no vertices), else None (refmeasure-fix01)."""
+    try:
+        if shape.ShapeType == "Face" and type(shape.Surface).__name__ == "Plane" and \
+                (not shape.Vertexes or shape.Area > 1e12):
+            s = shape.Surface
+            return "plane", V(s.Position), V(s.Axis).normalize()
+        if shape.ShapeType == "Edge" and _line(shape) is not None and (not shape.Vertexes or shape.Length > 1e12):
+            c = shape.Curve
+            return "axis", V(c.Location), V(c.Direction).normalize()
+    except Exception as _fw_err:
+        _fw_log("measure.py:reference", _fw_err)
+    return None
+
+
+def _bounded(ref, near):
+    ""
+
+    kind, p, n = ref
+    w = near - p
+    if kind == "plane":
+        c = near - n * w.dot(n)
+        u = n.cross(V(1, 0, 0) if abs(n.x) < 0.9 else V(0, 1, 0)).normalize()
+        v = n.cross(u)
+        r = REF_REACH
+        corners = [c + u * r + v * r, c - u * r + v * r, c - u * r - v * r, c + u * r - v * r]
+        return Part.Face(Part.makePolygon(corners + corners[:1]))
+    c = p + n * w.dot(n)
+    return Part.LineSegment(c - n * REF_REACH, c + n * REF_REACH).toShape()
+
+
+def _centre(shape, ref=None):
+    if ref is not None:
+        return ref[1]
+    try:
+        return shape.BoundBox.Center
+    except Exception:
+        return V()
+
+
 def measure_shapes(shapes, units=None, arc_mode=ARC_MODES[0], xyz=False, projection=None, points=None):
     """Lines of (name, text) and the segments to draw [(p1, p2, label, rgb)] for picked shapes.
 
@@ -390,6 +434,17 @@ def measure_shapes(shapes, units=None, arc_mode=ARC_MODES[0], xyz=False, project
         shapes = [Part.Vertex(p) for p in points]
     if not shapes:
         return lines, draw
+    refs = [_reference(s) for s in shapes]
+    if any(refs):
+
+        # show, and with other items it stands for the whole plane or line (refmeasure-fix01)
+        if len(shapes) == 1:
+            return lines, draw
+        shapes = list(shapes)
+        for i, ref in enumerate(refs):
+            if ref is not None:
+                others = [_centre(s, r) for j, (s, r) in enumerate(zip(shapes, refs)) if j != i]
+                shapes[i] = _bounded(ref, others[0] if others else ref[1])
     kinds = {s.ShapeType for s in shapes}
     if len(shapes) == 1:
         s = shapes[0]
@@ -417,7 +472,9 @@ def measure_shapes(shapes, units=None, arc_mode=ARC_MODES[0], xyz=False, project
             lines += [("Volume", units.len(s.Volume, 3)), ("Surface area", units.len(s.Area, 2))]
         return lines, draw
     if len(shapes) > 2:
-        if kinds == {"Edge"}:
+        if any(refs):
+            lines.append(("Items", "%d picked: pick two to measure between them" % len(shapes)))
+        elif kinds == {"Edge"}:
             lines.append(("Total Length", units.len(sum(s.Length for s in shapes))))
         elif kinds == {"Face"}:
             lines.append(("Total Area", units.len(sum(s.Area for s in shapes), 2)))
@@ -426,7 +483,9 @@ def measure_shapes(shapes, units=None, arc_mode=ARC_MODES[0], xyz=False, project
         return lines, draw
     a, b = shapes
     total = []
-    if kinds == {"Edge"}:
+    if any(refs):
+        pass            # a reference plane or axis has no length or area of its own
+    elif kinds == {"Edge"}:
         total.append(("Total Length", units.len(a.Length + b.Length)))
     elif kinds == {"Face"}:
         total.append(("Total Area", units.len(a.Area + b.Area, 2)))
@@ -498,7 +557,9 @@ def measure_shapes(shapes, units=None, arc_mode=ARC_MODES[0], xyz=False, project
     shown = delta.Length
     if angle is not None:
         lines.append(("Angle", units.angle(angle)))
-    lines.append((name if projection is None else name + " (projected)", units.len(shown)))
+    if not (any(refs) and angle is not None and shown < 1e-6):
+
+        lines.append((name if projection is None else name + " (projected)", units.len(shown)))
     if normal_gap is not None and abs(normal_gap - shown) > 1e-6:
         lines.append(("Normal Distance", units.len(normal_gap)))
     end = p + delta
@@ -515,6 +576,19 @@ def measure_shapes(shapes, units=None, arc_mode=ARC_MODES[0], xyz=False, project
             if abs(value) > TOL:
                 draw.append((s, e, "%s: %s" % (axis, units.len(abs(value))), rgb))
     return lines + total, draw
+
+
+def summary_text(lines):
+    """The one line shown while the box is collapsed: the first two results, and with XYZ on the
+    value with all three deltas (never Delta X alone)."""
+    if not lines:
+        return ""
+    deltas = [(n, v) for n, v in lines if n in ("Delta X", "Delta Y", "Delta Z")]
+    if deltas:
+        main = [(n, v) for n, v in lines if (n, v) not in deltas][:1]
+        return "  ".join(["%s: %s" % (n, v) for n, v in main] +
+                         ["d%s: %s" % (n[-1], v) for n, v in deltas])
+    return "  ".join("%s: %s" % (n, v) for n, v in lines[:2])
 
 
 def callout(shape, lines):
@@ -683,6 +757,81 @@ def coin_vec(x, y, z):
     return coin.SbVec3f(x, y, z)
 
 
+
+# default bitmap font (a small serif). Drawn as a screen-aligned image so it stays crisp at any zoom.
+CALLOUT_FILL = (255, 255, 225)
+CALLOUT_EDGE = (96, 96, 96)
+CALLOUT_INK = (0, 0, 0)
+_LABEL_IMAGES = {}                  # (text, scale) -> (w, h, bytes): pivy cannot read an SoSFImage back
+
+
+def _label_scale():
+    try:
+        mw = Gui.getMainWindow()
+        return max(1.0, float(mw.devicePixelRatioF())) if mw is not None else 1.0
+    except Exception:
+        return 1.0
+
+
+def label_image(text, scale=None):
+    """(width, height, RGBA bytes bottom row first) of a boxed callout holding text."""
+    scale = _label_scale() if scale is None else scale
+    key = (text, scale)
+    if key in _LABEL_IMAGES:
+        return _LABEL_IMAGES[key]
+    font = QtGui.QFont(QtWidgets.QApplication.font())
+    font.setPixelSize(max(9, int(round(12 * scale))))
+    font.setStyleHint(QtGui.QFont.SansSerif)
+    metrics = QtGui.QFontMetrics(font)
+    pad_x, pad_y = int(round(5 * scale)), int(round(2 * scale))
+    w = metrics.horizontalAdvance(text) + 2 * pad_x + 2
+    h = metrics.height() + 2 * pad_y + 2
+    img = QtGui.QImage(w, h, QtGui.QImage.Format_RGBA8888)
+    img.fill(QtGui.QColor(*CALLOUT_FILL))
+    painter = QtGui.QPainter(img)
+    try:
+        painter.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
+        pen = QtGui.QPen(QtGui.QColor(*CALLOUT_EDGE))
+        pen.setWidth(max(1, int(round(scale))))
+        painter.setPen(pen)
+        painter.drawRect(0, 0, w - 1, h - 1)
+        painter.setPen(QtGui.QColor(*CALLOUT_INK))
+        painter.setFont(font)
+        painter.drawText(QtCore.QRect(0, 0, w, h), QtCore.Qt.AlignCenter, text)
+    finally:
+        painter.end()
+    img = img.mirrored(False, True)      # Coin images start at the bottom row
+    bits = img.constBits()
+    try:
+        data = bytes(bits[:w * h * 4]) if not hasattr(bits, "setsize") else None
+    except Exception:
+        data = None
+    if data is None or len(data) != w * h * 4:
+        rows = []
+        for y in range(h):
+            for x in range(w):
+                c = img.pixelColor(x, y)
+                rows.append(bytes((c.red(), c.green(), c.blue(), c.alpha())))
+        data = b"".join(rows)
+    if len(_LABEL_IMAGES) > 200:
+        _LABEL_IMAGES.clear()
+    _LABEL_IMAGES[key] = (w, h, data)
+    return w, h, data
+
+
+def label_node(text, centred=False):
+    """A screen-aligned callout box for the current translation (left-bottom corner, or centred)."""
+    from pivy import coin
+    w, h, data = label_image(text)
+    node = coin.SoImage()
+    node.setName("SWMeasureLabel")
+    node.image.setValue(coin.SbVec2s(w, h), 4, data)
+    if centred:
+        node.horAlignment = coin.SoImage.CENTER
+        node.vertAlignment = coin.SoImage.HALF
+    return node
+
+
 class _Drawing:
     def __init__(self):
         self.node = None
@@ -720,12 +869,7 @@ class _Drawing:
             mid = (p + q) * 0.5
             move.translation.setValue(mid.x, mid.y, mid.z)
             label.addChild(move)
-            font = coin.SoFont()
-            font.size = 14
-            label.addChild(font)
-            t = coin.SoText2()
-            t.string = text
-            label.addChild(t)
+            label.addChild(label_node(text, centred=True))
             sep.addChild(label)
             root.addChild(sep)
         for pts in outlines:
@@ -758,12 +902,7 @@ class _Drawing:
             move = coin.SoTranslation()
             move.translation.setValue(end.x, end.y, end.z)
             sep.addChild(move)
-            font = coin.SoFont()
-            font.size = 14
-            sep.addChild(font)
-            t = coin.SoText2()
-            t.string = text
-            sep.addChild(t)
+            sep.addChild(label_node(text))
             root.addChild(sep)
         view.getSceneGraph().addChild(root)
         self.node, self.view = root, view
@@ -1203,7 +1342,7 @@ class MeasureWindow(QtWidgets.QDialog):
         if self.busy:
             return
         self.items = [i for i in self.items if i[:3] != (doc, obj, sub)]
-        QtCore.QTimer.singleShot(0, self.refresh)
+        from . import safe_later as _sl; _sl.later(0, self.refresh, self, "picks")
 
     def clearSelection(self, doc):
         if self.busy:
@@ -1300,7 +1439,7 @@ class MeasureWindow(QtWidgets.QDialog):
             html = "Select items in the graphics area to measure them." if not self.p2p.isChecked() else \
                 "Click two points on the model."
         self.result.setHtml(html)
-        self.summary.setText("  ".join("%s: %s" % (n, v) for n, v in lines[:2]) if lines else "")
+        self.summary.setText(summary_text(lines))
         self.drawing.show(draw, callouts, outlines)
 
     def create_sensor(self, name=None, operator="Is greater than", limit1=None, limit2=0.0, ask=True):
@@ -1320,7 +1459,8 @@ class MeasureWindow(QtWidgets.QDialog):
             what = QtWidgets.QComboBox()
             what.addItems([n for n, _v in numeric])
             op = QtWidgets.QComboBox()
-            op.addItems(["Is greater than", "Is less than", "Is not between", "Is between"])
+            from . import sensorpm
+            op.addItems(list(sensorpm.RULES))
             l1, l2 = QtWidgets.QDoubleSpinBox(), QtWidgets.QDoubleSpinBox()
             for sb in (l1, l2):
                 sb.setRange(-1e12, 1e12)

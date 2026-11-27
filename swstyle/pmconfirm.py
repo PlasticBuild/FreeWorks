@@ -262,12 +262,215 @@ def _busy():
     return False
 
 
+# --------------------------------------------------------------------------- UI Automation guard (pkg425)
+# Windows 11 24H2: with a UI Automation client attached (screen reader, voice control, remote or AI
+# screen tools), UIAutomationCore.dll ends FreeCAD (0xC0000409) about 0.2 s after a task panel opens,
+# also with a fully stock panel. Keeping Qt's accessibility off while the panel is built stops it
+# (PC probe hs397f, 2026-11-26). The guard arms on the first Show of a widget inside FreeCAD's task
+# view (Qt sends the Show event before it tells accessibility), before any client hears of the panel.
+# The client switches accessibility back on every few milliseconds, so the guard re-applies it on a
+# 5 ms timer for 1.5 s after each panel widget shows, then every 100 ms while the panel stays open,
+
+_UIA_FAST = 1.5         # seconds of 5 ms ticks after a panel widget shows
+_uia = {"timer": None, "until": 0.0, "wanted": None}
+
+
+def _uia_wanted():
+    if _uia["wanted"] is None:
+        import sys
+        on = sys.platform == "win32"
+        if on:
+            try:
+                on = App.ParamGet("User parameter:BaseApp/Preferences/Mod/FreeWorks").GetBool("PanelAccessibilityGuard", True)
+            except Exception:
+                on = True
+        _uia["wanted"] = bool(on) and hasattr(QtGui, "QAccessible")
+    return _uia["wanted"]
+
+
+def _uia_panel():
+    try:
+        return bool(Gui.Control.activeDialog())
+    except Exception:
+        return False
+
+
+def _uia_off():
+    try:
+        QtGui.QAccessible.setActive(False)
+    except Exception as _fw_err:
+        _fw_log("pmconfirm.py:uia-off", _fw_err)
+
+
+def _uia_tick():
+    import time
+    t = _uia["timer"]
+    if time.monotonic() < _uia["until"]:
+        _uia_off()
+        return
+    if _uia_panel():
+        _uia_off()
+        if t is not None and t.interval() != 100:
+            t.setInterval(100)
+        return
+    if _uia.get("session"):
+        # pkg442: the guard stays on for the whole session (PC: gp1126 died between two pages, rgnames with no
+        # page open at all), re-applied every 100 ms; screen readers can't read FreeCAD while it runs
+        _uia_off()
+        if t is not None and t.interval() != 100:
+            t.setInterval(100)
+        return
+    if t is not None:
+        t.stop()
+
+
+def _in_task_view(widget, depth=14):
+    w = widget
+    while w is not None and depth > 0:
+        try:
+            if w.metaObject().className() == "Gui::TaskView::TaskView":
+                return True
+            w = w.parentWidget()
+        except Exception:
+            return False
+        depth -= 1
+    return False
+
+
+_UIA_CLICK = ("TopBar", "RibbonPage", "TabRow", "QatRow", "MenuStrip", "OverflowStrip", "GroupBox",
+              "QToolBar", "QMenu", "QMenuBar")       # pkg435: the ribbon (CommandManager), toolbars and menus
+
+
+def _from_commands(widget, depth=14):
+    """pkg435: the click is on a ribbon / CommandManager, toolbar or menu control (not the task view)."""
+    w = widget
+    while w is not None and depth > 0:
+        try:
+            if type(w).__name__ in _UIA_CLICK or w.metaObject().className() in _UIA_CLICK:
+                return True
+            if w.metaObject().className() == "Gui::TaskView::TaskView":
+                return False
+            w = w.parentWidget()
+        except Exception:
+            return False
+        depth -= 1
+    return False
+
+
+def _uia_click(obj, event):
+    """pkg435 (v3): a command click arms the guard at once. The PC saw UIAutomationCore end FreeCAD right
+    after a real ribbon click, before any panel widget showed (mr433, insertcomp, sfvar440)."""
+    if not _uia_wanted() or not isinstance(obj, QtWidgets.QWidget) or not _from_commands(obj):
+        return False
+    _uia_arm("click " + (type(obj).__name__ or "?"))
+    return False
+
+
+def _uia_show(obj, event):
+    """A widget of the task view is about to show: accessibility off now, before a client hears of it."""
+    if not _uia_wanted() or not isinstance(obj, QtWidgets.QWidget) or not _in_task_view(obj):
+        return False
+    _uia_arm("panel")
+    return False
+
+
+def _uia_arm(why):
+    """Accessibility off now, then the 5 ms re-apply for _UIA_FAST seconds (then 100 ms while a panel is open).
+    pkg435: a log line on each arming, once per second at most; the first one also goes to the Report view."""
+    import time
+    now = time.monotonic()
+    if now - _uia.get("logged", -10.0) >= 1.0:
+        try:
+            text = "FreeCAD: accessibility guard armed (%s)\n" % why
+            if not _uia.get("said"):
+                _uia["said"] = True
+                App.Console.PrintMessage(text)
+            else:
+                App.Console.PrintLog(text)
+        except Exception as _fw_err:
+            _fw_log("pmconfirm.py:uia-log", _fw_err)
+        _uia["logged"] = now
+    _uia["arms"] = _uia.get("arms", 0) + 1       # for checks
+    _uia["last"] = why
+    _uia["until"] = now + _UIA_FAST
+    _uia_off()
+    t = _uia["timer"]
+    if t is None:
+        t = _uia["timer"] = QtCore.QTimer()
+        t.timeout.connect(_uia_tick)
+    if t.interval() != 5:
+        t.setInterval(5)
+    if not t.isActive():
+        t.start()
+
+
+# pkg457 (v5): live batch 8b still died in UIAutomationCore with v4 on (assembly open, Quick View, a Fillet
+# ribbon click): a client's WM_GETOBJECT for the UIA root switches Qt's accessibility on at once, and the
+# 100 ms re-apply leaves it on long enough. Qt answers that request only by turning accessibility on and
+# handing out its provider, so the request is answered "no provider" before Qt sees it: accessibility never
+# comes on and Windows' own window-level provider stands in. PanelAccessibilityGuard false turns it off.
+_WM_GETOBJECT = 0x003D
+_UIA_ROOT = -25         # UiaRootObjectId
+_uia_native = {"filter": None, "blocked": 0}
+
+
+def _uia_lparam(value):
+    """LPARAM as the signed number UIA sends (UiaRootObjectId may arrive as 0xFFFFFFE7 or -25)."""
+    value = int(value) & 0xFFFFFFFF
+    return value - 0x100000000 if value & 0x80000000 else value
+
+
+def _uia_message(event_type, message):
+    """True for a Windows UIA root request (WM_GETOBJECT, UiaRootObjectId) in a native event."""
+    try:
+        if bytes(event_type) not in (b"windows_generic_MSG", b"windows_dispatcher_MSG"):
+            return False
+        import ctypes
+        from ctypes import wintypes
+        msg = wintypes.MSG.from_address(int(message))
+        return msg.message == _WM_GETOBJECT and _uia_lparam(msg.lParam) == _UIA_ROOT
+    except Exception:
+        return False
+
+
+def _uia_native_install():
+    """Windows: an application-wide native filter that turns away UIA root requests (pkg457)."""
+    if _uia_native["filter"] is not None or not hasattr(QtCore, "QAbstractNativeEventFilter"):
+        return _uia_native["filter"] is not None
+
+    class _UiaFilter(QtCore.QAbstractNativeEventFilter):
+        def nativeEventFilter(self, event_type, message):
+            if _uia_message(event_type, message):
+                _uia_native["blocked"] += 1
+                if _uia_native["blocked"] == 1:
+                    try:
+                        App.Console.PrintLog("FreeCAD: accessibility guard turned away a UI Automation request\n")
+                    except Exception:
+                        pass
+                return True, 0
+            return False, 0
+    try:
+        f = _UiaFilter()
+        QtCore.QCoreApplication.instance().installNativeEventFilter(f)
+        _uia_native["filter"] = f
+        return True
+    except Exception as _fw_err:
+        _fw_log("pmconfirm.py:uia-native", _fw_err)
+        return False
+
+
 def install():
     global _keys
     if _keys is None:
         _keys = Keys()
         from . import pmevents
         pmevents.hook("pm.confirm", (QtCore.QEvent.KeyPress, QtCore.QEvent.KeyRelease), _keys.eventFilter)      # pkg98, release pkg102
+        if _uia_wanted():
+            pmevents.hook("pm.uiaguard", (QtCore.QEvent.Show,), _uia_show)
+            pmevents.hook("pm.uiaclick", (QtCore.QEvent.MouseButtonPress,), _uia_click)     # pkg435: guard v3
+            _uia["session"] = True       # pkg442: armed at start, never stops (PanelAccessibilityGuard false = off)
+            _uia_native_install()        # pkg457: UIA root requests turned away before Qt switches accessibility on
+            QtCore.QTimer.singleShot(0, lambda: _uia_arm("start"))
 
 
 # --------------------------------------------------------------------------- right-click menu

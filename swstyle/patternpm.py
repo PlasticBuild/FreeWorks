@@ -253,6 +253,130 @@ class _Escape(QtCore.QObject):
         return False
 
 
+class SkipDots(QtCore.QObject):
+    ""
+
+
+
+    RADIUS = 9          # px around a dot that a click takes
+    PINK = (0.9, 0.1, 0.9)
+
+    def __init__(self, sites, toggle):
+        super().__init__()
+        self.sites, self.toggle = sites, toggle
+        self.root = self.view = None
+        self.widgets, self.shown, self._eat = [], [], False
+        coin = getattr(mirrorpm, "coin", None)
+        if coin is None:
+            return
+        attached = None
+        try:
+            self.view = Gui.ActiveDocument.ActiveView
+            self.root = coin.SoAnnotation()
+            style = coin.SoPickStyle()
+            style.style = coin.SoPickStyle.UNPICKABLE
+            self.root.addChild(style)
+            self.marks = coin.SoSeparator()
+            self.root.addChild(self.marks)
+            attached = self.view.getSceneGraph()
+            attached.addChild(self.root)
+            w = self.view.graphicsView().viewport()
+            w.installEventFilter(self)
+            self.widgets.append(w)
+        except Exception as _fw_err:
+            _fw_log("patternpm.py:SkipDots", _fw_err)
+            # the view could not take the clicks: the node already in the scene goes too (Codex review b9)
+            for w in self.widgets:
+                try:
+                    w.removeEventFilter(self)
+                except Exception as _fw_err2:
+                    _fw_log("patternpm.py:SkipDots.undo-filter", _fw_err2)
+            self.widgets = []
+            if attached is not None and self.root is not None:
+                try:
+                    attached.removeChild(self.root)
+                except Exception as _fw_err2:
+                    _fw_log("patternpm.py:SkipDots.undo-node", _fw_err2)
+            self.root = None
+
+    def show(self, on):
+        if self.root is None:
+            return
+        from pivy import coin
+        self.marks.removeAllChildren()
+        self.shown = []
+        if not on:
+            return
+        try:
+            self.shown = [(k, p, bool(gone)) for k, p, gone in self.sites()]
+        except Exception as _fw_err:
+            _fw_log("patternpm.py:SkipDots.sites", _fw_err)
+            return
+        for gone, marker in ((False, "CIRCLE_FILLED_9_9"), (True, "CIRCLE_LINE_9_9")):
+            points = [p for _k, p, g in self.shown if g == gone]
+            if not points:
+                continue
+            group = coin.SoSeparator()
+            colour = coin.SoBaseColor()
+            colour.rgb = self.PINK
+            group.addChild(colour)
+            coords = coin.SoCoordinate3()
+            coords.point.setValues(0, len(points), [(p.x, p.y, p.z) for p in points])
+            group.addChild(coords)
+            marks = coin.SoMarkerSet()
+            marks.markerIndex = getattr(coin.SoMarkerSet, marker)
+            group.addChild(marks)
+            self.marks.addChild(group)
+
+    def at(self, widget, x, y):
+        """The key of the dot under a viewport point (logical pixels, Qt's y), or None."""
+        import math
+        try:
+            dpr = widget.devicePixelRatioF()
+            best = None
+            for key, p, _gone in self.shown:
+                vx, vy = self.view.getPointOnViewport(p)
+                d = math.hypot(vx / dpr - x, widget.height() - vy / dpr - y)
+                if d <= self.RADIUS and (best is None or d < best[0]):
+                    best = (d, key)
+            return best and best[1]
+        except Exception as _fw_err:
+            _fw_log("patternpm.py:SkipDots.at", _fw_err)
+            return None
+
+    def eventFilter(self, watched, event):
+        if not isinstance(event, QtCore.QEvent):
+            return False        # a stale PySide wrapper (QLayoutItem etc.) can arrive here
+        t = event.type()
+        if t == QtCore.QEvent.MouseButtonPress and self.shown and event.button() == QtCore.Qt.LeftButton \
+                and not (event.modifiers() & (QtCore.Qt.ShiftModifier | QtCore.Qt.ControlModifier | QtCore.Qt.AltModifier)):
+            pos = event.position() if hasattr(event, "position") else event.pos()
+            key = self.at(watched, pos.x(), pos.y())
+            if key is not None:
+                self._eat = True
+                QtCore.QTimer.singleShot(0, lambda: self.toggle(key))
+                return True
+        elif t in (QtCore.QEvent.MouseButtonRelease, QtCore.QEvent.MouseButtonDblClick) and self._eat:
+            if t == QtCore.QEvent.MouseButtonRelease:
+                self._eat = False
+            return True         # the press went to a dot: no pick, no box select
+        return False
+
+    def remove(self):
+        for w in self.widgets:
+            try:
+                w.removeEventFilter(self)
+            except Exception as _fw_err:
+                _fw_log("patternpm.py:SkipDots.remove", _fw_err)
+        self.widgets, self.shown = [], []
+        if self.root is not None:
+            try:
+                self.view.getSceneGraph().removeChild(self.root)
+            except Exception as _fw_err:
+                _fw_log("patternpm.py:SkipDots.remove2", _fw_err)
+            self.root = None
+
+
 def _greyed(text, parent):
     w = QtWidgets.QCheckBox(text, parent)
     w.setEnabled(False)
@@ -614,7 +738,7 @@ class PatternPanel:
         self.propagate_box = QtWidgets.QCheckBox("Propagate visual properties", options)
         self.propagate_box.setObjectName("SWPatternPropagate")
         self.propagate_box.setChecked(True)
-        self.propagate_box.setToolTip("The copies take the seed features' colour")
+        self.propagate_box.setToolTip("The copies take the seed features' color")
         self.propagate_box.toggled.connect(lambda on: self.set_option("propagate", on))
         lay.addWidget(self.propagate_box)
 
@@ -629,6 +753,7 @@ class PatternPanel:
         lay.addWidget(self.full_preview)
         lay.addWidget(self.partial_preview)
         self.ghost = mirrorpm._Ghost()
+        self.dots = SkipDots(self._dot_sites, self._skip_toggle)
         self.form = [self.boxes[k] for k in self.boxes] + [self.features_box, self.bodies_box, skip, options]
         self.scope_page = self._scope_page()       # Feature Scope, in a multibody part only (as Mirror, pkg310)
         if self.scope_page is not None:
@@ -831,11 +956,25 @@ class PatternPanel:
         index = self.instance_at(point)
         if index is None or index == (1, 1):
             return
+        self._skip_toggle(index)
+
+    def _skip_toggle(self, index):
+        """A click on an instance or on its skip dot: skipped, or back if it was."""
+        if self._gone():
+            return
         if index in self.skip:
             self.skip.discard(index)
         else:
             self.skip.add(index)
         self.update()
+
+    def sites(self):
+        """[(index, placement)] of every instance but the seed, skipped ones too (the skip dots)."""
+        return []
+
+    def _dot_sites(self):
+        centre = self.seed_centre()
+        return [(ij, pl.multVec(centre), ij in self.skip) for ij, pl in self.sites()]
 
     def set_option(self, what, on):
         setattr(self, what, on)
@@ -968,7 +1107,7 @@ class PatternPanel:
             if sub.startswith("Edge") or not sub.startswith("Face"):
                 return
         feature = None
-        if not sub and obj in mirrorpm.features_of(self.body):
+        if not sub and mirrorpm.is_feature(obj, self.body):
             feature = obj
         elif sub.startswith("Face"):
             feature = mirrorpm.feature_of_face(self.body, obj, sub)
@@ -1173,7 +1312,7 @@ class PatternPanel:
                 seeds = self.seeds()
                 if p.TypeId == self.OWN.type:
                     own = self.features if self.faces else seeds
-                    p.Features = [f for f in (mirrorpm.features_of(self.body) if self.whole else own) if f is not p]
+                    p.Features = [f for f in (mirrorpm.features_of(self.body) if self.whole else mirrorpm.originals(own)) if f is not p]
                     p.Faces = [(o, [sub]) for o, sub in self.faces]
                     if "Bodies" in p.PropertiesList:
                         p.Bodies = [(o, [sub]) for o, sub in self.solids]
@@ -1184,7 +1323,7 @@ class PatternPanel:
                     p.TransformMode = "Whole shape"
                 else:
                     p.TransformMode = "Features"
-                    p.Originals = list(seeds)
+                    p.Originals = mirrorpm.originals(seeds)
                 if p.TypeId != self.OWN.type:
                     self.set_pattern(p)
                 from . import refpattern
@@ -1232,6 +1371,9 @@ class PatternPanel:
             box.blockSignals(False)
         self.vary_box.setVisible(self.vary or self._vary_ok())     # not greyed: shown where it can work
         self._scope_shown()
+        dots = getattr(self, "dots", None)
+        if dots is not None:
+            dots.show(self.active == "skip" and self.ok)
 
     def _vary_ok(self):
         ""
@@ -1370,6 +1512,10 @@ class PatternPanel:
             self.ghost.remove()
         except Exception as _fw_err:
             _fw_log("patternpm.py:1118", _fw_err)
+        try:
+            self.dots.remove()
+        except Exception as _fw_err:
+            _fw_log("patternpm.py:dots", _fw_err)
         try:
             if self.pattern is not None and self.pattern.ViewObject is not None:
                 self.pattern.ViewObject.Visibility = True
@@ -1606,6 +1752,25 @@ class LinearPanel(_VaryMixin, PatternPanel):
                 out.append(App.Placement(move, App.Rotation()))
         return out
 
+    def sites(self):
+        d1, d2 = self.dirs["dir1"], self.dir2()
+        if d1["ref"] is None:
+            return []
+        v1 = patterns.direction_of(*d1["ref"]) * (-1 if d1["reverse"] else 1)
+        n1, s1 = d1["count"], d1["value"]
+        v2, n2, s2 = None, 1, 0.0
+        if d2["use"] and d2["ref"] is not None:
+            v2 = patterns.direction_of(*d2["ref"]) * (-1 if d2["reverse"] else 1)
+            n2, s2 = d2["count"], d2["value"]
+        out = []
+        for i in range(n1):
+            for j in range(n2):
+                if (i == 0 and j == 0) or (d2.get("seed") and i > 0 and j > 0):
+                    continue
+                move = v1 * (s1 * i) + (v2 * (s2 * j) if v2 is not None else App.Vector())
+                out.append(((i + 1, j + 1), App.Placement(move, App.Rotation())))
+        return out
+
     def instance_at(self, point):
         d1, d2 = self.dirs["dir1"], self.dir2()
         if d1["ref"] is None:
@@ -1631,7 +1796,9 @@ class LinearPanel(_VaryMixin, PatternPanel):
 
     def make_boxes(self):
         return {"dir1": _DirectionBox(self, "dir1", "Direction 1"),
-                "dir2": _DirectionBox(self, "dir2", "Direction 2", optional=True)}   # look audit Z3: a tick in its title, folded and off
+                "dir2": _DirectionBox(self, "dir2", "Direction 2")}
+
+        # hidden SWPatternDir2On check stays for macros, and a picked direction or Symmetric turns it on
 
     def direction_of(self, obj, sub):
         return linear_direction(self.body, obj, sub)
@@ -1738,6 +1905,23 @@ class CircularPanel(_VaryMixin, PatternPanel):
             for k in range(1, n2):
                 if (-k - 1, 1) not in self.skip:
                     out.append(App.Placement(App.Vector(), App.Rotation(axis, -self._vary_spacing(step2, k, 2)), point))
+        return out
+
+    def sites(self):
+        d, d2 = self.dirs["dir1"], self.dirs["dir2"]
+        if d["ref"] is None:
+            return []
+        point, axis = patterns.axis_of(*d["ref"])
+        if d["reverse"]:
+            axis = axis * -1
+        step = self._step()
+        out = [((k + 1, 1), App.Placement(App.Vector(), App.Rotation(axis, self._vary_spacing(step, k, 1)), point))
+               for k in range(1, d["count"])]
+        if d2["use"]:
+            n2 = d["count"] if d2.get("symmetric") else d2["count"]
+            step2 = step if d2.get("symmetric") else self._step(d2)
+            out += [((-k - 1, 1), App.Placement(App.Vector(), App.Rotation(axis, -self._vary_spacing(step2, k, 2)), point))
+                    for k in range(1, n2)]
         return out
 
     def instance_at(self, point):

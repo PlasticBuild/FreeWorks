@@ -229,7 +229,7 @@ class EditPolygonPage(sketchtoolpm.ToolPage):
 class EditPolygonCommand:
     def GetResources(self):
         return {"Pixmap": "Sketcher_CreateRegularPolygon", "MenuText": "Edit Polygon",
-                "ToolTip": "Changes a polygon's sides, size, centre and angle", "CmdType": "ForEdit"}
+                "ToolTip": "Changes a polygon's sides, size, center and angle", "CmdType": "ForEdit"}
 
     def IsActive(self):
         return contextbar.sketch_in_edit() is not None

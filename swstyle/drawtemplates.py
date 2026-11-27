@@ -43,6 +43,10 @@ def install():
     if _DONE:
         return
     try:
+        wrap_default_row()
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: Default Templates > Drawings: %s\n" % error)
+    try:
         from . import saveas
     except Exception:
         return
@@ -254,3 +258,76 @@ def make_template(path, size, std, units):
         return True
     finally:
         App.closeDocument(doc.Name)
+
+
+# --------------------------------------------------------------------------- Options > Default Templates > Drawings
+
+# starts on newdoc.sheet_template() (the drafting standard's sheet format); TechDraw's TemplateFile is blank on a
+# fresh install. The row shows that real default; a sheet format picked there is what new drawings then use
+# (and TechDraw's own default, kept the same). Run time wraps of newdoc's and optionspages' (not this thread's).
+DEFAULT_PARAM = "DrawingTemplate"
+_TD = "User parameter:BaseApp/Preferences/Mod/TechDraw/Files"
+
+
+def chosen_drawing_template():
+    """The sheet format picked in Default Templates > Drawings, when it is there ("" = none picked)."""
+    path = _params().GetString(DEFAULT_PARAM, "")
+    return path if path and os.path.isfile(path) else ""
+
+
+def default_drawing_template():
+    ""
+    path = chosen_drawing_template()
+    if path:
+        return path
+    from . import newdoc
+    old = getattr(newdoc.sheet_template, "_fw_old", newdoc.sheet_template)
+    try:
+        path = old() or ""
+    except Exception as _fw_err:
+        _fw_log("drawtemplates.py:default sheet", _fw_err)
+        path = ""
+    if not path:
+        path = App.ParamGet(_TD).GetString("TemplateFile", "")
+    if not path:          # stock TechDraw's own default when its preference is blank
+        for root in (App.getResourceDir(), os.path.join(App.getResourceDir(), "share")):
+            p = os.path.join(root, "Mod", "TechDraw", "Templates", "Default_Template_A4_Landscape.svg")
+            if os.path.isfile(p):
+                return p
+    return path
+
+
+def set_default_drawing_template(path):
+    """The row's write: a path other than the shown default becomes new drawings' sheet format; blank or the
+    same default leaves new drawings following the drafting standard."""
+    path = (path or "").strip()
+    p = _params()
+    if not path:
+        p.SetString(DEFAULT_PARAM, "")
+        return ""
+    if os.path.normcase(os.path.abspath(path)) == os.path.normcase(os.path.abspath(default_drawing_template())):
+        return path                    # unchanged: OK on the box writes nothing new
+    p.SetString(DEFAULT_PARAM, path)
+    App.ParamGet(_TD).SetString("TemplateFile", path)
+    return path
+
+
+def wrap_default_row():
+    from . import newdoc
+    if not getattr(newdoc.sheet_template, "_fw_drawtemplates", False):
+        old = newdoc.sheet_template
+
+        def sheet_template():
+            return chosen_drawing_template() or old()
+        sheet_template._fw_drawtemplates = True
+        sheet_template._fw_old = old
+        newdoc.sheet_template = sheet_template
+    try:
+        from . import optionspages
+    except Exception:
+        return
+    if hasattr(optionspages, "_tech_template_read") and \
+            not getattr(optionspages._tech_template_read, "_fw_drawtemplates", False):
+        default_drawing_template._fw_drawtemplates = True
+        optionspages._tech_template_read = default_drawing_template
+        optionspages._tech_template_write = set_default_drawing_template

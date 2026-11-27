@@ -36,7 +36,8 @@ MAPPINGS = ("Automatic", "Projection", "Spherical", "Cylindrical", "Surface")
 DIRECTIONS = ("XY", "YZ", "ZX")
 FINISHES = ("None", "Bumps", "Knurl", "Sandblast", "Rough", "Brushed", "Cast")
 DEFAULTS = {"image": "", "mapping": "Automatic", "direction": "XY", "width": "100", "height": "100",
-            "angle": "0", "mirror_h": "0", "mirror_v": "0", "finish": "None", "finish_scale": "100", "bump": ""}
+            "angle": "0", "mirror_h": "0", "mirror_v": "0", "finish": "None", "finish_scale": "100", "bump": "",
+            "hloc": "0", "vloc": "0"}     # Horizontal / Vertical location (mm): where the image sits on the faces
 
 _nodes = {}         # (doc, tip name) -> (root, [nodes])
 _overlays = {}      # (doc, tip name) -> [(parent, overlay switch, face index)]
@@ -213,8 +214,12 @@ def _coordinate_node(s, obj):
     from pivy import coin
     mapping = s["mapping"]
     if mapping in ("Spherical", "Cylindrical"):
-        node = coin.SoTextureCoordinateEnvironment()
-        return node
+        # wrapped round the faces in the model's own space, so the image turns with the part (an environment
+        # map slid over the faces whenever the view turned)
+        try:
+            return coin.SoTextureCoordinateSphere() if mapping == "Spherical" else coin.SoTextureCoordinateCylinder()
+        except AttributeError:
+            return coin.SoTextureCoordinateEnvironment()
     # Automatic, Projection and Surface: a plane projection (Part shapes carry no texture coordinates)
     node = coin.SoTextureCoordinatePlane()
     try:
@@ -243,6 +248,35 @@ def _coordinate_node(s, obj):
     return node
 
 
+def _plane_size(s, obj):
+    """(width, height) in mm of one repeat of the image, as _coordinate_node lays it."""
+    try:
+        w, h = max(float(s["width"]), 0.01), max(float(s["height"]), 0.01)
+    except ValueError:
+        w, h = 100.0, 100.0
+    if s["mapping"] == "Automatic":
+        box = _bound(obj)
+        if box is not None and box.isValid():
+            w = h = max(box.XLength, box.YLength, box.ZLength, 0.01)
+    return w, h
+
+
+def _shift(node, s, obj):
+    """Horizontal / Vertical location: the image slid along the faces (plane mappings), on the texture
+    transform node."""
+    from pivy import coin
+    if s.get("mapping") in ("Spherical", "Cylindrical") or not s.get("image"):
+        return
+    try:
+        dh, dv = float(s.get("hloc", "0")), float(s.get("vloc", "0"))
+    except ValueError:
+        return
+    if not dh and not dv:
+        return
+    w, h = _plane_size(s, obj)
+    node.translation.setValue(coin.SbVec2f(-dh / w, -dv / h))
+
+
 def remove(body):
     """Takes the drawn image off the body: off its last feature, and off a feature that was last before (a feature
     added at the end of the body becomes the tip; the one before kept the texture)."""
@@ -269,6 +303,24 @@ def remove(body):
         _watch(False)
 
 
+def _texture_from_file(tex, path):
+    """The picture put in the texture as pixels read with Qt, as decalpm and scenebg do: Coin reads a file
+    named in SoTexture2.filename only through simage, which FreeCAD's Windows build may lack, and the
+    texture then draws nothing (a textured appearance showed in plain colour). Falls back to the file name."""
+    from pivy import coin
+    image = QtGui.QImage(path)
+    if image.isNull():
+        tex.filename.setValue(path)
+        return False
+    image = image.convertToFormat(QtGui.QImage.Format_RGBA8888).mirrored(False, True)     # Coin: bottom row first
+    w, h = image.width(), image.height()
+    stride = image.bytesPerLine()
+    raw = bytes(image.constBits())[:stride * h]
+    tex.filename.setValue("")
+    tex.image.setValue(coin.SbVec2s(w, h), 4, b"".join(raw[y * stride:y * stride + 4 * w] for y in range(h)))
+    return True
+
+
 def apply(body):
     """Draws the body's image, mapping and finish (or takes them away when there are none)."""
     if not App.GuiUp or body is None:
@@ -288,7 +340,7 @@ def apply(body):
             return False
         root = tip.ViewObject.RootNode
         tex = coin.SoTexture2()
-        tex.filename.setValue(path)
+        _texture_from_file(tex, path)
         tex.model = coin.SoTexture2.MODULATE
         tex.wrapS = coin.SoTexture2.REPEAT
         tex.wrapT = coin.SoTexture2.REPEAT
@@ -300,6 +352,7 @@ def apply(body):
             k = 1.0
         if s["finish"] != "None" and not s["image"]:
             scale.scaleFactor.setValue(coin.SbVec2f(4.0 / k, 4.0 / k))
+        _shift(scale, s, tip)
         nodes = [tex, coords, scale]
         for i, n in enumerate(nodes):
             root.insertChild(n, i)
@@ -397,7 +450,7 @@ def _textured_overlay(face_set, indices, material, offset, s, shape_box):
     switch = coin.SoSwitch()
     sep = coin.SoSeparator()
     tex = coin.SoTexture2()
-    tex.filename.setValue(path)
+    _texture_from_file(tex, path)
     tex.model = coin.SoTexture2.MODULATE
     tex.wrapS = coin.SoTexture2.REPEAT
     tex.wrapT = coin.SoTexture2.REPEAT
@@ -410,6 +463,7 @@ def _textured_overlay(face_set, indices, material, offset, s, shape_box):
         k = 1.0
     if s["finish"] != "None" and not s["image"]:
         scale.scaleFactor.setValue(coin.SbVec2f(4.0 / k, 4.0 / k))
+    _shift(scale, s, _BoxOnly(shape_box))
     sep.addChild(scale)
     pull = coin.SoPolygonOffset()
     factor, units, on = offset if offset is not None else (0.0, 0.0, False)

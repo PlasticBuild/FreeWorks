@@ -14,6 +14,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -50,7 +51,7 @@ def target():
         _fw_log("detailedpreview.py:49", _fw_err)
     try:
         edit = Gui.ActiveDocument.getInEdit()
-        obj = edit.Object if edit is not None else None
+        obj = editobj.of(edit) if edit is not None else None
     except Exception:
         return None
     if obj is None or not obj.TypeId.startswith("PartDesign::") or obj.TypeId == "PartDesign::Body":
@@ -272,7 +273,7 @@ def feature_page():
         _fw_log("detailedpreview.py:271", _fw_err)
     try:
         edit = Gui.ActiveDocument.getInEdit()
-        obj = edit.Object if edit is not None else None
+        obj = editobj.of(edit) if edit is not None else None
         if obj is None:
             return False
         if obj.TypeId in EYE_TYPES:

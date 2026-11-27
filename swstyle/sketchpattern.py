@@ -318,15 +318,12 @@ def make_pattern(sketch, entities, centre, count, total_deg, equal=True, reverse
     cons = []
     if at_origin:
         centre_ref = (-1, 1)
+    elif centre_point is not None:
+
+        # (fix305: a second point of its own, tied to nothing, let the picked one walk away)
+        centre_ref = (int(centre_point[0]), int(centre_point[1]))
     else:
         centre_ref = (sketch.addGeometry(Part.Point(App.Vector(cx, cy, 0)), True), 1)
-        if centre_point is not None:
-
-            # pattern's centre, so the pattern follows it
-            try:
-                sketch.addConstraint(C("Coincident", centre_ref[0], 1, int(centre_point[0]), int(centre_point[1])))
-            except Exception as _fw_err:
-                _fw_log("sketchpattern.py:172", _fw_err)
     ag, apos = anchor(sketch, entities[0])
     a0 = sketch.getPoint(ag, apos)
     radius = math.hypot(a0.x - cx, a0.y - cy)
@@ -484,14 +481,24 @@ def make_pattern(sketch, entities, centre, count, total_deg, equal=True, reverse
     if spacing_name and gap_ids:
         import bisect
         gone = sorted(gone)
+        hidden = []
         for i in gap_ids:
             if i in gone:
                 continue
             try:
-                sketch.setExpression(".Constraints[%d]" % (i - bisect.bisect_left(gone, i)),
-                                     ".Constraints.%s" % spacing_name)
+                j = i - bisect.bisect_left(gone, i)
+
+                # (<name>_t<k>: exprkeep takes them with it when it is deleted)
+                sketch.renameConstraint(j, _free_name(sketch, "%s_t%d" % (spacing_name, j)))
+                hidden.append(j)
+                sketch.setExpression(".Constraints[%d]" % j, ".Constraints.%s" % spacing_name)
             except Exception as _fw_err:
                 _fw_log("sketchpattern.py:gap expression", _fw_err)
+        if hidden:
+            try:
+                sketch.setVirtualSpace(hidden, True)
+            except Exception as _fw_err:
+                _fw_log("sketchpattern.py:gap hide", _fw_err)
     _helpers.hide_new(sketch, _first_geo)
     sketch.solve()
     return [sorted(m.values()) for m in instances]
@@ -663,16 +670,18 @@ class CircularPatternPage(sketchtoolpm.ToolPage):
                 name = _stp.point_name(self.sketch, g, pos) if g >= 0 else "Point"
         self.centre_box.clear()
         self.centre_box.addItem(name)
+        # fix305: known before Center X/Y change, so the pattern their change makes goes round this point
+        self.centre_point = (g, pos, q.x, q.y) if g >= 0 or g <= -3 else None
         self.cx.setValue(q.x)
         self.cy.setValue(q.y)
-        self.centre_point = (g, pos, q.x, q.y) if g >= 0 or g <= -3 else None
         self._centre_on(False)
         return True
 
     def _centre_point(self):
         """(geo, pos) of the picked centre point while Center X/Y still say where it is."""
         cp = getattr(self, "centre_point", None)
-        if cp is None or abs(cp[2] - self.cx.value()) > 1e-6 or abs(cp[3] - self.cy.value()) > 1e-6:
+        tol = max(1e-6, 0.6 * 10.0 ** -self.cx.decimals())     # fix305: Center X/Y show 3 decimals
+        if cp is None or abs(cp[2] - self.cx.value()) > tol or abs(cp[3] - self.cy.value()) > tol:
             return None
         return cp[:2]
 

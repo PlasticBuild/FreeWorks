@@ -339,7 +339,7 @@ class EdgePicks:
             self.error.setVisible(True)
             return False
         invalid = "Invalid" in self.obj.State
-        self.error.setText(self.obj.getStatusString() if invalid else "")
+        self.error.setText(naming.status_text(self.obj, "The flange") if invalid else "")
         self.error.setVisible(invalid)
         return not invalid
 
@@ -373,6 +373,9 @@ class EdgePicks:
             base = self.base if self.new else None
             doc.abortTransaction()
             doc.recompute()
+            if getattr(self, "made_before_back", False):
+                # pkg460: back from Edit Flange Profile, the new flange's step is already in the Undo list
+                _drop_new(doc, getattr(self, "back_new", self.new))
             if base is not None:
                 try:
                     base.ViewObject.Visibility = True
@@ -898,7 +901,7 @@ class Panel(EdgePicks):
     def addSelection(self, doc, name, sub, point):
         if sub.startswith("Edge"):
             return EdgePicks.addSelection(self, doc, name, sub, point)
-        QtCore.QTimer.singleShot(0, lambda: self._picked_other(doc, name, sub))
+        from . import safe_later as _sl; _sl.later(0, lambda: self._picked_other(doc, name, sub), self, "angle_face")
 
     def _picked_other(self, doc_name, name, sub):
         try:
@@ -1020,13 +1023,140 @@ class Panel(EdgePicks):
             sk.Label = naming.next_label(doc, "Sketch")
             obj.SWProfile = sk
             doc.recompute()
-        if not self.accept():
-            return
+
+        # Sketch" dialog (Back / Finish / Cancel), the flange following the sketch live; Finish makes it.
+        # The page's own step stays open across the sketch (leaving the sketch commits it: one Undo).
+        self._changed()
+        try:
+            Gui.Selection.removeObserver(self)
+        except Exception as _fw_err:
+            _fw_log("smedgeflange.py:profile-observer", _fw_err)
+        Gui.Control.closeDialog()
         try:
             sk.ViewObject.Visibility = True
         except Exception as _fw_err:
             _fw_log("smedgeflange.py:968", _fw_err)
         Gui.ActiveDocument.setEdit(sk.Name)
+        ProfileSketch(obj, sk, getattr(self, "back_new", self.new))
+
+class ProfileSketch(QtWidgets.QDialog):
+    ""
+
+    current = None
+
+    def __init__(self, obj, sketch, new):
+        super().__init__(Gui.getMainWindow(), QtCore.Qt.Tool)
+        self.setObjectName("SWSMProfileSketch")
+        self.setWindowTitle("Profile Sketch")
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        self.obj, self.sketch, self.new, self.doc = obj, sketch, new, obj.Document
+        self.undo0 = len(self.doc.UndoNames)
+        lay = QtWidgets.QHBoxLayout(self)
+        for name, text in (("Back", "Back"), ("Finish", "Finish"), ("Cancel", "Cancel")):
+            b = QtWidgets.QPushButton(text, self)
+            b.setObjectName("SWSMProfileSketch" + name)
+            b.clicked.connect(getattr(self, name.lower()))
+            lay.addWidget(b)
+        self.seen = self._state()
+        self.timer = QtCore.QTimer(self)
+        self.timer.timeout.connect(self._follow)
+        self.timer.start(300)
+        ProfileSketch.current = self
+        try:
+            view = Gui.getMainWindow().centralWidget()
+            self.adjustSize()
+            self.move(view.mapToGlobal(QtCore.QPoint(view.width() - self.width() - 40, 60)))
+        except Exception as _fw_err:
+            _fw_log("smedgeflange.py:profile-place", _fw_err)
+        self.show()
+
+    def _state(self):
+        try:
+            sk = self.sketch
+            return (len(sk.Geometry),
+                    tuple(round(c, 6) for g in sk.Geometry for p in (getattr(g, "StartPoint", None), getattr(g, "EndPoint", None))
+                          if p is not None for c in (p.x, p.y)),
+                    tuple(str(getattr(c, "Value", "")) for c in sk.Constraints))
+        except Exception:
+            return None
+
+    def _follow(self):
+        ""
+        try:
+            gdoc = Gui.ActiveDocument
+            if gdoc is None or gdoc.getInEdit() is None:
+                # the sketch was closed another way (its own Close): as Finish
+                self.timer.stop()
+                self._done()
+                return
+            state = self._state()
+            if state != self.seen:
+                self.seen = state
+                self.sketch.recompute()     # its shape (the solver alone leaves the old one)
+                self.obj.touch()
+                self.obj.recompute()
+        except Exception as _fw_err:
+            _fw_log("smedgeflange.py:profile-follow", _fw_err)
+
+    def _leave(self):
+        self.timer.stop()
+        try:
+            if Gui.ActiveDocument.getInEdit() is not None:
+                Gui.ActiveDocument.resetEdit()
+        except Exception as _fw_err:
+            _fw_log("smedgeflange.py:profile-leave", _fw_err)
+
+    def _done(self):
+        if ProfileSketch.current is self:
+            ProfileSketch.current = None
+        try:
+            self.sketch.ViewObject.Visibility = False
+        except Exception as _fw_err:
+            _fw_log("smedgeflange.py:profile-hide", _fw_err)
+        try:
+            self.doc.recompute()
+        except Exception as _fw_err:
+            _fw_log("smedgeflange.py:profile-recompute", _fw_err)
+        self.close()
+
+    def finish(self):
+        self._leave()
+        self._done()
+
+    def back(self):
+        self._leave()
+        if ProfileSketch.current is self:
+            ProfileSketch.current = None
+        self.close()
+        try:
+            self.doc.recompute()
+            panel = Panel(self.obj, self.new)
+            # the flange's step was closed with the sketch: Cancel now takes it out with one Undo
+            panel.made_before_back = True
+            panel.back_new = self.new
+            panel.undo_at_back = len(self.doc.UndoNames)
+            Gui.Control.showDialog(panel)
+        except Exception as error:
+            App.Console.PrintWarning("FreeCAD: Edge Flange: %s\n" % error)
+
+    def cancel(self):
+        self._leave()
+        if ProfileSketch.current is self:
+            ProfileSketch.current = None
+        self.close()
+        _drop_new(self.doc, self.new)
+
+
+def _drop_new(doc, new):
+    """Cancel after the profile sketch: a new flange (and its sketch) goes with its Undo step, as if never made;
+    an edited one goes back as it was."""
+    try:
+        if doc.UndoNames and doc.UndoNames[0] == (TITLE if new else "Edit " + TITLE):
+            doc.undo()
+            doc.recompute()
+    except Exception as _fw_err:
+        _fw_log("smedgeflange.py:profile-cancel", _fw_err)
+
 
 class _DeleteKey(QtCore.QObject):
     def __init__(self, panel):

@@ -15,6 +15,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -3335,7 +3336,7 @@ if GUI:
                     offer = {kind: rel for kind, label, rel in sketch3dpm.addable(self, list(self.selection))}
                 except Exception:
                     offer = {}
-                for kind, tip in (("AlongX", "Make Along X"), ("AlongY", "Make Along Y"), ("AlongZ", "Make AlongZ"),
+                for kind, tip in (("AlongX", "Make Along X"), ("AlongY", "Make Along Y"), ("AlongZ", "Make Along Z"),
                                   ("Fix", "Make Fixed")):
                     if kind in offer:
                         icon_action(top, sketch3dpm.relation_icon(kind), tip, lambda r=offer[kind]: self._add_offered(r))
@@ -3558,7 +3559,7 @@ if GUI:
             from . import sketch3dpm
             top = row("SW3DSketchContextRelations")
             if isinstance(tool, LineTool):
-                for kind, tip in (("AlongX", "Make Along X"), ("AlongY", "Make Along Y"), ("AlongZ", "Make AlongZ")):
+                for kind, tip in (("AlongX", "Make Along X"), ("AlongY", "Make Along Y"), ("AlongZ", "Make Along Z")):
                     icon_action(top, sketch3dpm.relation_icon(kind), tip,
                                 lambda k=kind: (setattr(tool, "force", k), tool.move(*self.cursor())))
             icon_action(top, sketch3dpm.relation_icon("Fix"), "Make Fixed", lambda: setattr(tool, "fix_first", True))
@@ -6695,7 +6696,7 @@ if GUI:
         it was drawn on (its ArcPlane)."""
         TITLE = "Circle"
         CURSOR = "Sketcher_Pointer_Create_Circle"
-        HINT = "3D Circle: click the centre, then a point on the rim. The circle lies on the sketch plane " \
+        HINT = "3D Circle: click the center, then a point on the rim. The circle lies on the sketch plane " \
                "(Tab changes it)."
 
         def __init__(self, session, construction=False):
@@ -6772,7 +6773,7 @@ if GUI:
     class CenterArcTool(CircleTool):
         TITLE = "Centerpoint Arc"
         CURSOR = "Sketcher_Pointer_Create_Arc"
-        HINT = "3D Centerpoint Arc: click the centre, then the start, then the end. The arc lies on the sketch " \
+        HINT = "3D Centerpoint Arc: click the center, then the start, then the end. The arc lies on the sketch " \
                "plane (Tab changes it)."
 
         def __init__(self, session, construction=False):
@@ -7193,7 +7194,7 @@ if GUI:
     class CenterRectangleTool(RectangleTool):
         TITLE = "Center Rectangle"
         CURSOR = "Sketcher_Pointer_Create_Box_Center"
-        HINT = "3D Center Rectangle: click the centre, then a corner, on the sketch plane (Tab changes it)."
+        HINT = "3D Center Rectangle: click the center, then a corner, on the sketch plane (Tab changes it)."
         MODE = "center"
 
     class ThreePointCornerRectangleTool(RectangleTool):
@@ -7205,7 +7206,7 @@ if GUI:
     class ThreePointCenterRectangleTool(RectangleTool):
         TITLE = "3 Point Center Rectangle"
         CURSOR = "Sketcher_Pointer_Create_Box_Center"
-        HINT = "3D 3 Point Center Rectangle: click the centre, the middle of one side, then the width."
+        HINT = "3D 3 Point Center Rectangle: click the center, the middle of one side, then the width."
         MODE = "3center"
         NEEDS = 2
 
@@ -8954,7 +8955,7 @@ def sketch2d_in_edit():
     try:
         gdoc = Gui.ActiveDocument
         vp = gdoc.getInEdit() if gdoc else None
-        return vp is not None and vp.Object.isDerivedFrom("Sketcher::SketchObject")
+        return vp is not None and editobj.derived(vp, "Sketcher::SketchObject")
     except Exception as _fw_err:
         _fw_log("sketch3d.py:8897", _fw_err)
         return False
@@ -8997,6 +8998,13 @@ def new_sketch_on_plane(obj=None, sub=""):
     return s.obj
 
 
+def _model_view():
+    try:    # the active window is a 3D model view (not a drawing sheet or a text page)
+        return hasattr(Gui.ActiveDocument.ActiveView, "graphicsView")
+    except Exception:
+        return False
+
+
 def new_sketch():
     ""
 
@@ -9004,8 +9012,8 @@ def new_sketch():
         exit_sketch()
         return None
     doc = App.ActiveDocument
-    if doc is None:
-        return None
+    if doc is None or not _model_view():
+        return None    # a drawing sheet has no 3D sketch (rcmenus sweep p280)
     picked = [s.Object for s in Gui.Selection.getSelectionEx() if is_sketch3d(s.Object)]
     if picked:
         Gui.Selection.clearSelection()
@@ -9149,13 +9157,13 @@ class _Command:
 
     def IsActive(self):
         if self.name == "FreeWorks_Sketch3D":
-            return App.ActiveDocument is not None and not sketch2d_in_edit()
+            return _model_view() and not sketch2d_in_edit()
         if self.name in ("FreeWorks_Sketch3DExit", "FreeWorks_Sketch3DPlane"):
             return editing() is not None
         if self.name == "FreeWorks_Sketch3DOnPlane":
-            return App.ActiveDocument is not None and not sketch2d_in_edit() and picked_plane() is not None
+            return _model_view() and not sketch2d_in_edit() and picked_plane() is not None
         if self.name in ("FreeWorks_Sketch3DSplineOnSurface", "FreeWorks_Sketch3DOffsetOnSurface"):
-            return App.ActiveDocument is not None and not sketch2d_in_edit()
+            return _model_view() and not sketch2d_in_edit()
         if self.name == "FreeWorks_Sketch3DInsertSplinePoint":
             if editing() is not None:
                 return any(e.kind == "S" for e in session().ents) if session() is not None else False
@@ -9171,7 +9179,7 @@ class _Command:
                     return bool(Gui.Command.get("Sketcher_Intersection").isActive())
                 except Exception:
                     return False
-            return App.ActiveDocument is not None
+            return _model_view()
         if editing() is not None:
             return True
         try:

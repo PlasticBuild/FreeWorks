@@ -1356,8 +1356,8 @@ class SlicerPanel:
         self.lay_button.setCheckable(True)
         self.auto_button = tool("Auto Orient", "Turn the part to need the least support (the slicers' "
                                 "Auto orient)", lambda: self.bed.auto_orient())
-        self.arrange_button = tool("Arrange", "Centre the part on the plate", lambda: self.bed.arrange())
-        self.reset_place = tool("Reset", "As modelled, Z up, centred", lambda: self.bed.reset())
+        self.arrange_button = tool("Arrange", "Center the part on the plate", lambda: self.bed.arrange())
+        self.reset_place = tool("Reset", "As modeled, Z up, centered", lambda: self.bed.reset())
         grid.addWidget(self.lay_button, 1, 0, 1, 2)
         grid.addWidget(self.auto_button, 1, 2)
         grid.addWidget(self.arrange_button, 2, 0, 1, 2)
@@ -1374,7 +1374,7 @@ class SlicerPanel:
             box.setRange(-10000, 10000)
             box.setDecimals(1)
             box.setSuffix(" mm")
-            box.setToolTip("Where the part's centre sits on the plate")
+            box.setToolTip("Where the part's center sits on the plate")
             box.editingFinished.connect(self._moved)
             pos.addWidget(QtWidgets.QLabel(label))
             pos.addWidget(box, 1)
@@ -2324,7 +2324,7 @@ class SlicerPanel:
         except Exception as _fw_err:
             _fw_log("slicerui cancel", _fw_err)
         self.after_slice = None
-        self._sliced({"ok": False, "cancelled": True, "error": "Slicing was cancelled."}, job)
+        self._sliced({"ok": False, "cancelled": True, "error": "Slicing was canceled."}, job)
 
     def _tick(self):
         """While slicing: how long it has run, so a long slice shows it is still going (there is no time limit;
@@ -2435,7 +2435,7 @@ class SlicerPanel:
             # Preview, Export G-code or Send to Printer asked for this slice: theirs follows
             QtCore.QTimer.singleShot(0, lambda: follow(self.key, result))
         if result.get("cancelled"):
-            self.status.setText("Slicing was cancelled.")
+            self.status.setText("Slicing was canceled.")
             self.results.setText("")
         elif not result.get("ok"):
             text = result.get("error") or "Slicing failed."

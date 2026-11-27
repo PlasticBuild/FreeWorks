@@ -11,6 +11,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -427,7 +428,7 @@ def ensure(obj):
 class RibFeature:
     def __init__(self, obj):
         obj.addProperty("App::PropertyLink", "Sketch", "Rib", "Sketch with the open rib line")
-        obj.addProperty("App::PropertyLength", "Thickness", "Rib", "Rib thickness, centred on the sketch plane")
+        obj.addProperty("App::PropertyLength", "Thickness", "Rib", "Rib thickness, centered on the sketch plane")
         obj.addProperty("App::PropertyBool", "Flip", "Rib", "Fill on the other side of the line")
         obj.Thickness = 10.0
         ensure(obj)
@@ -725,7 +726,7 @@ class RibPanel(QtCore.QObject):
         self._enable()
         self._show_state()
         self._show_contours()
-        QtCore.QTimer.singleShot(0, self._fold_contours)
+        from . import safe_later as _sl; _sl.later(0, self._fold_contours, self, "contours")
 
     def _fold_contours(self, tries=0):
         ""
@@ -733,7 +734,7 @@ class RibPanel(QtCore.QObject):
         try:
             if not self.contours.isVisible():
                 if tries < 20:
-                    QtCore.QTimer.singleShot(100, lambda: self._fold_contours(tries + 1))
+                    from . import safe_later as _sl; _sl.later(100, lambda: self._fold_contours(tries + 1), self, "contours")
                 return
             for group in mw().findChildren(QtWidgets.QWidget):
                 if not group.inherits("QSint::ActionGroup") or not group.isAncestorOf(self.contours):
@@ -922,9 +923,33 @@ def run():
     _watch["ticks"] = 0
     picker = sketchstart.PlanePicker(body, title="Rib", icon="FEATURES_RIB",
                                      message=MESSAGE, tool="Sketcher_CreateLine")
+    _take_rib_sketch(picker)
     Gui.Control.showDialog(picker)
     _start_watch()
     return True
+
+
+def _take_rib_sketch(picker):
+    ""
+
+    own = picker.picked
+
+    def picked():
+        try:
+            sel = Gui.Selection.getSelectionEx()
+            if sel and not picker.done:
+                entry = sel[-1]
+                subs = [s for s in entry.SubElementNames if s]
+                obj = entry.Object
+                if obj.TypeId == SKETCH and not (subs and subs[-1].startswith("Face")) and _free_rib_line(obj):
+                    if _watch.get("timer") is not None:
+                        _watch["timer"].stop()
+                    picker._finish(lambda: make(obj))
+                    return
+        except Exception as _fw_err:
+            _fw_log("rib.py:take-sketch", _fw_err)
+        own()
+    picker.picked = picked
 
 
 def _start_watch():
@@ -942,8 +967,8 @@ def _tick():
     editing = None
     try:
         edit = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument is not None else None
-        if edit is not None and edit.Object.TypeId == SKETCH:
-            editing = edit.Object
+        if edit is not None and editobj.type_id(edit) == SKETCH:
+            editing = editobj.of(edit)
     except Exception as _fw_err:
         _fw_log("rib.py:933", _fw_err)
     if _watch["sketch"] is None:

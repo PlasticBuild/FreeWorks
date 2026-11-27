@@ -119,7 +119,7 @@ def _stepped(doc):
             return
         tool.after_undo()
     except Exception as error:
-        App.Console.PrintLog("FreeWorks sketch tool after Undo: %s\n" % error)
+        App.Console.PrintLog("Sketch tool after Undo: %s\n" % error)
 
 
 def _prune_selection(doc_name):
@@ -149,7 +149,7 @@ def _prune_selection(doc_name):
         if stale:
             Gui.Selection.clearSelection()
     except Exception as error:
-        App.Console.PrintLog("FreeWorks sketch selection after Undo: %s\n" % error)
+        App.Console.PrintLog("Sketch selection after Undo: %s\n" % error)
 
 
 def _watch_steps():
@@ -159,80 +159,7 @@ def _watch_steps():
             App.addDocumentObserver(watch)
             _step_watch[0] = watch
         except Exception as error:
-            App.Console.PrintLog("FreeWorks sketch tools: no Undo watch: %s\n" % error)
-            _step_watch[0] = False
-
-
-# Undo or Redo under a running tool (Ctrl+Z while a chain is drawn): what the tool remembers of the
-# sketch (the chain's last line, the entities picked so far) is gone or renumbered. Seen as: Ctrl+Z
-# in a line chain, the next line got "Coincident" between its own two ends and the sketch no longer
-# solved. An App document observer tells the tool (SketchTool.after_undo).
-_step_watch = [None]
-
-
-class _StepWatch:
-    def slotUndoDocument(self, doc):
-        _stepped(doc)
-
-    def slotRedoDocument(self, doc):
-        _stepped(doc)
-
-
-def _stepped(doc):
-    try:
-        name = doc.Name
-    except Exception:
-        return
-    QtCore.QTimer.singleShot(0, lambda: _prune_selection(name))     # once the step is in the sketch
-    tool = _active
-    if tool is None:
-        return
-    try:
-        if tool.sketch.Document.Name != name:
-            return
-        tool.after_undo()
-    except Exception as error:
-        App.Console.PrintLog("FreeCAD sketch tool after Undo: %s\n" % error)
-
-
-def _prune_selection(doc_name):
-    ""
-
-
-    try:
-        try:
-            _gdoc, sketch = edited_sketch()
-        except RuntimeError:
-            return
-        if sketch.Document.Name != doc_name:
-            return
-        stale = False
-        for ex in Gui.Selection.getSelectionEx(doc_name):
-            if ex.Object is None or ex.Object.Name != sketch.Name:
-                continue
-            for sub in ex.SubElementNames:
-                if sub.startswith("Edge") and sub[4:].isdigit():
-                    stale = stale or int(sub[4:]) > sketch.GeometryCount
-                elif sub.startswith("Vertex") and sub[6:].isdigit():
-                    stale = stale or sketch.getGeoVertexIndex(int(sub[6:]) - 1)[0] == -2000
-                elif sub.startswith("Constraint") and sub[10:].isdigit():
-                    stale = stale or int(sub[10:]) > sketch.ConstraintCount
-                elif sub.startswith("ExternalEdge") and sub[12:].isdigit():
-                    stale = stale or int(sub[12:]) > len(sketch.ExternalGeo) - 2
-        if stale:
-            Gui.Selection.clearSelection()
-    except Exception as error:
-        App.Console.PrintLog("FreeCAD sketch selection after Undo: %s\n" % error)
-
-
-def _watch_steps():
-    if _step_watch[0] is None:
-        try:
-            watch = _StepWatch()
-            App.addDocumentObserver(watch)
-            _step_watch[0] = watch
-        except Exception as error:
-            App.Console.PrintLog("FreeCAD sketch tools: no Undo watch: %s\n" % error)
+            App.Console.PrintLog("Sketch tools: no Undo watch: %s\n" % error)
             _step_watch[0] = False
 
 
@@ -702,6 +629,15 @@ class SketchTool(QtCore.QObject, ViewMath):
     # --- events ----------------------------------------------------------------------------------
     TOOL_KEYS = (QtCore.Qt.Key_Escape, QtCore.Qt.Key_A, QtCore.Qt.Key_M)
 
+    @staticmethod
+    def _lkey(event):
+        """filterkeys-1126: the key as the tool knows it (A, the line/arc switch, follows Customize > Keyboard)."""
+        try:
+            from .. import filterkeys
+            return filterkeys.logical(event.key(), event.modifiers())[0]
+        except Exception:
+            return event.key()
+
     def claims_key(self, key):
         """Keys the tool takes ahead of FreeCAD's shortcuts while the pointer is over the view."""
         if _digit(key) is not None and self._numeric_spec_now() is not None:
@@ -837,20 +773,20 @@ class SketchTool(QtCore.QObject, ViewMath):
                     over = self.viewport.underMouse()
                 except RuntimeError:
                     return False
-                if over and self.claims_key(event.key()):
+                if over and self.claims_key(self._lkey(event)):
                     if t == QtCore.QEvent.ShortcutOverride:
                         event.accept()
                         return True
-                    return self._key(event.key())
+                    return self._key(self._lkey(event))
             return False
-        if t == QtCore.QEvent.ShortcutOverride and self.claims_key(event.key()):
+        if t == QtCore.QEvent.ShortcutOverride and self.claims_key(self._lkey(event)):
             event.accept()
             return True
         if t == QtCore.QEvent.KeyPress:
             if event.key() in (QtCore.Qt.Key_Control, QtCore.Qt.Key_Shift):
                 self._move()  # replay the hover with the new modifier
                 return False
-            return self._key(event.key())
+            return self._key(self._lkey(event))
         if t == QtCore.QEvent.KeyRelease and event.key() in (QtCore.Qt.Key_Control, QtCore.Qt.Key_Shift):
             self._move()
             return False

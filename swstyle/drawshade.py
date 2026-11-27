@@ -87,6 +87,32 @@ def _alpha(o):
         return 1.0
 
 
+def _decals(v, shapes):
+    ""
+
+    names = set()
+    for o, _sh in shapes:
+        names.add(o.Name)
+        try:
+            names.update(x.Name for x in o.OutListRecursive)
+        except Exception as _fw_err:
+            _fw_log("drawshade.py:decal-sources", _fw_err)
+    out = []
+    for d in v.Document.Objects:
+        of = getattr(d, "DecalOf", None)
+        if of is None or "DecalFace" not in getattr(d, "PropertiesList", ()) or of.Name not in names:
+            continue
+        try:
+            if d.ViewObject is not None and not d.ViewObject.Visibility:
+                continue
+        except Exception as _fw_err:
+            _fw_log("drawshade.py:decal-shown", _fw_err)
+        picture = getattr(d, "DecalPicture", "") or getattr(d, "ImageFile", "")
+        if picture and os.path.exists(picture):
+            out.append((d, picture))
+    return out
+
+
 def render(v, path, ppm=PPM):
     ""
 
@@ -108,6 +134,7 @@ def render(v, path, ppm=PPM):
     light.normalize()
     tol = max(0.05, box.DiagonalLength / 300.0)
     tris = []                     # (depth, [(u, w) x3], shade colour)
+    flat = []                     # each facet's corners (u, w, depth), for the decals' places in the order
     hw = hh = 1e-6
     for o, sh in shapes:
         r, g, b = _colour(o)
@@ -141,8 +168,35 @@ def render(v, path, ppm=PPM):
                 col.setAlphaF(_alpha(o) if getattr(v, "SWSeeThrough", True) else 1.0)
                 depth = (uv[t[0]][2] + uv[t[1]][2] + uv[t[2]][2]) / 3.0
                 tris.append((depth, (uv[t[0]][:2], uv[t[1]][:2], uv[t[2]][:2]), col))
+                flat.append((uv[t[0]], uv[t[1]], uv[t[2]], depth))
     if not tris:
         return None
+    # the decals, each laid in the far-first order just in front of its face (vdp185)
+    for dec, picture in _decals(v, shapes):
+        try:
+            if _curved_decal(dec, picture, c, d, x, y, light, tris):
+                continue                # draped over its curved face, as in the 3D view
+            pl = dec.Placement
+            n = pl.Rotation.multVec(App.Vector(0, 0, 1))
+            if n.dot(d) <= 1e-6:
+                continue                # its face looks away from the viewer
+            a, b = dec.XSize.Value / 2.0, dec.YSize.Value / 2.0
+            quad = []
+            for lx, ly in ((-a, b), (a, b), (a, -b), (-a, -b)):     # the picture's top left, clockwise
+                q = pl.multVec(App.Vector(lx, ly, 0)) - c
+                quad.append((q.dot(x), q.dot(y), q.dot(d)))
+            lit = 0.30 + 0.55 * max(0.0, n.dot(light)) + 0.15 * max(0.0, n.dot(d))
+            # after every facet of the face it lies on (the facets in its plane, under it), else at its middle
+            m = (n.dot(x), n.dot(y), n.dot(d))
+            o = pl.Base - c
+            o = (o.dot(x), o.dot(y), o.dot(d))
+            near = 0.05 + tol
+            under = [f[3] for f in flat if all(abs(sum((pp[i] - o[i]) * m[i] for i in range(3))) <= near
+                                              for pp in f[:3])]
+            depth = (max(under) if under else sum(q[2] for q in quad) / 4.0) + 1e-6
+            tris.append((depth, [q[:2] for q in quad], (picture, lit)))
+        except Exception as _fw_err:
+            _fw_log("drawshade.py:decal", _fw_err)
     hw *= 1.01
     hh *= 1.01
     k = float(getattr(v, "Scale", 1.0) or 1.0)
@@ -158,8 +212,15 @@ def render(v, path, ppm=PPM):
     pt = QtGui.QPainter(img)
     pt.setRenderHint(QtGui.QPainter.Antialiasing, False)
     tris.sort(key=lambda t: t[0])                 # far first (depth along the direction to the viewer)
+    shaded = {}
     for _z, uvs, col in tris:
         poly = QtGui.QPolygonF([QtCore.QPointF((u + hw) * sx, (hh - w) * sy) for u, w in uvs])
+        if isinstance(col, tuple) and col[0] == "drape":
+            _drape_triangle(pt, poly, col[1], col[2], col[3], shaded)
+            continue
+        if isinstance(col, tuple):
+            _decal_on(pt, poly, *col)
+            continue
         pt.setBrush(col)
         pt.setPen(QtGui.QPen(col, 0.8))           # the facet's own colour over the seams
         pt.drawPolygon(poly)
@@ -168,6 +229,105 @@ def render(v, path, ppm=PPM):
     if not img.save(path, "PNG"):
         return None
     return 2 * hw * k, 2 * hh * k
+
+
+def _curved_decal(dec, picture, c, d, x, y, light, tris):
+    """A decal on a curved face, draped over it triangle by triangle from the same mesh the 3D view draws
+    (decalpm.drape_mesh), each triangle lit as the face there and put in the far-first order just in front
+    of the face. True when it was drawn so; False for a flat face (the flat quad is right there)."""
+    from . import decalpm
+    face = decalpm.face_of(dec)
+    if face is None or not decalpm.curved(face):
+        return False
+    mesh = decalpm.drape_mesh(dec, face)
+    if mesh is None:
+        return False
+    pts, nrm, uvs, keep = mesh
+    pl = dec.Placement
+    rot = pl.Rotation
+    proj = []
+    for p in pts:
+        q = pl.multVec(p) - c
+        proj.append((q.dot(x), q.dot(y), q.dot(d)))
+    for t in keep:
+        n = rot.multVec(nrm[t[0]] + nrm[t[1]] + nrm[t[2]])
+        if n.Length < 1e-12:
+            continue
+        n.normalize()
+        if n.dot(d) <= 1e-6:
+            continue                        # this part of the picture is round the back
+        lit = 0.30 + 0.55 * max(0.0, n.dot(light)) + 0.15 * max(0.0, n.dot(d))
+        depth = (proj[t[0]][2] + proj[t[1]][2] + proj[t[2]][2]) / 3.0 + 1e-4
+        tris.append((depth, [proj[i][:2] for i in t], ("drape", picture, [uvs[i] for i in t], lit)))
+    return True
+
+
+def _drape_triangle(pt, poly, picture, uvs, lit, shaded):
+    """One draped triangle of a decal's picture: the picture's own triangle (uvs, 0..1 with v up) mapped onto poly."""
+    from PySide import QtCore, QtGui
+    level = int(round(max(0.0, min(1.0, lit + 0.04)) * 32))
+    image = shaded.get((picture, level))
+    if image is None:
+        image = QtGui.QImage(picture)
+        if image.isNull():
+            return
+        image = image.convertToFormat(QtGui.QImage.Format_ARGB32_Premultiplied)
+        tint = QtGui.QPainter(image)
+        tint.setCompositionMode(QtGui.QPainter.CompositionMode_Multiply)
+        g = level / 32.0
+        tint.fillRect(image.rect(), QtGui.QColor.fromRgbF(g, g, g))
+        tint.setCompositionMode(QtGui.QPainter.CompositionMode_DestinationIn)
+        tint.drawImage(0, 0, QtGui.QImage(picture).convertToFormat(QtGui.QImage.Format_ARGB32_Premultiplied))
+        tint.end()
+        shaded[(picture, level)] = image
+    w, h = float(image.width()), float(image.height())
+    (s0, t0), (s1, t1), (s2, t2) = [(u * w, (1.0 - v) * h) for u, v in uvs]
+    det = (s1 - s0) * (t2 - t0) - (s2 - s0) * (t1 - t0)
+    if abs(det) < 1e-9:
+        return
+    p0, p1, p2 = poly[0], poly[1], poly[2]
+    # the affine map (s, t) -> screen that takes the picture's triangle onto poly
+    a = ((p1.x() - p0.x()) * (t2 - t0) - (p2.x() - p0.x()) * (t1 - t0)) / det
+    b = ((p2.x() - p0.x()) * (s1 - s0) - (p1.x() - p0.x()) * (s2 - s0)) / det
+    cc = ((p1.y() - p0.y()) * (t2 - t0) - (p2.y() - p0.y()) * (t1 - t0)) / det
+    dd = ((p2.y() - p0.y()) * (s1 - s0) - (p1.y() - p0.y()) * (s2 - s0)) / det
+    tx = p0.x() - a * s0 - b * t0
+    ty = p0.y() - cc * s0 - dd * t0
+    path = QtGui.QPainterPath()
+    path.addPolygon(poly)
+    path.closeSubpath()
+    pt.save()
+    pt.setClipPath(path)
+    pt.setRenderHint(QtGui.QPainter.SmoothPixmapTransform, True)
+    pt.setTransform(QtGui.QTransform(a, cc, b, dd, tx, ty))
+    pt.drawImage(0, 0, image)
+    pt.restore()
+
+
+def _decal_on(pt, poly, picture, lit):
+    """A decal's picture drawn on the quad poly (its top left first, clockwise), lit as its face."""
+    from PySide import QtCore, QtGui
+    image = QtGui.QImage(picture)
+    if image.isNull():
+        return
+    image = image.convertToFormat(QtGui.QImage.Format_ARGB32_Premultiplied)
+    shade = QtGui.QPainter(image)
+    shade.setCompositionMode(QtGui.QPainter.CompositionMode_Multiply)
+    g = max(0.0, min(1.0, lit + 0.04))
+    shade.fillRect(image.rect(), QtGui.QColor.fromRgbF(g, g, g))
+    shade.setCompositionMode(QtGui.QPainter.CompositionMode_DestinationIn)
+    shade.drawImage(0, 0, QtGui.QImage(picture).convertToFormat(QtGui.QImage.Format_ARGB32_Premultiplied))
+    shade.end()
+    w, h = float(image.width()), float(image.height())
+    src = QtGui.QPolygonF([QtCore.QPointF(0, 0), QtCore.QPointF(w, 0), QtCore.QPointF(w, h), QtCore.QPointF(0, h)])
+    t = QtGui.QTransform()
+    if not QtGui.QTransform.quadToQuad(src, poly, t):
+        return
+    pt.save()
+    pt.setRenderHint(QtGui.QPainter.SmoothPixmapTransform, True)
+    pt.setTransform(t)
+    pt.drawImage(0, 0, image)
+    pt.restore()
 
 
 def picture_of(v):
@@ -411,6 +571,26 @@ def refresh(v):
     if style in SHADED:
         return apply(v, style)
     return None
+
+
+def refresh_for(obj):
+    """The shaded views of obj's model drawn again (a decal added, changed or taken off). Returns how many."""
+    done = 0
+    for doc in App.listDocuments().values():
+        for v in doc.Objects:
+            if getattr(v, "SWDisplayStyle", "") not in SHADED:
+                continue
+            try:
+                names = set()
+                for o, _sh in _shapes(v):
+                    names.add(o.Name)
+                    names.update(x.Name for x in o.OutListRecursive)
+                if obj.Name in names and obj.Document is v.Document:
+                    refresh(v)
+                    done += 1
+            except Exception as _fw_err:
+                _fw_log("drawshade.py:refresh-for", _fw_err)
+    return done
 
 
 class _Follow(object):

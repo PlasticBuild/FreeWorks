@@ -56,6 +56,14 @@ COMMANDS = {
     "FreeWorks_SmartDimension": ("Smart Dimension", "Dimensions what you pick: a line, two lines, a point and a "
                                  "line, a circle, two points, an edge of the part; the next click places it",
                                  "Constraint_Dimension", lambda: tool.start_dimension()),
+
+    # commands that asked the value in FreeCAD's Insert Length dialog at the first pick
+    "FreeWorks_HorizontalDimension": ("Horizontal Dimension", "Dimensions the horizontal distance between two points "
+                                      "or along a line; the next click places it",
+                                      "Constraint_HorizontalDistance", lambda: tool.start_dimension("DistanceX")),
+    "FreeWorks_VerticalDimension": ("Vertical Dimension", "Dimensions the vertical distance between two points "
+                                    "or along a line; the next click places it",
+                                    "Constraint_VerticalDistance", lambda: tool.start_dimension("DistanceY")),
     "FreeWorks_TangentArc": ("Tangent Arc", "Sketches an arc tangent to the end of a line or arc",
                              "Sketcher_CreateArc", tool.start_tangent_arc),
     "FreeWorks_StraightSlot": ("Straight Slot", "Sketches a straight slot from end center to end center, then the width",
@@ -162,7 +170,12 @@ class _ToggleSnaps:
     ""
 
     def GetResources(self):
-        return {"Pixmap": "Snap_Lock", "MenuText": "Toggle Sketch Snaps",
+        # fix290 (look audit BB37): "Snap_Lock" is Draft's icon, there only once Draft has loaded ("Cannot
+        # find icon" without it); the drawn Quick Snaps toggle is always there
+        import os as _os
+        drawn = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "resources",
+                              "icons-drawn", "FW_SWStyle_QuickSnapsToggle.svg")
+        return {"Pixmap": drawn if _os.path.isfile(drawn) else "", "MenuText": "Toggle Sketch Snaps",
                 "ToolTip": "Turns sketch snapping on or off (F3)", "CmdType": "ForEdit NoTransaction"}
 
     def IsActive(self):

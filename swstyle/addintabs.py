@@ -139,7 +139,7 @@ KEYS = (
     ("CFD_Boundary", "Boundary Conditions", ("CfdOF_FluidBoundary",), "Inlets, outlets, walls and openings on the faces.",
      "Boundary\nConditions"),
     ("CFD_Porous", "Porous Zone", ("CfdOF_PorousZone", "CfdOF_ZoneCreate"), "A region the fluid passes through slowly.", None),
-    ("CFD_InitZone", "Initialisation Zone", ("CfdOF_InitialisationZone",), "A region that starts with values of its own.",
+    ("CFD_InitZone", "Initialization Zone", ("CfdOF_InitialisationZone",), "A region that starts with values of its own.",
      "Initialisation\nZone"),
     ("CFD_Goals", "Goals", ("CfdOF_ReportingFunctions",), "Forces, coefficients and probes the solver reports while it runs.",
      None),
@@ -214,7 +214,7 @@ KEYS = (
     ("S3D_Curves", "Curve Wizard", ("Mesh_CrossSections",), "Section curves through the scan.", "Curve\nWizard"),
     ("S3D_Section", "Section Curve", ("Mesh_SectionByPlane",), "A curve where a plane cuts the mesh.", None),
     ("S3D_Boundary", "Boundary Curves", ("Reen_MeshBoundary",), "Curves along the open edges.", None),
-    ("S3D_Deviation", "Deviation Analysis", ("Inspection_VisualInspection",), "Colours the gap between scan and model.",
+    ("S3D_Deviation", "Deviation Analysis", ("Inspection_VisualInspection",), "Colors the gap between scan and model.",
      "Deviation\nAnalysis"),
     ("S3D_InspectPoint", "Deviation at Point", ("Inspection_InspectElement",), "The gap at one point.", None),
     ("S3D_Curvature", "Curvature", ("Mesh_VertexCurvature", "Mesh_CurvatureInfo"), "Curvature on the mesh.", None),
@@ -881,7 +881,7 @@ def _ensure_mesh(analysis):
             if empty or stale:
                 part = getattr(m, "Shape", None)
                 try:
-                    nothing = part is None or part.Shape.isNull() or not (part.Shape.Solids or part.Shape.Faces)
+                    nothing = part is None or part.Shape.isNull() or not (part.Shape.Solids or part.Shape.Faces or part.Shape.Edges)
                 except Exception:
                     nothing = True
                 if nothing:
@@ -1037,7 +1037,9 @@ def _need_program(solver_name, label):
 # FreeCAD's check_prerequisites lines, in the study's own words (the rest are shown as FreeCAD wrote them)
 PREREQUISITES = (
     ("No mechanical boundary conditions", "The part is not held: add a fixture (Fixtures in the study tree, or the "
-                                          "Fixtures Advisor), then run again."),
+                                          "Fixtures Advisor), or in the study's Properties tick Use soft spring to "
+                                          "stabilize the model (loads in balance) or Use inertial relief, then run "
+                                          "again."),
     ("No material object defined", "No material is applied to the part: right-click the part in the study tree, "
                                    "Apply/Edit Material..., then run again."),
     ("No YoungsModulus defined", "The material has no Elastic Modulus: edit the material and enter it, then run again."),
@@ -1045,6 +1047,260 @@ PREREQUISITES = (
     ("FEM mesh has no volume elements", "The mesh has no solid elements: a surface needs a shell thickness. Study a "
                                         "solid body, or give the surface a thickness, then run again."),
 )
+
+
+def _folder_items(analysis, what):
+    """The active (not suppressed) items under the study tree's folder `what` ("fixtures", "loads")."""
+    from . import simtree
+    def walk(r):
+        yield r
+        for c in r.rows:
+            yield from walk(c)
+    out = []
+    for r in walk(simtree.study_rows(analysis)):
+        if r.what == what:
+            out += [c.obj for c in r.rows if c.obj is not None and not getattr(c.obj, "Suppressed", False)]
+    return out
+
+
+def uses_inplane(analysis):
+    """A Frequency study with "Use inplane effect" ticked and at least one active load."""
+    try:
+        from . import simtypes
+        return (simtypes.study_type(analysis) == "frequency" and bool(getattr(analysis, simtypes.INPLANE, False))
+                and bool(_folder_items(analysis, "loads")))
+    except Exception as _fw_err:
+        _fw_log("addintabs.py:inplane", _fw_err)
+        return False
+
+
+def densities(text):
+    """{material name: its *DENSITY data line} of a CalculiX input (the static writer leaves density out)."""
+    import re
+    out = {}
+    for m in re.finditer(r"^\*MATERIAL,\s*NAME=([^\n]+)\n(.*?)(?=^\*MATERIAL|^\*[A-Z ]*SECTION|^\*STEP|\Z)", text, re.M | re.S):
+        d = re.search(r"^\*DENSITY\s*\n([^\n]+)", m.group(2), re.M)
+        if d:
+            out[m.group(1).strip()] = d.group(1).strip()
+    return out
+
+
+def inplane_inp(path, solver, dens=None):
+    ""
+
+
+    import re
+    text = open(path).read()
+    for name, line in (dens or {}).items():     # the frequency step needs each material's density
+        m = re.search(r"^\*MATERIAL,\s*NAME=%s\s*\n" % re.escape(name), text, re.M)
+        if m and not re.search(r"^\*DENSITY", text[m.end():].split("*MATERIAL", 1)[0].split("*STEP", 1)[0], re.M):
+            text = text[:m.end()] + "*DENSITY\n%s\n" % line + text[m.end():]
+    end = text.rfind("*END STEP")
+    if end < 0:
+        raise RuntimeError("The input file has no step: the inplane effect could not be written.")
+    end += len("*END STEP")
+    head = "*FREQUENCY"
+    kind = str(getattr(solver, "MatrixSolverType", "default"))
+    word = {"pastix": "PASTIX", "pardiso": "PARDISO", "spooles": "SPOOLES", "iterativescaling": "ITERATIVE SCALING",
+            "iterativecholesky": "ITERATIVE CHOLESKY"}.get(kind)
+    if word:
+        head += ", SOLVER=" + word
+    lo = solver.EigenmodeLowLimit.getValueAs("Hz").Value
+    hi = solver.EigenmodeHighLimit.getValueAs("Hz").Value
+    data = "%d" % solver.EigenmodesCount if lo == 0.0 and hi == 0.0 else "%d,%r,%r" % (solver.EigenmodesCount, lo, hi)
+    step = ("\n**\n** Use inplane effect: the frequencies about the loaded state above\n*STEP, PERTURBATION\n%s\n%s\n"
+            "*NODE FILE\nU\n*EL FILE\nS, E\n*END STEP\n" % (head, data))
+    with open(path, "w") as f:
+        f.write(text[:end] + step + text[end:])
+
+
+def uses_soft(analysis):
+    """A Static or Frequency study with "Use soft spring to stabilize the model" ticked."""
+    try:
+        from . import simtypes
+        return (simtypes.study_type(analysis) in simtypes.SOFT_TYPES
+                and bool(getattr(analysis, simtypes.SOFT, False)))
+    except Exception as _fw_err:
+        _fw_log("addintabs.py:soft", _fw_err)
+        return False
+
+
+SOFT_RATIO = 1e-9      # the soft springs' total stiffness in each direction: E x the part's size x this
+# inertial relief's own springs: stiffer, as they carry only what the balancing loads leave over (the loads' resultant
+# is read back to about 6 digits), and so hold the part still; next to its stiffness they change the results by 1e-5
+INERTIAL_RATIO = 1e-5
+
+
+def soft_spring_inp(path, femmesh, ratio=None, name="FW_SOFT"):
+    ""
+
+
+
+    import re
+    text = open(path).read()
+    mods = [float(m.group(1)) for m in re.finditer(r"^\*ELASTIC[^\n]*\n\s*([-+0-9.eE]+)", text, re.M | re.I)]
+    e = max(mods) if mods else 210000.0
+    nodes = sorted(femmesh.Nodes)
+    if not nodes:
+        return False
+    size = femmesh.BoundBox.DiagonalLength or 1.0
+    k = e * size * (SOFT_RATIO if ratio is None else ratio) / len(nodes)
+    top = 0
+    for line in text.splitlines():           # element ids past the ones FreeCAD, the connectors and supports wrote
+        s = line.split(",")[0].strip()
+        if s.isdigit():
+            top = max(top, int(s))
+    elem = top + 1000
+    lines = ["** %s: weak springs to ground at every node" % (
+        "Use soft spring to stabilize the model" if name == "FW_SOFT" else "Inertial relief")]
+    for d in (1, 2, 3):
+        es = "%s%d" % (name, d)
+        lines.append("*ELEMENT, TYPE=SPRING1, ELSET=%s" % es)
+        for n in nodes:
+            lines.append("%d, %d" % (elem, n))
+            elem += 1
+        lines += ["*SPRING, ELSET=%s" % es, "%d" % d, repr(float("%.12g" % k))]
+    i = text.upper().find("\n*STEP")
+    if i < 0:
+        raise RuntimeError("The input file has no step: the soft springs could not be written.")
+    with open(path, "w") as f:
+        f.write(text[:i + 1] + "\n".join(lines) + "\n" + text[i + 1:])
+    return k
+
+
+def uses_inertial(analysis):
+    """A Static study with "Use inertial relief" ticked."""
+    try:
+        from . import simtypes
+        return (simtypes.study_type(analysis) in simtypes.SOFT_TYPES and simtypes.study_type(analysis) != "frequency"
+                and bool(getattr(analysis, simtypes.INERTIAL, False)))
+    except Exception as _fw_err:
+        _fw_log("addintabs.py:inertial", _fw_err)
+        return False
+
+
+def inertial_prerequisites(analysis):
+    """Inertial relief holds a part that nothing else holds: with fixtures it is refused before the run."""
+    if uses_inertial(analysis) and _folder_items(analysis, "fixtures"):
+        return ("Use inertial relief is for a part with no fixtures: its own inertia balances the loads. Suppress "
+                "the fixtures, or untick Use inertial relief in the study's Properties, then run again.")
+    return ""
+
+
+def _frd_disp(path):
+    """{node: (ux, uy, uz)} of the first DISP block of a CalculiX .frd."""
+    out, on = {}, False
+    for line in open(path, errors="replace"):
+        if line.startswith(" -4") and "DISP" in line:
+            on = True
+            continue
+        if on:
+            if line.startswith(" -3"):
+                break
+            if line.startswith(" -1"):
+                n = int(line[3:13])
+                out[n] = tuple(float(line[13 + 12 * i:25 + 12 * i]) for i in range(3))
+    return out
+
+
+def _lumped_masses(femmesh):
+    """{node: volume share}: each tetrahedron's volume shared by its four corners."""
+    import numpy as np
+    share = {}
+    for e in femmesh.Volumes:
+        ns = femmesh.getElementNodes(e)
+        if len(ns) not in (4, 10):
+            raise RuntimeError("Use inertial relief needs a solid mesh of tetrahedra: mesh the part again "
+                               "(Mesh > Create Mesh...) and run again.")
+        p = [femmesh.getNodeById(n) for n in ns[:4]]
+        v = abs(np.linalg.det(np.array([[q.x - p[0].x, q.y - p[0].y, q.z - p[0].z] for q in p[1:]]))) / 6.0
+        for n in ns[:4]:
+            share[n] = share.get(n, 0.0) + v / 4.0
+    if not share:
+        raise RuntimeError("Use inertial relief needs a solid mesh: shells and beams are not balanced by it.")
+    return share
+
+
+def _density(analysis):
+    """The study's (first) material density in t/mm^3, CalculiX's units."""
+    for o in analysis.Group:
+        m = getattr(o, "Material", None)
+        if o.isDerivedFrom("App::MaterialObjectPython") or (isinstance(m, dict) and "Density" in m):
+            d = (m or {}).get("Density")
+            if d:
+                return App.Units.Quantity(d).getValueAs("t/mm^3").Value
+    raise RuntimeError("Use inertial relief needs the material's density: edit the material and enter it, then "
+                       "run again.")
+
+
+def inertial_relief(fea, analysis, femmesh):
+    ""
+
+
+
+
+    import numpy as np
+    from . import simxpress
+    path = fea.inp_file_name
+    k = soft_spring_inp(path, femmesh, INERTIAL_RATIO, "FW_IR")
+    with_springs = open(path).read()
+    simxpress.solver_stopped(fea, simxpress.run_ccx(fea))
+    disp = _frd_disp(path[:-4] + ".frd")
+    if not disp:
+        raise RuntimeError("The solver gave no displacements: inertial relief could not find the loads.")
+    vol = _lumped_masses(femmesh)
+    rho = _density(analysis)
+    ids = sorted(vol)
+    xyz = np.array([[femmesh.getNodeById(n).x, femmesh.getNodeById(n).y, femmesh.getNodeById(n).z] for n in ids])
+    mi = np.array([vol[n] * rho for n in ids])
+    m = mi.sum()
+    c = (mi[:, None] * xyz).sum(0) / m
+    pts = np.array([[femmesh.getNodeById(n).x, femmesh.getNodeById(n).y, femmesh.getNodeById(n).z] for n in disp])
+    u = np.array([disp[n] for n in disp])
+    F = (k * u).sum(0)                                   # the springs pull back by -k u: the loads are +k u
+    M = np.cross(pts - c, k * u).sum(0)
+    d = xyz - c
+    I = (mi[:, None, None] * ((d * d).sum(1)[:, None, None] * np.eye(3) - d[:, :, None] * d[:, None, :])).sum(0)
+    acc = F / m
+    alpha = np.linalg.solve(I, M) if abs(np.linalg.det(I)) > 0 else np.zeros(3)
+    f = -mi[:, None] * (acc + np.cross(alpha, d))
+    lines = ["** Use inertial relief: the part's inertia balances its loads (F %r N, M %r N mm)" % (
+        [float("%.6g" % x) for x in F], [float("%.6g" % x) for x in M]), "*CLOAD"]
+    for n, row in zip(ids, f):
+        for j in range(3):
+            if row[j]:
+                lines.append("%d, %d, %.12g" % (n, j + 1, row[j]))
+    text = with_springs
+    up = text.upper()
+    s = up.find("\n*STEP")
+    e = up.find("\n*END STEP", s)
+    nf = up.find("\n*NODE FILE", s)
+    at = nf if 0 <= nf < e else e
+    text = text[:at + 1] + "\n".join(lines) + "\n" + text[at + 1:]
+    with open(path, "w") as fh:
+        fh.write(text)
+    return {"F": F.tolist(), "M": M.tolist(), "mass": m}
+
+
+def buckling_prerequisites(analysis):
+    ""
+
+
+    try:
+        from . import simtypes
+        if simtypes.study_type(analysis) != "buckling":
+            return ""
+        out = []
+        if not _folder_items(analysis, "fixtures"):
+            out.append("The part is not held: add a fixture (Fixtures in the study tree, or the Fixtures Advisor), "
+                       "then run again.")
+        if not _folder_items(analysis, "loads"):
+            out.append("A buckling study needs a load: add one under External Loads (the factor found multiplies it), "
+                       "then run again.")
+        return "\n".join(out)
+    except Exception as _fw_err:
+        _fw_log("addintabs.py:buckling prerequisites", _fw_err)
+        return ""
 
 
 def plain_prerequisites(message):
@@ -1247,6 +1503,9 @@ def _run_study(analysis):
     solver = _solver(analysis)
     if solver is None:
         raise RuntimeError("The study has no solver: add one from the Run This Study arrow.")
+    message = buckling_prerequisites(analysis) or inertial_prerequisites(analysis)   # before meshing: said at once
+    if message:
+        raise RuntimeError(message)
     _ensure_mesh(analysis)
     doc.recompute()
     if getattr(getattr(solver, "Proxy", None), "Type", "") == "Fem::SolverCcxTools":
@@ -1257,11 +1516,32 @@ def _run_study(analysis):
         fea.setup_working_dir()
         fea.setup_ccx()
         message = fea.check_prerequisites()
+        if message and (uses_soft(analysis) or uses_inertial(analysis)):     # the soft springs hold the part
+            message = "".join(line for line in message.splitlines(True) if "No mechanical boundary conditions" not in line)
         if message:
             raise RuntimeError(plain_prerequisites(message))
         fea.purge_results()
         simrun.stage("Writing the input file")
         fea.write_inp_file()
+        if uses_inplane(analysis):        # the loads are written by the static writer (a frequency step has none)
+            dens = densities(open(fea.inp_file_name).read())
+            kind0 = solver.AnalysisType
+            solver.AnalysisType = "static"
+            try:
+                fea.write_inp_file()
+            finally:
+                solver.AnalysisType = kind0
+            inplane_inp(fea.inp_file_name, solver, dens)
+        if uses_soft(analysis):
+            mesh = next((m for m in analysis.Group if m.isDerivedFrom("Fem::FemMeshObject")), None)
+            if mesh is not None:
+                soft_spring_inp(fea.inp_file_name, mesh.FemMesh)
+        if uses_inertial(analysis):
+            mesh = next((m for m in analysis.Group if m.isDerivedFrom("Fem::FemMeshObject")), None)
+            if mesh is None:
+                raise RuntimeError("The study has no mesh.")
+            simrun.stage("Balancing the loads (inertial relief)")
+            inertial_relief(fea, analysis, mesh.FemMesh)
         try:                                         # cyclic symmetry fixtures (PM pkg355): no fixture on a tie's dependent nodes
             from . import simpms
             if hasattr(simpms, "cyclic_inp"):
@@ -1362,7 +1642,7 @@ if Gui is not None:
                 simrun.end()
                 QtWidgets.QApplication.restoreOverrideCursor()
                 doc.recompute()
-                Gui.getMainWindow().statusBar().showMessage("%s: run cancelled." % a.Label, 8000)
+                Gui.getMainWindow().statusBar().showMessage("%s: run canceled." % a.Label, 8000)
                 return
             except Exception as error:
                 simrun.end()
@@ -1556,7 +1836,7 @@ if Gui is not None:
 
     class CAMStock(_Base):
         def GetResources(self):
-            return {"MenuText": "Stock Manager", "ToolTip": "Opens the job's stock and setup.", "Pixmap": "CAM_Job"}
+            return {"MenuText": "Stock Manager", "ToolTip": "Opens the job's stock and setup.", "Pixmap": "FW_CAM_Stock"}     # camicons-1126
 
         def Activated(self):
             doc = _doc()
@@ -1751,9 +2031,44 @@ def install():
         App.Console.PrintError("FreeCAD: add-in tabs not added (%s)\n" % error)
 
 
+FEM_MESH_TYPES = ("Fem::FemMeshObject", "Fem::FemMeshObjectPython", "Fem::FemMeshShapeObject",
+                  "Fem::FemMeshShapeBaseObjectPython", "Fem::FemMeshShapeNetgenObject")
+
+
+def warm_fem_meshes():
+    """Makes one of each FEM mesh object in a hidden scratch document and closes it. Once a session has opened its
+    first sketch, FreeCAD 1.1 can no longer make a first mesh object ("Cannot add static property"), so New Study
+    left a study without a mesh and no study tree; a mesh object made before then keeps it working."""
+    doc = None
+    try:
+        try:
+            doc = App.newDocument("FwWarmFem", hidden=True, temp=True)
+        except TypeError:
+            doc = App.newDocument("FwWarmFem")
+        for t in FEM_MESH_TYPES:
+            try:
+                o = doc.addObject(t, "Warm")
+                doc.removeObject(o.Name)
+            except Exception as _fw_err:
+                _fw_log("addintabs.py:warm %s" % t, _fw_err)
+    except Exception as _fw_err:
+        _fw_log("addintabs.py:warm", _fw_err)
+    finally:
+        if doc is not None:
+            try:
+                App.closeDocument(doc.Name)
+            except Exception as _fw_err:
+                _fw_log("addintabs.py:warm close", _fw_err)
+
+
 def _install():
     if Gui is None:
         return
+    try:
+        from PySide import QtCore
+        QtCore.QTimer.singleShot(0, warm_fem_meshes)
+    except Exception as _fw_err:
+        _fw_log("addintabs.py:warm timer", _fw_err)
     from . import catalog, cmtabs
     for name, cmd in COMMANDS.items():
         if name not in Gui.listCommands():
@@ -1809,6 +2124,13 @@ def _install():
         simadvisor.install()               # the Simulation Advisor in the Task Pane (Study, Fixtures, Loads ... Results)
     except Exception as error:
         App.Console.PrintWarning("FreeCAD: Simulation Advisor not added (%s)\n" % error)
+    try:
+        from . import simroutes
+        simroutes.install()
+    except ImportError:
+        pass
+    except Exception as error:
+        App.Console.PrintWarning("FreeCAD: Simulation PropertyManagers not added (%s)\n" % error)
     have_wb = Gui.listWorkbenches()
     extra = []
     for key, label, wb, caption in MORE_WB:

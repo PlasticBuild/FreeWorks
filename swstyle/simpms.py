@@ -177,19 +177,46 @@ def kept(o):
 
 
 def _label(a, base):
-    used = {o.Label for o in a.Group}
+    used = {study_name(o) for o in a.Group}
     n = 1
     while "%s-%d" % (base, n) in used:
         n += 1
     return "%s-%d" % (base, n)
 
 
+
+# document, so a second study's Fixed-1 is labelled Fixed-001. The study's own name is kept beside FreeCAD's label
+# ("Fixed-1|Fixed-001") and shown while the label is still the one FreeCAD gave; a rename shows the user's label.
+STUDY_NAME = "FwStudyName"
+
+
+def study_name(o):
+    ""
+    label = getattr(o, "Label", "") or ""
+    want, _sep, auto = (getattr(o, STUDY_NAME, "") or "").partition("|")
+    return want if want and auto == label else label
+
+
+def _set_label(o, want):
+    o.Label = want
+    try:
+        if o.Label != want:
+            if STUDY_NAME not in o.PropertiesList:
+                o.addProperty("App::PropertyString", STUDY_NAME, "FreeCAD", "The row name in its study")
+                o.setPropertyStatus(STUDY_NAME, "Hidden")
+            setattr(o, STUDY_NAME, "%s|%s" % (want, o.Label))
+        elif STUDY_NAME in o.PropertiesList:
+            setattr(o, STUDY_NAME, "")
+    except Exception as _fw_err:
+        _fw_log("simpms.py:studyname", _fw_err)
+
+
 def _swap(a, old, new):
     """An edited fixture whose kind changed: the new object takes the old one's name and place."""
-    label = old.Label
+    label = study_name(old)
     a.removeObject(old)
     old.Document.removeObject(old.Name)
-    new.Label = label
+    _set_label(new, label)
 
 
 
@@ -202,7 +229,7 @@ def _add(a, o, kind_label, edit):
     if edit is None or edit is o:
         if edit is None:
             a.addObject(o)
-            o.Label = _label(a, kind_label)
+            _set_label(o, _label(a, kind_label))
             if o.TypeId in SYMBOL_COLOUR:
                 symbol(o, SYMBOL_COLOUR[o.TypeId])
     else:
@@ -236,7 +263,7 @@ def _round_axis(els, what):
                 what == "cylinder" and d.Length > 1e-6 and abs(abs(App.Vector(d).normalize().dot(ax)) - 1) > 1e-6):
             raise SetupError("All the faces must share one axis.")
         if what == "sphere" and d.Length > 1e-6:
-            raise SetupError("All the spherical faces must share one centre.")
+            raise SetupError("All the spherical faces must share one center.")
     return c0, ax
 
 
@@ -1286,7 +1313,7 @@ def _gmsh(a, m):
         simmeshinfo.TIMES[m.Name] = time.time() - t0
     except Exception as _fw_err:
         _fw_log("simpms.py:meshtime", _fw_err)
-    if not err and not m.FemMesh.VolumeCount and not m.FemMesh.FaceCount:
+    if not err and not m.FemMesh.VolumeCount and not m.FemMesh.FaceCount and not m.FemMesh.EdgeCount:   # a beam: edges
         err = "Gmsh made no elements"
     return err or ""
 
@@ -1448,8 +1475,31 @@ if Gui is not None:
                 b.model().rowsRemoved.connect(lambda *_: self.preview())
             self._activate(first)
             QtCore.QTimer.singleShot(0, self.preview)
+            self._mesh_unpickable()
             Gui.Selection.clearSelection()
             Gui.Selection.addObserver(self)
+
+        def _mesh_unpickable(self):
+            ""
+
+
+            self._unpickable = []
+            for o in (self.a.Group if self.a is not None else []):
+                try:
+                    if o.isDerivedFrom("Fem::FemMeshObject") and o.ViewObject is not None and \
+                            "Selectable" in o.ViewObject.PropertiesList and o.ViewObject.Selectable:
+                        o.ViewObject.Selectable = False
+                        self._unpickable.append(o)
+                except Exception as _fw_err:
+                    _fw_log("simpms.py:unpickable", _fw_err)
+
+        def _mesh_pickable(self):
+            for o in getattr(self, "_unpickable", None) or []:
+                try:
+                    o.ViewObject.Selectable = True
+                except Exception as _fw_err:
+                    _fw_log("simpms.py:pickable", _fw_err)
+            self._unpickable = []
 
 
         PREVIEW_FACE = (0.35, 0.6, 1.0)
@@ -1563,6 +1613,7 @@ if Gui is not None:
 
         def _close(self):
             self._unpreview()
+            self._mesh_pickable()
             try:
                 Gui.Selection.removeObserver(self)
             except Exception as _fw_err:
@@ -1708,7 +1759,7 @@ if Gui is not None:
             self.accordion = _Accordion(std, adv)
             self._kind_changed()
             self._start()
-            QtCore.QTimer.singleShot(0, self._shown)
+            from . import safe_later as _sl; _sl.later(0, self._shown, self, "tabs")
 
         def _shown(self):
             if self._open():
@@ -2196,6 +2247,7 @@ if Gui is not None:
                 self.ref.addItem("%s:%s" % (s.Object.Name, sub))
             self.ref.activated_box.connect(self._activate)
             self._activate(self.ref)
+            self._mesh_unpickable()
             Gui.Selection.clearSelection()
             Gui.Selection.addObserver(self)
 
@@ -2342,6 +2394,7 @@ if Gui is not None:
                 self.axis.addItem("%s:%s" % (s0.Object.Name, s0.SubElementNames[0].split(".")[-1] if s0.SubElementNames else ""))
             self.axis.activated_box.connect(self._activate)
             self._activate(self.axis)
+            self._mesh_unpickable()
             Gui.Selection.clearSelection()
             Gui.Selection.addObserver(self)
 
@@ -2808,6 +2861,16 @@ if Gui is not None:
             self.slider.setRange(0, 10)
             self.slider.setValue(5)
             self.slider.setTickPosition(QtWidgets.QSlider.TicksBelow)
+            try:                                # look-audit SIM-9: Dark's groove was a faint line with no fill
+                from . import style
+                if style.dark():
+                    self.slider.setStyleSheet(
+                        "QSlider#SWSimMeshDensity::groove:horizontal{height:4px;background:#5a606a;border-radius:2px}"
+                        "QSlider#SWSimMeshDensity::sub-page:horizontal{background:#3d8ee8;border-radius:2px}"
+                        "QSlider#SWSimMeshDensity::handle:horizontal{background:#e6e9ee;border:1px solid #9aa3ad;"
+                        "width:10px;margin:-6px 0;border-radius:3px}")
+            except Exception as _fw_err:
+                _fw_log("simpms.py:meshslider", _fw_err)
             row.addWidget(self.slider, 1)
             row.addWidget(QtWidgets.QLabel("Fine"))
             dl.addLayout(row)
@@ -2941,7 +3004,7 @@ if Gui is not None:
                 lw.model().rowsRemoved.connect(lambda *_: self._quality())
             self._kind()
             self._quality()
-            QtCore.QTimer.singleShot(0, lambda: self._open() and self._tab(self.tabs.currentIndex()))
+            from . import safe_later as _sl; _sl.later(0, lambda: self._open() and self._tab(self.tabs.currentIndex()), self, "tabs")
 
         def _unit_changed(self, unit):
             ""
@@ -3140,7 +3203,7 @@ KEYS = (
     ("SIM_MeshControl", "Mesh Control", ("SWStyle_SimMeshControl", "FEM_MeshRegion"),
      "A finer mesh on chosen faces, edges or vertices, growing by a ratio to the global size.", None),
     ("SIM_MeshQuality", "Mesh Quality Plot", ("SWStyle_SimMeshQuality",),
-     "The mesh coloured by element aspect ratio or Jacobian.", None),
+     "The mesh colored by element aspect ratio or Jacobian.", None),
 )
 
 

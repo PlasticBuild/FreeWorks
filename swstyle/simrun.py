@@ -41,7 +41,7 @@ class Cancelled(RuntimeError):
     """The user pressed Cancel in the run window."""
 
     def __init__(self):
-        super().__init__("Run cancelled.")
+        super().__init__("Run canceled.")
 
 
 STATE = {"window": None, "depth": 0, "cancel": False, "paused": False, "proc": None, "study": None, "lines": []}
@@ -221,7 +221,7 @@ if Gui is not None:
             STATE["cancel"] = True
             if STATE["paused"]:
                 self.toggle_pause()
-            self.cancel.setText("Cancelling")
+            self.cancel.setText("Canceling")
             self.pause.hide()
 
         def toggle_more(self):

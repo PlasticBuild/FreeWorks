@@ -159,7 +159,8 @@ def _solid(points, top, down):
 def _points(obj, face):
     sketch = obj.Positions
     if sketch is None:
-        return [face.CenterOfMass]
+        clicked = list(getattr(obj, "PositionPoints", []) or [])     # pkg468: Positions clicked on the face
+        return [V(p) for p in clicked] or [face.CenterOfMass]
     placement = sketch.getGlobalPlacement() if hasattr(sketch, "getGlobalPlacement") else sketch.Placement
     out = []
     for index, geometry in enumerate(sketch.Geometry):
@@ -316,6 +317,32 @@ except ImportError:      # bench without a GUI
 class Panel(sf.Panel):
     ""
 
+
+    def addSelection(self, doc, name, sub, point):
+
+        # centre there (on the near side face's plane), as the Hole Wizard's Positions tab
+        if getattr(self, "active", None) == "Positions" and point is not None and sub and \
+                sub.split(".")[-1].startswith("Face"):
+            p = App.Vector(*point)
+            QtCore.QTimer.singleShot(0, lambda: self._alive() and self._place(p))
+            return
+        sf.Panel.addSelection(self, doc, name, sub, point)
+
+    def _place(self, point):
+        """The clicked hole centres are kept on the feature (no sketch object of their own: one Undo or Cancel
+        takes them with the hole)."""
+        import FreeCADGui as Gui
+        obj = self.obj
+        if "PositionPoints" not in obj.PropertiesList:
+            obj.addProperty("App::PropertyVectorList", "PositionPoints", "Advanced Hole",
+                            "Hole centres clicked on the near side face (Positions)")
+        obj.PositionPoints = list(obj.PositionPoints) + [point]
+        try:
+            Gui.Selection.clearSelection()
+            Gui.getMainWindow().statusBar().showMessage("%d hole position(s): click for another, or OK" % len(obj.PositionPoints), 6000)
+        except Exception as error:
+            App.Console.PrintLog("FreeCAD: advanced hole position: %r\n" % (error,))
+        self._changed()
 
     def __init__(self, obj):
         super().__init__(obj)
@@ -606,7 +633,7 @@ ADVANCED_HOLE = sf.Spec(
            box="Near Side",
            tip="One per line: Counterbore D depth / Countersink D angle / Straight D depth|through / "
                "Tapered D depth"),
-     Field("Positions", "pick", "Hole positions (sketch with points)", what="Feature", box="Positions",
+     Field("Positions", "pick", "Hole positions (click on the face, or a sketch with points)", what="Feature", box="Positions",
            optional=True)],
     _advanced_hole, subtractive=True, first_pick="Face", panel=Panel if QtWidgets is not None else None)
 

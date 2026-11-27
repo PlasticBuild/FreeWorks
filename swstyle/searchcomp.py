@@ -35,7 +35,7 @@ LABELS = ("Add SpeedPak", "Remove SpeedPak", "Replace Components", "Dissolve Sub
           "Release Temporary Fix/Group", "Set to Lightweight", "Set to Resolved", "Component Properties...", "Copy with Mates",
           "View Mates", "Reload", "Configure Component", "Add to Library", "Save Part (in External File)",
           "Edit Toolbox Definition")
-HINT = "Pick a component of the assembly first. Runs the same entry as the component's right-click menu; greyed when it does not apply to it."
+HINT = "Pick a component of the assembly first. Runs the same entry as the component's right-click menu; grayed when it does not apply to it."
 _cache = {"at": 0.0, "key": None, "items": None}
 
 

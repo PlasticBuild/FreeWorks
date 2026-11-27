@@ -262,7 +262,7 @@ def paint_overridden(dim):
         return                       # dangling wins: its colour says the reference is gone
     if on:
         if "SWOverColor" not in dim.PropertiesList:
-            dim.addProperty("App::PropertyString", "SWOverColor", "FreeCAD", "colour before the override")
+            dim.addProperty("App::PropertyString", "SWOverColor", "FreeCAD", "color before the override")
             dim.setPropertyStatus("SWOverColor", "Hidden")
             dim.SWOverColor = ",".join("%g" % c for c in tuple(vo.Color)[:3])
         vo.Color = overridden_color()
@@ -313,7 +313,7 @@ def _paint(dim, on):
     colour = dangling_color()
     if on:
         if "SWDangleColor" not in dim.PropertiesList:
-            dim.addProperty("App::PropertyString", "SWDangleColor", "FreeCAD", "colour before it dangled")
+            dim.addProperty("App::PropertyString", "SWDangleColor", "FreeCAD", "color before it dangled")
             dim.setPropertyStatus("SWDangleColor", "Hidden")
             dim.SWDangleColor = ",".join("%g" % c for c in tuple(vo.Color)[:3])
         if tuple(round(c, 3) for c in tuple(vo.Color)[:3]) != colour:
@@ -545,7 +545,7 @@ def _mark(dim, prop, colour, on):
         return
     if on:
         if prop not in dim.PropertiesList:
-            dim.addProperty("App::PropertyString", prop, "FreeCAD", "colour before it was marked")
+            dim.addProperty("App::PropertyString", prop, "FreeCAD", "color before it was marked")
             dim.setPropertyStatus(prop, "Hidden")
             dim.setPropertyStatus(prop, "Transient")
             setattr(dim, prop, ",".join("%g" % c for c in tuple(vo.Color)[:3]))

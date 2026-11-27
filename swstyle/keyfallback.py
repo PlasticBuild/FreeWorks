@@ -30,7 +30,8 @@ SHORTCUT = "User parameter:BaseApp/Preferences/Shortcut"
 TEXT = (QtWidgets.QLineEdit, QtWidgets.QTextEdit, QtWidgets.QPlainTextEdit, QtWidgets.QAbstractSpinBox,
         QtWidgets.QComboBox, QtWidgets.QAbstractItemView)
 _FILTER = []
-ANYWHERE = ("FreeWorks_ContextHelp",)
+ANYWHERE = ("FreeWorks_ContextHelp",
+            "SWStyle_Welcome")          # kbmap-1127: Ctrl+F2 also with nothing open (no menu shows Welcome then)
 
 
 def table():

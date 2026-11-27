@@ -14,19 +14,23 @@ FreeWorks is not in the official Addon Manager list yet, so add this repository 
 ## Install from source
 
 Clone the repository into your user `Mod` folder as `FreeWorks`, for example
-`git clone https://github.com/PlasticBuild/FreeWorks.git "%APPDATA%\FreeCAD\Mod\FreeWorks"` on Windows. Run `git pull` in that folder to update, with FreeCAD closed. See [Install from source](../README.md#install-from-source) for more detail.
+`git clone https://github.com/PlasticBuild/FreeWorks.git "%APPDATA%\FreeCAD\v1-1\Mod\FreeWorks"` on Windows (see the table below for other folders). Run `git pull` in that folder to update, with FreeCAD closed. See [Install from source](../README.md#install-from-source) for more detail.
+
+## Windows installer (optional)
+
+Each release can also carry **FreeWorks-0.4.0-alpha-Setup.exe**. It asks your FreeCAD where its user `Mod` folder is, usually `%APPDATA%\FreeCAD\v1-1\Mod`, and installs the add-on there as `FreeWorks` for your Windows user only. You need no administrator rights. If a `FreeWorks` folder is already there, setup moves it aside as a backup and does not delete it. It needs FreeCAD 1.1 to be installed already, and it never installs, changes, or removes FreeCAD itself. To remove the add-on, use **FreeWorks add-on for FreeCAD** in Windows Settings > Apps.
 
 ## Manual install
 
-1. Download **FreeWorks-0.3.3-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.3.3-alpha). The zip is built from the tagged source in this repository.
+1. Download **FreeWorks-0.4.0-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.0-alpha). The zip is built from the tagged source in this repository.
 2. Close FreeCAD. Extract the add-on into your user `Mod` folder as `FreeWorks`. Check that `InitGui.py` sits directly inside `Mod/FreeWorks`.
 3. Restart FreeCAD.
 
 | Operating system | User `Mod` folder |
 | --- | --- |
-| Windows | `%APPDATA%\FreeCAD\Mod` |
+| Windows | `%APPDATA%\FreeCAD\v1-1\Mod` (older profiles: `%APPDATA%\FreeCAD\Mod`) |
 | macOS | Locate it using the Python console as described below. |
-| Linux | `~/.local/share/FreeCAD/Mod` |
+| Linux | `~/.local/share/FreeCAD/v1-1/Mod` (older profiles: `~/.local/share/FreeCAD/Mod`) |
 
 To find your user folder, enter `App.getUserAppDataDir()` in the FreeCAD Python console and look for the `Mod` folder inside that path.
 

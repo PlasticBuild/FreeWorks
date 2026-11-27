@@ -793,7 +793,7 @@ if Gui is not None:
             self.use_lib = QtWidgets.QCheckBox("Use Library models for components")
             self.use_lib.setObjectName("SWCircuitWorksOptLibrary")
             self.use_lib.setChecked(o["use_library"])
-            self.colour = QtWidgets.QCheckBox("Colour the board green")
+            self.colour = QtWidgets.QCheckBox("Color the board green")
             self.colour.setChecked(o["board_colour"])
             for w in (self.top, self.bottom, self.use_lib, self.colour):
                 lay.addRow(w)

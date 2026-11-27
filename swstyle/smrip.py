@@ -569,7 +569,7 @@ class Panel:
 
     def _report(self):
         if "Invalid" in self.obj.State:
-            self.error.setText(self.obj.getStatusString())
+            self.error.setText(naming.status_text(self.obj, "The rip"))
         elif not self.obj.EdgePoints and not round_rips(self.obj):
             self.error.setText(self.HINT)
         else:
@@ -626,7 +626,9 @@ def _part_body():
         _fw_log("smrip.py:623", _fw_err)
         return None
     if body is None or body.Tip is None or body.Tip.Shape.isNull() or not body.Tip.Shape.Solids:
-        return None
+        body = smflatten._body()        # the active body has no solid (look audit SM-3): the part's sheet metal body
+        if body is None or body.Tip is None or body.Tip.Shape.isNull() or not body.Tip.Shape.Solids:
+            return None
     return body
 
 

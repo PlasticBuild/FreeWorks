@@ -25,22 +25,48 @@ def is_cam(ref):
 
 
 def follower_kind(ref):
-    """'point' (a vertex), 'roller' (a round face or circular edge: its axis and radius) or None."""
+    ""
+
     s = ac.element(*ref)
     if s is None:
         return None
     if s.ShapeType == "Vertex":
         return "point"
+    if _flat(s):
+        return "plane"
     g = ac.geometry(s)
     if g is not None and g[0] == "axis" and len(g) > 3 and g[3] > 0:
         return "roller"
     return None
 
 
+def _flat(s):
+    """A flat face: a plane follower (asmpkg355)."""
+    return s.ShapeType == "Face" and s.Surface.TypeId == "Part::GeomPlane"
+
+
+def _plane_of(s):
+    """A flat follower face: (a point on it, its outward normal: the side the cam is on)."""
+    u0, u1, v0, v1 = s.ParameterRange
+    u, v = (u0 + u1) / 2.0, (v0 + v1) / 2.0
+    return V(s.valueAt(u, v)), V(s.normalAt(u, v)).normalize()
+
+
+def _plane_gap(solid, p, n):
+    """How far the cam is in front of the flat follower (< 0: into it): the least x . n over the
+    cam, less p . n, measured exactly against a wide face set well behind the cam."""
+    import Part
+    bb = solid.BoundBox
+    far = bb.DiagonalLength + abs((bb.Center - p).dot(n)) + 1.0
+    at = bb.Center - n * ((bb.Center - p).dot(n) + far)
+    wall = Part.Face(Part.Wire(Part.makeCircle(bb.DiagonalLength * 4 + 10.0, at, n)))
+    return solid.distToShape(wall)[0] - far
+
+
 def make(asm, cam, follower, joint=None):
     """Returns (mate, message)."""
     if not is_cam(cam) or follower_kind(follower) is None:
-        return None, "Pick a curved face of the cam, then the follower's vertex or round face."
+        return None, "Pick a curved face of the cam, then the follower's vertex, flat face or round face."
     if cam[0] is follower[0]:
         return None, "The cam and the follower are two components."
     if joint is None:
@@ -151,6 +177,9 @@ def _gap(joint, shift=V()):
         p = V(s.Point) + shift
         d = Part.Compound(solid.Faces).distToShape(Part.Vertex(p))[0]     # to the skin (a solid is 0 inside)
         return -d if solid.isInside(p, 1e-7, False) else d
+    if follower_kind(fol) == "plane":
+        p, n = _plane_of(s)
+        return _plane_gap(solid, p + shift, n)
     g = ac.geometry(s)
     c, axis, r = V(g[1]) + shift, V(g[2]).normalize(), g[3]
     # the roller's axis across the cam's thickness: a segment through the cam's bounding box
@@ -204,7 +233,8 @@ def touch(asm, joint, fixed):
     if d is not None:
         bb = _cam_solid(cam).BoundBox
         at = ac.element(*fol)
-        at = V(at.Point) if follower_kind(fol) == "point" else V(ac.geometry(at)[1])
+        kind = follower_kind(fol)
+        at = V(at.Point) if kind == "point" else _plane_of(at)[0] if kind == "plane" else V(ac.geometry(at)[1])
         reach = bb.DiagonalLength + (at - bb.Center).Length + 1.0     # as far as the cam is
         f = lambda t: _gap(joint, d * t)
         best = None
@@ -224,6 +254,8 @@ def touch(asm, joint, fixed):
         if best is None:
             return False
         shift = d * best
+    elif follower_kind(fol) == "plane":
+        shift = _plane_of(ac.element(*fol))[1] * gap0     # straight on along its normal: the face meets the cam
     else:
         import Part
         s = ac.element(*fol)
@@ -296,7 +328,7 @@ def is_cam_shape(s):
 
 
 def follower_shape(s):
-    if s.ShapeType == "Vertex":
+    if s.ShapeType == "Vertex" or _flat(s):
         return True
     g = ac.geometry(s)
     return g is not None and g[0] == "axis" and len(g) > 3 and g[3] > 0

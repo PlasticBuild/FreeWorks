@@ -285,6 +285,12 @@ def due(now=None):
 def tick():
     if STATE["running"]:
         return
+    try:
+        from . import recovery
+        if recovery.busy():
+            return          # fh259: a task opening and closing files while another file opens or rebuilds ended FreeCAD
+    except Exception as _fw_err:
+        _fw_log("taskscheduler.py:busy", _fw_err)
     STATE["running"] = True
     try:
         for t in due():

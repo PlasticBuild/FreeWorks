@@ -292,7 +292,7 @@ class ApiRebuilder(rb.Rebuilder):
         if self.needs_regions(sk):
             faces = self.choose_regions(sk, cut, a + shift, b + shift)
             if not faces:
-                raise RuntimeError("no sketch region of %s fits the SolidWorks shape" % sk.Label)
+                raise RuntimeError("no sketch region of %s fits the file's shape" % sk.Label)
         else:
             wires = [Part.Wire(es) for es in Part.sortEdges(self.profile_edges(sk))]
             faces = Part.makeFace(wires, "Part::FaceMakerBullseye").Faces
@@ -355,7 +355,7 @@ class ApiRebuilder(rb.Rebuilder):
     def run(self):
         for f in self.tree["features"]:
             if f.get("suppressed"):
-                self.note(f["name"], "skipped (suppressed in SolidWorks)")
+                self.note(f["name"], "skipped (suppressed in the file)")
                 continue
             kind = f.get("kind") or ("sketch" if "sketch" in f else None)
             if f["type"] in ("BaseBody", "MBimport", "ImportedBody"):
@@ -535,7 +535,7 @@ class ApiRebuilder(rb.Rebuilder):
         best = min(((err_of(t, s, e), t, s, e) for t in tlist for s in sides for e in exts), key=lambda r: r[0])
         err, t, side, ext = best
         if err == float("inf"):
-            self.note(f["name"], "failed", kind="thin", error="no wall fits the SolidWorks shape")
+            self.note(f["name"], "failed", kind="thin", error="no wall fits the file's shape")
             return
         if not thin.get("thickness"):  # refine the wall thickness (golden section)
             lo, hi = t / 2, t * 2
@@ -752,7 +752,7 @@ class ApiRebuilder(rb.Rebuilder):
             self.undo_profile_holes(f)
         cavs = self.hole_cavities()
         if not cavs:
-            self.note(f["name"], "not rebuilt", kind="hole", error="no hole-shaped cavity in the SolidWorks shape")
+            self.note(f["name"], "not rebuilt", kind="hole", error="no hole-shaped cavity in the file's shape")
             return
         holes = [c for c in cavs if c["spec"] is not None]
         seeds = self.hole_seeds(f, holes) if holes else []

@@ -3,6 +3,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -256,8 +257,68 @@ def _what_fields():
 
 
 def _skip_field():
-    return Field("Skip", "text", "Instances to Skip", "", box="Instances to Skip",
-                 tip="Instance numbers to leave out (the seed is 1), e.g. 3, 5")
+    return Field("Skip", "skip", "Instances to Skip", "", box="Instances to Skip",
+                 tip="Click the pink dots in the graphics area to skip instances")
+
+
+_SITES = {}         # {(doc, feature): (stamp, seed centre, [(key, placement)])} of the last rebuild: the skip dots
+
+
+def _stamp(obj):
+    """Which document and object an entry is for: a name used again (a deleted feature's name taken
+    by a new one, a closed document's name by a new document) has another stamp."""
+    try:
+        return (obj.Document.Uid, obj.ID)
+    except Exception:
+        return None
+
+
+def _prune():
+    """Entries of closed documents and of removed (or replaced) features go."""
+    try:
+        open_docs = App.listDocuments()
+        for key, entry in list(_SITES.items()):
+            doc = open_docs.get(key[0])
+            obj = doc.getObject(key[1]) if doc is not None else None
+            if obj is None or _stamp(obj) != entry[0]:
+                _SITES.pop(key, None)
+    except Exception as _fw_err:
+        _fw_log("patterns.py:prune", _fw_err)
+
+
+def _entry(obj):
+    """(centre, keyed) recorded for this very object, or (None, [])."""
+    try:
+        entry = _SITES.get((obj.Document.Name, obj.Name))
+    except Exception:
+        return None, []
+    if entry is None:
+        return None, []
+    if entry[0] != _stamp(obj):
+        _SITES.pop((obj.Document.Name, obj.Name), None)       # another feature had this name
+        return None, []
+    return entry[1], entry[2]
+
+
+def _record(obj, seeds, base, keyed):
+    """Every instance but the seed, skipped ones too, as the skip dots show them."""
+    try:
+        _prune()
+        centre = _center(seeds, obj, base)
+        _SITES[(obj.Document.Name, obj.Name)] = (_stamp(obj), centre, list(keyed))
+    except Exception as _fw_err:
+        _fw_log("patterns.py:record", _fw_err)
+
+
+def skip_sites(obj):
+    """[(key, point)] where the skip dots go: the seed's centre carried to each instance."""
+    centre, keyed = _entry(obj)
+    return [(key, placement.multVec(centre)) for key, placement in keyed] if centre is not None else []
+
+
+def skip_seed(obj):
+    centre, _keyed = _entry(obj)
+    return centre
 
 
 def _option_fields(vary=False):
@@ -271,6 +332,7 @@ def _finish(obj, base, seeds, placements, skip=True):
     """Instances to Skip (by number, the seed being 1), then Geometry pattern / Vary sketch: on,
     copies of the seed; off (or Vary sketch), the seed made again at every instance."""
     if skip:
+        _record(obj, seeds, base, [((k, 1), p) for k, p in enumerate(placements, start=2)])
         gone = {i for i, _j in parse_skip(getattr(obj, "Skip", "") or "")}
         placements = [p for k, p in enumerate(placements, start=2) if k not in gone]
     vary = bool(getattr(obj, "VarySketch", False))
@@ -302,9 +364,9 @@ def _picked_point(obj, field):
             return shape.Point
         if shape.ShapeType == "Edge" and hasattr(shape.Curve, "Center"):
             return V(shape.Curve.Center)
-        if shape.Vertexes:
+        if shape.ShapeType in ("Edge", "Wire") and shape.Vertexes:
             return shape.Vertexes[0].Point
-    return None
+    return None             # a whole feature is no point (a reference point is a vertex: tdpref-fix01)
 
 
 def _reference(obj, seeds, fallback=None, base=None):
@@ -340,14 +402,14 @@ def _sketch_driven(obj, base):
 def _ref_fields():
     return [Field("ReferencePoint", "radio", "Reference point", "Centroid", values=["Centroid", "Selected point"],
                   box="Reference point"),
-            Field("RefPoint", "pick", "Reference vertex", what=("Vertex", "Edge"), optional=True,
+            Field("RefPoint", "pick", "Reference vertex", what=("Vertex", "Edge", ""), optional=True,
                   shown=lambda o: getattr(o, "ReferencePoint", "") == "Selected point", box="Reference point")]
 
 
 SKETCH_DRIVEN = sf.Spec(
     "SWStyle_SketchDrivenPattern", "Sketch Driven Pattern", "Sketch-Pattern",
     "Copies features to the points of a sketch.", "FEATURES_SKETCH_DRIVEN_PATTERN", "PartDesign_LinearPattern",
-    [Field("Sketch", "pick", "Reference sketch", tip="A sketch with points (circle centres count too)",
+    [Field("Sketch", "pick", "Reference sketch", tip="A sketch with points (circle centers count too)",
            what="Feature", box="Selections")] + _ref_fields() + _what_fields() + [_skip_field()] + _option_fields(),
     _sketch_driven, first_pick="Sketch")
 
@@ -367,14 +429,57 @@ def _table(text):
     return points
 
 
+_POINTS = ("PartDesign::Point", "App::Point", "Part::DatumPoint")
+_CSYS = ("PartDesign::CoordinateSystem", "App::LocalCoordinateSystem", "Part::LocalCoordinateSystem", "App::Origin")
+
+
+def _is_csys(o):
+    return getattr(o, "TypeId", "") in _CSYS
+
+
+def _select_point_option(obj):
+    """Reference point: Selected point, on the page too (the page writes its options back after a pick)."""
+    obj.ReferencePoint = "Selected point"
+    try:
+        from PySide import QtWidgets
+        for b in QtWidgets.QApplication.allWidgets():
+            if b.objectName() == "SWStyle_ReferencePoint_Selectedpoint" and b.isVisible():
+                b.blockSignals(True)
+                b.setChecked(True)
+                b.blockSignals(False)
+    except Exception as _fw_err:
+        _fw_log("patterns.py:tdpref", _fw_err)
+
+
+def _table_route(obj, active, holder, element):
+    ""
+
+
+    if element == "" and getattr(holder, "TypeId", "") in _POINTS:
+        if getattr(obj, "ReferencePoint", "") != "Selected point":
+            _select_point_option(obj)
+        return "RefPoint"
+    if element == "" and _is_csys(holder):
+        return "CoordinateSystem"
+    if active == "CoordinateSystem":
+        if element.startswith("Vertex") and getattr(obj, "ReferencePoint", "") == "Selected point":
+            return "RefPoint"
+        return "Features" if element == "" else "Faces"
+    if active == "RefPoint" and element == "":
+        return "Features"
+    return active
+
+
 def _table_driven(obj, base):
     seeds = _seeds(obj, base)
     points = _table(obj.Points)
-    if _nothing(obj, base, seeds) or len(points) < 2:
+    if _nothing(obj, base, seeds):
         return None, None
     # the table's X Y are in the coordinate system picked (else the part's own)
     csys = getattr(obj, "CoordinateSystem", None)
     pl = App.Placement()
+    if csys is not None and not _is_csys(csys):
+        csys = None                 # only a coordinate system frames the table (tdpref-fix01)
     if csys is not None:
         pl = csys.getGlobalPlacement() if hasattr(csys, "getGlobalPlacement") else csys.Placement
 
@@ -385,6 +490,8 @@ def _table_driven(obj, base):
     if lines and lines[0].strip() != first:
         obj.Points = "\n".join([first] + lines[1:])
         points = _table(obj.Points)
+    if len(points) < 2:
+        return None, None
     world = [pl.multVec(p) for p in points]
     return _finish(obj, base, seeds, [App.Placement(p - world[0], App.Rotation()) for p in world[1:]])
 
@@ -433,13 +540,23 @@ TABLE_DRIVEN = sf.Spec(
      Field("CoordinateSystem", "pick", "Coordinate system", what="Feature", optional=True, box="Coordinate system"),
      Field("ReferencePoint", "radio", "Reference point", "Centroid", values=["Centroid", "Selected point"],
            box="Reference point"),
-     Field("RefPoint", "pick", "Reference vertex", what=("Vertex", "Edge"), optional=True,
+     Field("RefPoint", "pick", "Reference vertex", what=("Vertex", "Edge", ""), optional=True,
            shown=lambda o: getattr(o, "ReferencePoint", "") == "Selected point", box="Reference point"),
      *_what_fields(),
      Field("Points", "text", "Points (X Y per line; point 0 is the seed)", "0 0\n20 0\n20 20",
            tip="One point per line: X Y (or X Y Z), in mm, in the coordinate system"),
      _skip_field()] + _option_fields(),
     _table_driven)
+
+
+TABLE_DRIVEN.route = _table_route
+for _f in TABLE_DRIVEN.fields:
+    if _f.name == "Points":
+        _f.grid = ("X", "Y")
+        _f.default = "0 0"           # a new table holds point 0 only; type the points in the empty row
+# pkg453: OK needs something to pattern (it made an empty Table-Pattern before)
+TABLE_DRIVEN.need = lambda o: None if any(getattr(o, f, None) for f in ("Features", "Faces", "Bodies")) \
+    else "Select the features, faces or bodies to pattern."
 
 
 # --------------------------------------------------------------------------- Curve Driven
@@ -528,14 +645,17 @@ def _curve_driven(obj, base):
     if wire2 is not None:
         st2 = _stations(obj, wire2, max(int(obj.Count2), 1), obj.EqualSpacing2, float(obj.Spacing2), obj.Reverse2)
         seconds = [(j, App.Placement(p - st2[0][0], App.Rotation())) for j, (p, _t) in enumerate(st2)]
-    placements = []
+    placements, sites = [], []
     for j, second in seconds:
         for i, placement in first:
-            if (i + 1, j + 1) in skips:
-                continue
             if j > 0 and i > 0 and getattr(obj, "SeedOnly", False):
                 continue
+            if i or j:
+                sites.append(((i + 1, j + 1), second.multiply(placement)))
+            if (i + 1, j + 1) in skips:
+                continue
             placements.append(second.multiply(placement))
+    _record(obj, seeds, base, sites)
     return _finish(obj, base, seeds, placements, skip=False)      # (i,j) skips are done above
 
 
@@ -566,9 +686,11 @@ CURVE_DRIVEN = sf.Spec(
      Field("Spacing2", "length", "Spacing", 10.0, shown=lambda o: _dir2("")(o) and not o.EqualSpacing2, box="Direction 2"),
      Field("SeedOnly", "bool", "Pattern seed only", False, shown=_dir2("SeedOnly"), box="Direction 2"),
      *_what_fields(),
-     Field("Skip", "text", "Instances to Skip", "", tip="(i,j) pairs", box="Instances to Skip")]
+     Field("Skip", "skip", "Instances to Skip", "", tip="Click the pink dots in the graphics area to skip instances",
+           box="Instances to Skip")]
     + _option_fields(vary=True),
     _curve_driven, first_pick="Curve")
+CURVE_DRIVEN.skip_pairs = True
 
 
 # --------------------------------------------------------------------------- Fill Pattern
@@ -685,6 +807,7 @@ def _fill(obj, base):
     kept.sort(key=lambda p: (p - origin).Length)
     moves = [App.Placement(p - origin, App.Rotation()) for p in kept]
     if make_seed:
+        _record(obj, seeds, base, [((k, 1), m) for k, m in enumerate([m for m in moves if m.Base.Length > 1e-6], start=2)])
         gone = {i for i, _j in parse_skip(getattr(obj, "Skip", "") or "")}
         moves = [App.Placement()] + [m for k, m in enumerate([m for m in moves if m.Base.Length > 1e-6], start=2)
                                      if k not in gone]
@@ -740,6 +863,8 @@ FILL = sf.Spec(
            what=("Face", "Edge", "Vertex"), many=True, optional=True, box="Bodies"),
      _skip_field()] + _option_fields(vary=True),
     _fill, first_pick="Boundary")
+for _spec in (SKETCH_DRIVEN, TABLE_DRIVEN, CURVE_DRIVEN, FILL):
+    _spec.skip_sites, _spec.skip_seed = skip_sites, skip_seed       # Instances to Skip: the pink dots
 
 
 # --------------------------------------------------------------------------- Linear and Circular
@@ -1772,7 +1897,7 @@ def _in_edit(obj):
     try:
         import FreeCADGui as Gui
         vp = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument is not None else None
-        return vp is not None and vp.Object is obj
+        return vp is not None and editobj.of(vp) is obj
     except Exception:
         return False
 
@@ -1845,3 +1970,40 @@ def register():
                 App.Console.PrintWarning("FreeCAD: Mirror command not added (%s)\n" % error)
             continue
         sf.register(spec)
+
+
+# pkg464: OK needs something to pattern on every pattern page (it made an empty Curve-Pattern / Sketch-Pattern
+# feature and undo step before); Fill Pattern's "Create seed cut" makes its own seed
+def _need_something(o):
+    if getattr(o, "Seed", "") == "Create seed cut":
+        return None
+    if any(getattr(o, f, None) for f in ("Features", "Faces", "Bodies")):
+        return None
+    return "Select the features, faces or bodies to pattern."
+
+
+for _spec in (SKETCH_DRIVEN, CURVE_DRIVEN, FILL, LINEAR, CIRCULAR):
+    if getattr(_spec, "need", None) is None:
+        _spec.need = _need_something
+
+
+def _curve_route(obj, active, holder, element):
+    ""
+
+    if active == "Curve" and element.startswith("Face"):
+        return "Features"
+    return active
+
+
+def _fill_route(obj, active, holder, element):
+    """pkg464: after the Fill boundary the clicks go to Pattern direction (edges only); a face clicked then
+    (the seed) goes to Features to pattern."""
+    if active == "Direction" and element.startswith("Face") and getattr(obj, "Seed", "") != "Create seed cut":
+        return "Features"
+    return active
+
+
+if getattr(CURVE_DRIVEN, "route", None) is None:
+    CURVE_DRIVEN.route = _curve_route
+if getattr(FILL, "route", None) is None:
+    FILL.route = _fill_route

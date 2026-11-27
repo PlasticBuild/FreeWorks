@@ -83,7 +83,8 @@ def sync_start_page():
     try:
         start = App.ParamGet("User parameter:BaseApp/Preferences/Mod/Start")
         hidden = paths.params().GetBool(START_HIDDEN, False)
-        if at_startup():
+        from . import startswitch      # startswitch-1127: the Start page picked: FreeCAD opens it
+        if at_startup() and startswitch.screen() == "welcome":
             if not hidden and start.GetBool("ShowOnStartup", True):
                 start.SetBool("ShowOnStartup", False)
                 paths.params().SetBool(START_HIDDEN, True)
@@ -730,6 +731,8 @@ class WelcomeDialog(QtWidgets.QDialog):
         close.setObjectName("SWWelcomeClose")
         close.clicked.connect(self.accept)
         bottom.addWidget(close)
+        from . import startswitch      # startswitch-1127: the switch to the Start page, bottom right
+        bottom.addWidget(startswitch.welcome_button(self))
         lay.addLayout(bottom)
 
     # ---- Home
@@ -1345,6 +1348,12 @@ def merge_first_start():
 
 def show_at_startup():
     ""
+    from . import startswitch      # startswitch-1127: the Start page picked last: no Welcome
+    if startswitch.screen() == "start":
+        hidden = paths.params().GetBool(START_HIDDEN, False)
+        sync_start_page()
+        startswitch.at_startup(hidden)
+        return None
     first = merge_first_start()
     if (not at_startup() and not first) or App.listDocuments():
         return None
@@ -1406,3 +1415,5 @@ class WelcomeCommand:
 def register():
     if Gui.Command.get(COMMAND) is None:
         Gui.addCommand(COMMAND, WelcomeCommand())
+    from . import startswitch      # startswitch-1127: theme and switch on every Start page
+    QtCore.QTimer.singleShot(2000, startswitch.start)

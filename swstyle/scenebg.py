@@ -27,7 +27,7 @@ def _fw_log(site, err):
     try:
         if site not in _FW_SEEN:
             _FW_SEEN.add(site)
-            __import__("FreeCAD").Console.PrintLog("FreeWorks %s: %s\n" % (site, err))
+            __import__("FreeCAD").Console.PrintLog("FreeCAD %s: %s\n" % (site, err))
     except Exception:
         return
 
@@ -66,14 +66,39 @@ OWN_SCENES = (-1, 0)        # the theme's own scene, or 3 Point Faded picked by 
 
 
 def wanted():
-    """The Light or Dark theme with its own scene (AMOLED stays pure black)."""
+    """The Light or Dark theme with its own scene (AMOLED stays pure black), with the scene's own background."""
     try:
         if not paths.params().GetBool(SETTING, True):
             return False
         if style.current_theme() not in ("Light", "Medium Light", "Medium", "Dark"):      # themes-medium-1120
             return False
-        return paths.params().GetInt(style.SCENE_SETTING, -1) in OWN_SCENES
+        if paths.params().GetInt(style.SCENE_SETTING, -1) not in OWN_SCENES:
+            return False
     except Exception:
+        return False
+    if options_background():
+        return False
+    try:
+        # Edit Scene's own background (None, Color, Gradient, Image) shows instead of the scene's
+        from . import scenepm
+        return scenepm.settings()["background"] == "Use Environment"
+    except Exception:
+        return True
+
+
+def options_background():
+    ""
+
+
+    import os
+    try:
+        fw = paths.params()
+        if fw.GetBool("BackgroundIsImage", False) and os.path.isfile(fw.GetString("BackgroundImage", "")):
+            return True
+        return any(p == "User parameter:BaseApp/Preferences/View" and n == "Gradient"
+                   for p, _k, n, _v in style.user_settings())
+    except Exception as _fw_err:
+        _fw_log("scenebg.py:options", _fw_err)
         return False
 
 
@@ -164,7 +189,21 @@ PHOTO_NAME = "SWScenePhoto"
 
 
 def photo_file():
-    """The picked scene's background photo, or None (a studio scene, the theme's own, or a missing file)."""
+    """The picture behind the model: Edit Scene's Background > Image when that is set, else the picked scene's
+    background photo; None for a studio scene, the theme's own, a missing file, or a None / Color / Gradient
+    background (the scene's photo gives way to it), or a Plain, Gradient or Image file background in Options."""
+    if options_background():
+        return None
+    try:
+        from . import scenepm
+        kind = scenepm.settings()["background"]
+        if kind == "Image":
+            got = scenepm.background_image()
+            return got[0] if got else None
+        if kind != "Use Environment":
+            return None
+    except Exception as _fw_err:
+        _fw_log("scenebg.py:own-image", _fw_err)
     try:
         from . import realview
         env = realview.environment_file()
@@ -216,6 +255,16 @@ def _load_photo(tex, path):
     raw = bytes(image.constBits())[:stride * h]
     tex.image.setValue(coin.SbVec2s(w, h), 3, b"".join(raw[y * stride:y * stride + 3 * w] for y in range(h)))
     return w, h
+
+
+def stretched():
+    """Background > Image with Stretch image to fit window: the whole picture fills the view, stretched."""
+    try:
+        from . import scenepm
+        got = scenepm.background_image()
+        return bool(got and got[1])
+    except Exception:
+        return False
 
 
 def cover(view_aspect, image_aspect):
@@ -300,10 +349,16 @@ class SceneBackground(QtCore.QObject):
                 aspect = w.width() / float(max(1, w.height()))
             except Exception:
                 aspect = 1.6
-            if self.photo_aspect is None or abs(aspect - self.photo_aspect) > 0.01:
-                s0, t0, s1, t1 = cover(aspect, self.photo_size[0] / float(self.photo_size[1]))
+            stretch = stretched()
+            if self.photo_aspect is None or abs(aspect - self.photo_aspect) > 0.01 or \
+                    stretch != getattr(self, "photo_stretch", None):
+                if stretch:
+                    s0, t0, s1, t1 = 0.0, 0.0, 1.0, 1.0
+                else:
+                    s0, t0, s1, t1 = cover(aspect, self.photo_size[0] / float(self.photo_size[1]))
                 tc.point.setValues(0, 4, [(s0, t0), (s1, t0), (s1, t1), (s0, t1)])
                 self.photo_aspect = aspect
+                self.photo_stretch = stretch
         for view in views:
             try:
                 root = view.getSceneGraph()

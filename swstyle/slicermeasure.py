@@ -79,7 +79,7 @@ def describe(kind, s):
     if kind == "edge":
         c = _circle(s)
         if c is not None:
-            return "Circle  diameter %.2f mm  (centre X %.2f  Y %.2f  Z %.2f)" % (2 * c.Radius, c.Center.x, c.Center.y,
+            return "Circle  diameter %.2f mm  (center X %.2f  Y %.2f  Z %.2f)" % (2 * c.Radius, c.Center.x, c.Center.y,
                                                                                   c.Center.z)
         return "Edge  length %.2f mm" % s.Length
     n = _plane_normal(s)
@@ -268,7 +268,7 @@ def panel(toolbar, ToolPanel):
         if r["angle"] is not None:
             rows.append("Angle %.2f°" % r["angle"])
         if r["centres"] is not None:
-            rows.append("Centre to centre %.3f mm" % r["centres"])
+            rows.append("Center to center %.3f mm" % r["centres"])
         p.out.setText("<br>".join(rows))
         toolbar.place()                  # the panel grows to its new rows
     p.fill = fill

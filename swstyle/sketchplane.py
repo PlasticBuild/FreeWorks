@@ -166,7 +166,7 @@ class SketchPlanePanel:
     def addSelection(self, doc, obj, sub, pnt):
         if doc != self.doc.Name:
             return
-        QtCore.QTimer.singleShot(0, lambda o=obj, s=sub: self.take(o, s))
+        from . import safe_later as _sl; _sl.later(0, lambda o=obj, s=sub: self.take(o, s), self, "note")
 
     def take(self, name, sub):
         obj = self.doc.getObject(name)

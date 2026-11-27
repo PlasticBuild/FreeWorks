@@ -200,8 +200,6 @@ CHOICES = {
     ("Search", "Indexing performance"): ("Index only when computer is idle", "Always index"),
     ("Configurations", "Default Bill Of Materials part number for new configurations"): ("Document Name",
                                                                                          "Configuration Name"),
-    ("Sketch", "Turn off Automatic Solve Mode and Undo when sketch contains more than"): (
-        "1000 sketch entities", "2000 sketch entities", "5000 sketch entities", "10000 sketch entities"),
 }
 
 
@@ -361,7 +359,7 @@ class SwatchButton(QtWidgets.QPushButton):
             self._hex = ""
         if not self._hex:
             QtWidgets.QPushButton.setText(self, "Default")
-            self.setToolTip("%s: not set (the part's colour). Click to pick one." % self._title)
+            self.setToolTip("%s: not set (the part's color). Click to pick one." % self._title)
             self.setStyleSheet("")
             return
         QtWidgets.QPushButton.setText(self, "")
@@ -399,6 +397,8 @@ SHOWN = {
     ("General", "Check for solutions when the program crashes"): "Check for solutions when FreeCAD crashes",
     ("General", "Enable sounds for events"): "Enable sounds for FreeCAD events",
     ("Backup/Recover", "Backup folder"): "",
+    # fh248: a product feature name, not a file format: neutral wording (the setting keeps its key)
+    ("Import", "Enable 3D Interconnect"): "Open assemblies with their structure (linked parts)",
 }
 EDITABLE = {("General", "Custom property used as component description")}
 
@@ -596,6 +596,12 @@ class FolderLater(Later):
         return v if v and os.path.isdir(v) else self.real_folder()
 
 
+def _tipped(row, tip):
+    """row with its tooltip (a kept row says what it does in FreeCAD)."""
+    row.tip = tip
+    return row
+
+
 def FixedValue(text, shown, tip=""):
     ""
     row = Later(text, shown, "Fixed")
@@ -608,9 +614,16 @@ class Radio(Setting):
     ""
 
 
-    def __init__(self, key, text, choices, read, write, tip=""):
+    def __init__(self, key, text, choices, read, write, tip="", reset_to=None):
         super().__init__("", key, None, text, tip)
         self.choices, self.read, self.write = choices, read, write
+        self.reset_to = reset_to        # fh236: the value Reset... puts back (None: Reset leaves it)
+
+    def reset(self):
+        if self.reset_to is None:
+            return False
+        self.set(self.reset_to)
+        return True
 
     def widget(self):
         box = QtWidgets.QGroupBox(self.text) if self.text else QtWidgets.QWidget()
@@ -1019,9 +1032,10 @@ def _browse_width(button):
 class PathFn(Setting):
     """A path box with "..." over read() and write(path); folder=True picks a folder."""
 
-    def __init__(self, key, text, read, write, folder=False, filt="All files (*)", tip=""):
+    def __init__(self, key, text, read, write, folder=False, filt="All files (*)", tip="", empty=""):
         super().__init__("", key, None, text, tip)
         self.read, self.write, self.folder, self.filt = read, write, folder, filt
+        self.empty = empty          # fh252: what an empty box means, shown in grey inside it
 
     def widget(self):
         row = QtWidgets.QWidget()
@@ -1032,6 +1046,8 @@ class PathFn(Setting):
         self.box.setObjectName("SWPath_" + self.key)
         self.box.setMinimumWidth(260)
         self.box.setToolTip(self.tip)
+        if self.empty:
+            self.box.setPlaceholderText(self.empty)
         lay.addWidget(self.box, 1)
         b = QtWidgets.QPushButton("...")
         b.setFixedWidth(_browse_width(b))       # look-audit optcut-1120: 28 px cut "..." to "."
@@ -1452,7 +1468,7 @@ class ColorList(Setting):
         self.edit.setEnabled(bool(target))
         color = self.color(target) if target else None
         self.swatch.setStyleSheet("background:%s; border:1px solid #888;" % (color.name() if color else "transparent"))
-        self.swatch.setToolTip("" if color else "The look's own colour")
+        self.swatch.setToolTip("" if color else "The look's own color")
 
     def select(self, name):
         found = self.list.findItems(name, Qt.MatchExactly)
@@ -1680,12 +1696,88 @@ def _grid_size():
             return 10.0
 
 
+
+# Minor-lines per major, Automatic scaling) are kept in the document ("major_mm;minor;auto", saved with the file);
+# a document without its own reads GRID_DEFAULT, the values FreeCAD's sketcher settings had before the first
+# document took its own. When a document becomes the active one its values go into FreeCAD's sketcher settings
+# (apply_doc_grid), so a new sketch in it starts on its grid.
+GRID_META = "FwGridSnap"
+GRID_DEFAULT = "GridSnapDefault"
+
+
+def _grid_live():
+    minor = max(1, _param(SK_GENERAL).GetInt("GridNumberSubdivision", 10))
+    return (_grid_size() * minor, minor, _param(SK_GENERAL).GetBool("GridAuto", True))
+
+
+def _grid_parse(text):
+    try:
+        major, minor, auto = str(text).split(";")
+        return (float(major), max(1, int(minor)), auto == "1")
+    except Exception:
+        return None
+
+
+def _grid_text(values):
+    return "%r;%d;%d" % (float(values[0]), int(values[1]), 1 if values[2] else 0)
+
+
+def _grid_default():
+    return _grid_parse(_fw().GetString(GRID_DEFAULT, "")) or _grid_live()
+
+
+def _grid_doc(doc=None):
+    """(major mm, minor lines, automatic scaling) of doc (the active document), else of new documents."""
+    doc = doc if doc is not None else App.ActiveDocument
+    if doc is not None:
+        try:
+            got = _grid_parse(dict(doc.Meta or {}).get(GRID_META, ""))
+            if got:
+                return got
+        except Exception as _fw_err:
+            _fw_log("optionspages.py:grid_doc", _fw_err)
+    return _grid_default()
+
+
+def _grid_store(major=None, minor=None, auto=None):
+    old = _grid_doc()
+    new = (old[0] if major is None else float(major), old[1] if minor is None else max(1, int(minor)),
+           old[2] if auto is None else bool(auto))
+    if not _fw().GetString(GRID_DEFAULT, ""):
+        _fw().SetString(GRID_DEFAULT, _grid_text(_grid_default()))      # what documents without their own keep
+    doc = App.ActiveDocument
+    if doc is None:
+        _fw().SetString(GRID_DEFAULT, _grid_text(new))
+        return
+    try:
+        meta = dict(doc.Meta or {})
+        if meta.get(GRID_META) != _grid_text(new):
+            meta[GRID_META] = _grid_text(new)
+            doc.Meta = meta
+    except Exception as _fw_err:
+        _fw_log("optionspages.py:grid_store", _fw_err)
+
+
+def apply_doc_grid(doc=None):
+    """fh267: the document's Grid/Snap into FreeCAD's sketcher settings (new sketches start on it)."""
+    try:
+        major, minor, auto = _grid_doc(doc)
+        live = _grid_live()
+        if abs(live[0] - major) < 1e-9 and live[1:] == (minor, auto):
+            return
+        _param(SK_GENERAL).SetInt("GridNumberSubdivision", int(minor))
+        _param(GRID_SIZE).SetString("GridSize", "%g mm" % (major / max(1, int(minor))))
+        _param(SK_GENERAL).SetBool("GridAuto", bool(auto))
+    except Exception as _fw_err:
+        _fw_log("optionspages.py:apply_doc_grid", _fw_err)
+
+
 def _minor_read():
-    return max(1, _param(SK_GENERAL).GetInt("GridNumberSubdivision", 10))
+    return _grid_doc()[1]
 
 
 def _major_read():
-    return _grid_size() * _minor_read()
+    return _grid_doc()[0]
 
 
 def _sketches_grid(prop, value):
@@ -1705,18 +1797,21 @@ def _sketches_grid(prop, value):
 
 
 def _major_write(mm):
+    _grid_store(major=mm)
     _param(GRID_SIZE).SetString("GridSize", "%g mm" % (mm / _minor_read()))
     _sketches_grid("GridSize", mm / _minor_read())
 
 
 def _minor_write(n):
     major = _major_read()
+    _grid_store(minor=n)
     _param(SK_GENERAL).SetInt("GridNumberSubdivision", int(n))
     _param(GRID_SIZE).SetString("GridSize", "%g mm" % (major / max(1, int(n))))
     _sketches_grid("GridSize", major / max(1, int(n)))
 
 
 def _grid_auto_write(on):
+    _grid_store(auto=on)
     write(SK_GENERAL, "Boolean", "GridAuto", bool(on))
     _sketches_grid("GridAuto", bool(on))
 
@@ -1897,7 +1992,7 @@ class DensityRow(Setting):
         lay.addWidget(label)
         lay.addWidget(self.box)
         lay.addStretch(1)
-        QtCore.QTimer.singleShot(0, self._link)
+        from . import safe_later as _sl; _sl.later(0, self._link, self, "box")
         return row
 
     def _link(self):
@@ -1942,11 +2037,8 @@ class DensityRow(Setting):
         self.loaded = self.value()
 
 
-def _shown(key):
-    from . import viewtypes
-    return App.ActiveDocument is not None and viewtypes.shown(key)
-
-
+# dupdef-1126: a one-argument _shown(key) stood here; the module's later _shown(setting, head) always replaced it
+# and nothing called the one-argument form, so it is gone
 def _set_shown(key, on):
     from . import viewtypes
     if App.ActiveDocument is not None:
@@ -1992,6 +2084,12 @@ def _rebuild_trees():
 
 def _later(page):
     return lambda text, default=None: Later(text, default, page)
+
+
+def _needs(row, parent):
+    """fix297: row shows only while parent's box is ticked."""
+    row.needs = parent.key
+    return row
 
 
 DOC_META = "FreeWorks:"
@@ -2280,6 +2378,11 @@ def _restore_associations(dialog):
 def _general():
     L = _later("General")
     return [
+        ("Workbenches", [
+            BoolFn("SheetMetalEnabled", "Enable Sheet Metal tools",
+                   *_fw_bool("SheetMetalEnabled", True),
+                   tip="Show Sheet Metal commands in the FreeCAD interface"),
+        ]),
         ("Recent documents", [
             # the look sets 50 at every start: written as the user's own so a change outlasts a restart
             NumberFn("RecentFiles", "Maximum recent documents displayed", "", 0, 50,
@@ -2315,15 +2418,26 @@ def _general():
             L("Auto-size PropertyManager when panels are split", True),
             Fixed("Automatically edit macro after recording", False,
                   "The macro opens in FreeCAD's macro editor when recording stops"),
-            L("Stop VSTA debugger on macro exit", True),
+            _tipped(L("Stop VSTA debugger on macro exit", True),    # BB39 OP-2: what it does in FreeCAD
+                    "FreeCAD's macro debugger stops when a macro run from Tools > Macro > Run ends"),
             L("Enable FeatureXpert", True),
             BoolFn("FreezeBar", "Enable Freeze bar", *_fw_bool("FreezeBar", False)),
             L("Custom property used as component description", "Description"),
             L("Show latest Technical Alerts and News in Welcome dialog", True),
+            BoolFn("StartScreenSwitch", "Show the Welcome / Start page switch",    # startswitch-1127
+                   lambda: not __import__("swstyle.startswitch", fromlist=["x"]).switch_hidden(),
+                   lambda v: __import__("swstyle.startswitch", fromlist=["x"]).set_switch_hidden(not v),
+                   "The button in the bottom right corner of the Welcome screen and the Start page; "
+                   "hidden, the screen picked last stays"),
             L("Check for solutions when the program crashes", True),
             L("Enable sounds for events", True),
         ] + ([Button("Configure Sounds...", _configure_sounds, "Windows' Sound control panel")]
              if os.name == "nt" else [])),    # extapps82
+        ("Donate and feedback", [
+            BoolFn("FeedbackButton", "Show Donate and Feedback button", lambda: _fw().GetBool("FeedbackButton", True),
+                   lambda v: __import__("swstyle.feedbackpill", fromlist=["x"]).set_enabled(v),
+                   "The Donate | Feedback button in the bottom right of the window"),
+        ]),
         ("Software updates", [
             BoolFn("UpdateCheck", "Check for updates automatically", lambda: _fw().GetBool("UpdateCheck", True),
                    lambda v: _fw().SetBool("UpdateCheck", bool(v)),
@@ -2350,7 +2464,7 @@ def _colors():
         (None, [
             L("Current color scheme", "Default"),     # extapps82: Icon color is listed above Background
             ColorList(),
-            ColorButton(VIEW, "DefaultShapeColor", "Default appearance", "The colour of new bodies and features"),
+            ColorButton(VIEW, "DefaultShapeColor", "Default appearance", "The color of new bodies and features"),
             L("Default scene", "00 3 point faded"),
             Radio("BackgroundAppearance", "Background appearance",
                   [("Use document scene background (recommended)", "scene"),
@@ -2358,7 +2472,7 @@ def _colors():
                    ("Gradient (Top/Bottom Gradient colors above)", "gradient"),
                    ("Image file", "image")], _background_read, _background_write),
             Fixed("Use specified color for Shaded With Edges mode", True,
-                  "Edges in Shaded With Edges use the 'Edges In Shaded With Edges Mode' colour above"),
+                  "Edges in Shaded With Edges use the 'Edges In Shaded With Edges Mode' color above"),
             # drawmaint.py colours a drawing's dimensions changed since the last save, on open (Drawings land117)
             L("Use specified color for changed drawing dimensions on open", False),
             L("Use specified colors when editing parts in assemblies", True),
@@ -2404,14 +2518,16 @@ def _sketch():
                    lambda: _param("Mod/Sketcher/General").GetBool("DimensionOnlyWhenEntered", True),
                    lambda v: write("Mod/Sketcher/General", "Boolean", "DimensionOnlyWhenEntered", bool(v)),
                    "Off: with on-screen numeric input, every line drawn keeps its length as a dimension",
-                   indent=True),
+                   needs="OnScreenNumericInput", indent=True),
             BoolFn("PreviewSketchDimension", "Preview sketch dimension when selected",
                    *_fw_bool("PreviewSketchDimension", False),
                    tip="Picking a sketch line, circle or arc shows its length or radius"),
         ]),
         ("Over defining dimensions", sections.get("Over defining dimensions", [])),
         (None, [
-            L("Turn off Automatic Solve Mode and Undo when sketch contains more than", "2000 sketch entities"),
+
+            (_solve_off := L("Turn off Automatic Solve Mode and Undo when sketch contains more than", True)),
+            _needs(L("sketch entities", 2000), _solve_off),
             L("Hide missing geometry error for suppressed dimensions", False),
         ]),
         ("Sketch tools", tools),
@@ -2715,6 +2831,9 @@ def _view():
     ]
 
 
+RECOVER_SIM = "Save auto-recover info after meshing and after running a simulation study"
+
+
 def _backup():
     L = _later("Backup/Recover")
     return [
@@ -2722,6 +2841,7 @@ def _backup():
             Bool(DOCUMENT, "AutoSaveEnabled", True, "Save auto-recover information every:"),      # extapps82
             Number(DOCUMENT, "AutoSaveTimeout", 15, "", "minutes", 1, 120, needs="AutoSaveEnabled"),
             FolderLater("Auto-recover folder", "Backup/Recover"),
+            L(RECOVER_SIM, False),          # simroutes writes the recovery data after a mesh and after a run
         ]),
         ("Backup", [
             Bool(DOCUMENT, "CreateBackupFiles", True, "Number of backup copies per document:"),     # extapps82
@@ -2744,7 +2864,7 @@ def _messages():
             NumberFn("SaveReminderMinutes", "", "minutes", 1, 240, lambda: _fw().GetInt("SaveReminderMinutes", 20),
                      lambda v: _fw().SetInt("SaveReminderMinutes", int(v)), needs="SaveReminder"),
             Bool("NotificationArea", "AutoRemoveUserNotifications", True, "Automatically dismiss notifications"),
-            Number("NotificationArea", "NotificationTime", 20, "after", "seconds", 1, 120,
+            Number("NotificationArea", "NotificationTime", 5, "after", "seconds", 1, 120,
                    needs="AutoRemoveUserNotifications"),
         ]),
         ("Rebuild errors", [
@@ -2886,7 +3006,7 @@ class FormatPicker(Setting):
         lay.addWidget(self.box, 1)
         lay.addStretch(1)
         self.box.currentIndexChanged.connect(lambda _i: self.show_boxes())
-        QtCore.QTimer.singleShot(0, self.show_boxes)
+        from . import safe_later as _sl; _sl.later(0, self.show_boxes, self, "box")
         return self.row
 
     def _page(self):
@@ -2937,8 +3057,18 @@ def radio_picked(parent, key, value, follow=None):
     return any(b.isChecked() and b.text() == value for b in buttons)
 
 
-IMPORT_FORMATS = (("General", ("General",)), ("STEP/IGES/ACIS", ("STEP/IGES/ACIS",)),
-                  ("Mesh", ("Mesh body options",)))
+
+
+IMPORT_FORMATS = (("General", ("General", "Unit", "Solid and Surface")), ("Mesh", ("Mesh body options",)))
+IMPORT_UNITS = (("File specified unit", "File specified unit"),
+                ("Document template specified unit", "Document template specified unit"))
+
+
+def import_unit():
+    """Import > Unit: "File specified unit" (the file's own unit becomes the document's) or
+    "Document template specified unit" (the document keeps the new-document units)."""
+    v = stored("Import", "Unit", "File specified unit")
+    return v if v in dict(IMPORT_UNITS) else "File specified unit"
 
 
 def _import():
@@ -2947,13 +3077,22 @@ def _import():
     return [
         (None, [FormatPicker("ImportFileFormat", IMPORT_FORMATS)]),
         ("General", [
-            L("Enable 3D Interconnect", True),
-            FixedValue("Unit", "File specified unit", "STEP and IGES files are read in the units they were written in"),
-        ]),
-        ("STEP/IGES/ACIS", [
-            L("Solid and Surface", "Try forming solid(s)"),
-            L("Perform full entity check and repair errors", True),
+            _tipped(L("Enable 3D Interconnect", True),
+                    "A STEP assembly opens as an assembly of linked parts, its structure kept; off, as one part"),
             L("Automatically run Import Diagnostics - healing", True),
+            L("Perform full entity check and repair errors", True),
+        ]),
+        ("Unit", [
+            Radio("ImportUnit", "", IMPORT_UNITS, import_unit, lambda v: set_stored("Import", "Unit", v),
+                  "File specified unit: an inch file opens in inches. Document template specified unit: "
+                  "the document keeps the units new documents get", reset_to="File specified unit"),
+        ]),
+        ("Solid and Surface", [
+
+            Radio("ImportSolidSurface", "", [(c, c) for c in CHOICES[("Import", "Solid and Surface")]],
+                  lambda: stored("Import", "Solid and Surface", "Try forming solid(s)"),
+                  lambda v: set_stored("Import", "Solid and Surface", v),
+                  "How the surfaces of an imported file are joined", reset_to="Try forming solid(s)"),
             L("B-Rep mapping", False),
         ]),
         ("Mesh body options", [
@@ -2965,21 +3104,76 @@ def _import():
 
 
 def _iges_output_read():
-    if _fw().GetBool("IGESWireframe", False):
+    if _fw().GetBool("IGESWireframe", False) and not _fw().GetBool("IGESSurfaces", True):
         return 2
     return _param("Mod/Part/IGES").GetInt("BrepMode", 0)
 
 
 def _iges_output_write(v):
+    """0 Trimmed Surface, 1 Manifold Solid, 2 wireframe only."""
     v = int(v)
     _fw().SetBool("IGESWireframe", v == 2)
+    _fw().SetBool("IGESSurfaces", v != 2)
     if v != 2:
         _param("Mod/Part/IGES").SetInt("BrepMode", v)
 
 
+def _iges_surfaces_write(v):
+    _fw().SetBool("IGESSurfaces", bool(v[0]))
+    if v[1] in (0, 1):
+        _param("Mod/Part/IGES").SetInt("BrepMode", v[1])
+
+
+class CheckCombo(Setting):
+    ""
+
+
+    def __init__(self, key, text, choices, read, write, tip=""):
+        super().__init__("", key, None, text, tip)
+        self.choices, self.read, self.write = choices, read, write
+
+    def widget(self):
+        row = QtWidgets.QWidget()
+        lay = QtWidgets.QHBoxLayout(row)
+        lay.setContentsMargins(0, 0, 0, 0)
+        self.check = QtWidgets.QCheckBox(self.text)
+        self.check.setObjectName("SWCheck_" + self.key)
+        self.box = QtWidgets.QComboBox()
+        self.box.setObjectName("SWCombo_" + self.key)
+        for text, _v in self.choices:
+            self.box.addItem(text)
+        for w in (self.check, self.box):
+            w.setToolTip(self.tip)
+        lay.addWidget(self.check)
+        lay.addWidget(self.box)
+        lay.addStretch(1)
+        return row
+
+    def value(self):
+        i = self.box.currentIndex()
+        return (self.check.isChecked(), self.choices[i][1] if 0 <= i < len(self.choices) else None)
+
+    def load(self):
+        try:
+            on, current = self.read()
+        except Exception:
+            on, current = False, None
+        self.check.setChecked(bool(on))
+        values = [v for _t, v in self.choices]
+        self.box.setCurrentIndex(values.index(current) if current in values else 0)
+        self.loaded = self.value()
+
+    def save(self):
+        if self.changed():
+            self.write(self.value())
+            self.loaded = self.value()
+
+
 SHARED_CURVES = "3D curves and faces (IGES and STEP)"
-EXPORT_FORMATS = (("IGES 5.3", ("IGES solid/surface features", SHARED_CURVES, "IGES assembly structure")),
-                  ("STEP", ("STEP", SHARED_CURVES)), ("VRML", ("VRML",)), ("STL/3MF/AMF", ("STL/3MF/AMF", "3MF")),
+OUTPUT_CS_BOX = "Output coordinate system"
+EXPORT_FORMATS = (("IGES 5.3", ("IGES solid/surface features", SHARED_CURVES, "IGES assembly structure", OUTPUT_CS_BOX)),
+                  ("STEP", ("STEP", SHARED_CURVES, OUTPUT_CS_BOX)), ("VRML", ("VRML",)),
+                  ("STL/3MF/AMF", ("STL/3MF/AMF", "3MF", OUTPUT_CS_BOX)),
                   ("PDF", ("PDF",)), ("TIF/JPG/PNG", ("TIF/JPG/PNG", "Print capture")), ("DXF/DWG", ("DXF/DWG",)))
 EXPORT_WHEN = {"Print capture": ("ImageOutput", "Print capture")}
 
@@ -2996,10 +3190,14 @@ def _export():
     return [
         (None, [FormatPicker("ExportFileFormat", EXPORT_FORMATS, EXPORT_WHEN)]),
         ("IGES solid/surface features", [
-            Combo("IGESBrepMode", "Output as",
-                  [("Manifold Solid (type 186)", 1), ("Trimmed Surface (type 144)", 0), ("Wireframe (type 110)", 2)],
-                  _iges_output_read, _iges_output_write,
-                  "How solids are written to IGES files (Wireframe: only the edges)"),
+
+            CheckCombo("IGESSurfaces", "IGES solid/surface entities:",
+                       [("Manifold Solid (type 186)", 1), ("Trimmed Surface (type 144)", 0)],
+                       lambda: (_fw().GetBool("IGESSurfaces", True), _param("Mod/Part/IGES").GetInt("BrepMode", 0)),
+                       _iges_surfaces_write, "Solids and surfaces written as solids (186) or trimmed surfaces (144)"),
+            CheckCombo("IGESWireframe", "IGES wireframe (3D curves):", [("B-Splines (type 126)", 126)],
+                       lambda: (_fw().GetBool("IGESWireframe", False), 126),
+                       lambda v: _fw().SetBool("IGESWireframe", bool(v[0])), "The model's edges written as B-spline curves"),
         ]),
         ("STEP", _step_scheme_rows() + [   # exportopts-1119: off writes the shapes without their colours
             L("Export face/edge properties", True),
@@ -3017,7 +3215,27 @@ def _export():
 
         # Options use the same settings, drawexport.py)
         ("DXF/DWG", _dxf_rows()),
-    ] + _mesh_export() + _other_export()
+    ] + _mesh_export() + _output_cs_rows() + _other_export()
+
+
+def _output_cs_choices():
+    """-- default -- and the active document's coordinate systems."""
+    S = _sa()
+    doc = App.ActiveDocument
+    return [(S.CS_DEFAULT, "")] + [(o.Label, o.Label) for o in S.coordinate_systems(doc)]
+
+
+def _output_cs_rows():
+    ""
+
+    try:
+        S = _sa()
+    except Exception:
+        return []
+    return [(OUTPUT_CS_BOX, [
+        Combo(S.OUTPUT_CS, "", _output_cs_choices, lambda: _sa_get("s", S.OUTPUT_CS, ""), _sa_set("s", S.OUTPUT_CS),
+              "The coordinate system the exported file is measured from"),
+    ])]
 
 
 def _step_scheme_rows():
@@ -3062,7 +3280,7 @@ def _other_export():
         ("TIF/JPG/PNG", [
             Combo(S.IMG_TYPE, "Image type", [(n, n) for n in S.IMAGE_TYPES],
                   lambda: _sa_get("s", S.IMG_TYPE, "RGB"), _sa_set("s", S.IMG_TYPE),
-                  "Colour, shades of gray, or black and white only"),
+                  "Color, shades of gray, or black and white only"),
             Radio(S.IMG_OUTPUT, "Output", [(n, n) for n in S.IMAGE_OUTPUTS],
                   lambda: _sa_get("s", S.IMG_OUTPUT, "Screen capture"), _sa_set("s", S.IMG_OUTPUT),
                   "Screen capture: the graphics area's size. Print capture: the paper size at the DPI below"),
@@ -3127,7 +3345,7 @@ def _mesh_export():
                      "Custom resolution: the most a triangle may be off the face"),
             NumberFn(S.STL_ANGLE, "Angle", "deg", 0.5, 90.0,
                      lambda: _sa_get("f", S.STL_ANGLE, 10.0), _sa_set("f", S.STL_ANGLE), 1,
-                     "Custom resolution: the most the normals of neighbouring triangles may turn"),
+                     "Custom resolution: the most the normals of neighboring triangles may turn"),
             BoolFn(S.STL_INFO, "Show STL info before file saving", lambda: _sa_get("b", S.STL_INFO, False),
                    _sa_set("b", S.STL_INFO)),
             BoolFn(S.STL_PREVIEW, "Preview before saving file", lambda: _sa_get("b", S.STL_PREVIEW, False),
@@ -3176,7 +3394,7 @@ def _dxf_rows():
         Radio("DxfFont", "Fonts", [("TrueType", "TrueType"), ("AutoCAD STANDARD", "AutoCAD STANDARD")],
               lambda: o("font"), lambda v: _dx().set_dxf_options(font=v), "The font of the drawings' text"),
         Radio("DxfLineStyles", "Line styles", [(x, x) for x in styles], lambda: o("line_styles"),
-              lambda v: _dx().set_dxf_options(line_styles=v), "The line types of hidden and centre lines"),
+              lambda v: _dx().set_dxf_options(line_styles=v), "The line types of hidden and center lines"),
         BoolFn("DxfScale11", "Scale output 1:1", lambda: o("scale11"),
                lambda v: _dx().set_dxf_options(scale11=v), "Drawings are written at full size, not at the sheet's scale"),
         BoolFn("DxfMergeEnds", "End points merge: Enable merging", lambda: o("merge"),
@@ -3223,6 +3441,15 @@ def folders(kind):
         return [f for f in got.split(";") if f]
     if kind == "Macros":
         return [App.getUserMacroDir(True)]
+    if kind == "Document Templates":
+
+
+        try:
+            from . import newdoc
+            return [newdoc.templates_folder()]
+        except Exception as _fw_err:
+            _fw_log("optionspages.py:templates folder", _fw_err)
+            return []
     if kind == "Sheet Formats":
         td = _param("Mod/TechDraw/Files").GetString("TemplateDir", "")      # extapps86: TechDraw's own folder
         return [td or os.path.join(App.getResourceDir(), "Mod", "TechDraw", "Templates")]
@@ -3290,9 +3517,11 @@ def _default_templates():
         ("Templates used where a template is not asked for", [
             PathFn("PartTemplate", "Parts", lambda: fw.GetString("PartTemplate", ""),
                    lambda v: fw.SetString("PartTemplate", v), filt="FreeCAD documents (*.FCStd)",
-                   tip="A part made by New starts as a copy of this document (empty: an empty part)"),
+                   tip="A part made by New starts as a copy of this document (empty: an empty part)",
+                   empty="Part (built in)"),
             PathFn("AssemblyTemplate", "Assemblies", lambda: fw.GetString("AssemblyTemplate", ""),
-                   lambda v: fw.SetString("AssemblyTemplate", v), filt="FreeCAD documents (*.FCStd)"),
+                   lambda v: fw.SetString("AssemblyTemplate", v), filt="FreeCAD documents (*.FCStd)",
+                   empty="Assembly (built in)"),
             PathFn("DrawingTemplate", "Drawings", _tech_template_read, _tech_template_write,
                    filt="Drawing templates (*.svg)", tip="TechDraw's default template"),
         ]),
@@ -3718,7 +3947,7 @@ def document_pages(base=()):
             BoolFn("GridDash", "Dash", lambda: _param(SK_GENERAL).GetInt("GridLinePattern", 0x0f0f) != 0xffff,
                    lambda v: _param(SK_GENERAL).SetInt("GridLinePattern", 0x0f0f if v else 0xffff),
                    tip="Minor grid lines dashed (FreeCAD's Sketcher grid line pattern)"),
-            BoolFn("GridAuto", "Automatic scaling", lambda: _param(SK_GENERAL).GetBool("GridAuto", True),
+            BoolFn("GridAuto", "Automatic scaling", lambda: _grid_doc()[2],
                    _grid_auto_write),
             NumberFn("MajorGrid", "Major grid spacing", grid_unit[0], 0.0001, 10000, lambda: _major_read() / grid_unit[1],
                      lambda v: _major_write(v * grid_unit[1]), decimals=4 if grid_unit[1] > 1.0 else 2),
@@ -3747,7 +3976,7 @@ def document_pages(base=()):
     material = [
         (None, [
             Combo("Material", "Material", _material_choices, _material_read, _material_write,
-                  "The material of every body (the Material row's favourites)"),
+                  "The material of every body (the Material row's favorites)"),
             DensityRow(),
             Radio("AreaHatch", "Area hatch/fill", [("None", "None"), ("Solid", "Solid"), ("Hatch", "Hatch")],
                   lambda: doc_value(App.ActiveDocument, "Material Properties", "Area hatch/fill", "Hatch"),

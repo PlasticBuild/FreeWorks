@@ -157,7 +157,7 @@ def _sync():
 class _Toggle:
     def GetResources(self):
         return {"MenuText": "Cartoon", "Pixmap": "DrawStyleFlatLines",
-                "ToolTip": "Draws the model in flat bands of colour with thick black outlines",
+                "ToolTip": "Draws the model in flat bands of color with thick black outlines",
                 "Checkable": False, "CmdType": "ForEdit"}      # extapps77: also while a sketch is open
 
     def Activated(self, checked=None):

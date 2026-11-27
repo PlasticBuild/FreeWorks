@@ -30,6 +30,32 @@ from . import inference as I
 TAG = "fw-helper"
 HIDDEN_LAYER = 2            # ViewProviderSketch's hidden visual layer
 MIDPOINT_GROUP = "FWMidArc_"    # the arc Midpoint relation's constraints: one row in the relations lists
+INTERSECTION_GROUP = "FWInter_"
+
+
+def name_intersections(sketch, first):
+    ""
+
+
+    try:
+        cons = sketch.Constraints
+        groups = {}
+        for i in range(first, len(cons)):
+            c = cons[i]
+            if c.Type == "PointOnObject" and not c.Name:
+                groups.setdefault((c.First, int(c.FirstPos)), []).append(i)
+        names = {c.Name for c in cons}
+        k = 0
+        for members in groups.values():
+            if len(members) != 2 or cons[members[0]].Second == cons[members[1]].Second:
+                continue
+            while any(nm.startswith("%s%d_" % (INTERSECTION_GROUP, k)) for nm in names):
+                k += 1
+            for j, i in enumerate(members):
+                sketch.renameConstraint(i, "%s%d_%d" % (INTERSECTION_GROUP, k, j))
+                names.add("%s%d_%d" % (INTERSECTION_GROUP, k, j))
+    except Exception as err:
+        _log("intersection", err)
 
 
 def _log(where, err):
@@ -298,15 +324,40 @@ def orphans(sketch):
 def prune(sketch):
     """Delete orphaned helpers. Outside any undo step: Undo of the delete that orphaned them puts
     back the sketch as it was, helpers included."""
+    out = []
     try:
-        gone = orphans(sketch)
-        if gone:
-            sketch.delGeometries(sorted(gone))
+        for _pass in range(8):      # a helper gone can leave the next one of its relation short
+            stale = _stale_curvature(sketch)
+            if stale:
+                sketch.delConstraints(stale)
+            gone = orphans(sketch)
+            if gone:
+                sketch.delGeometries(sorted(gone))
+                out += gone
+            if not stale and not gone:
+                break
+        if out:
             sketch.solve()
-        return gone
+        return out
     except Exception as err:
         _log("prune", err)
-        return []
+        return out
+
+
+CURVATURE_GROUP = "FWEqCurv_"       # fwsketch/eqcurv.py: Equal Curvature, the Tangent plus its helpers' relations
+
+
+def _stale_curvature(sketch):
+    """The relations of an Equal Curvature whose tangency is gone (the line or arc deleted)."""
+    found = {}
+    for i, c in enumerate(sketch.Constraints):
+        if c.Name.startswith(CURVATURE_GROUP):
+            found.setdefault(c.Name.rsplit("_", 1)[0], []).append((i, c.Type))
+    out = []
+    for members in found.values():
+        if not any(t == "Tangent" for _i, t in members):
+            out += [i for i, _t in members]
+    return sorted(out)
 
 
 _COUNTS = {}        # sketch full name: (geometry count, constraint count) last seen

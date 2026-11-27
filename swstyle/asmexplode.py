@@ -597,6 +597,7 @@ class ExplodePanel:
         self.asm = asm
         self.doc = asm.Document
         self.doc.openTransaction("Exploded View")
+        self._made = view is None       # asmpkg359: a view this page made itself
         try:
             self.view = view or new_view(asm)
             _props(self.view)
@@ -628,10 +629,13 @@ class ExplodePanel:
             se, lay = asmpm._box("Add a Step")
             self.list = QtWidgets.QListWidget()
             self.list.setObjectName("FW_ExplodeComponents")
+            self.list.setProperty("swpickbox", True)
             self.list.setToolTip("Explode Step Components")
             self.list.setStyleSheet(asmpm.PICK_STYLE.replace("#cfe6fb", "#fbd6ec").replace("#3399ff", "#e0569f"))
             self.list.setFixedHeight(asmpm._rows(self.list, 3))
             lay.addWidget(self.list)
+            from . import asmpattern
+            asmpattern.mark_active(self.list)        # the box the picks go into at open (PM thread 11-27)
             row = QtWidgets.QHBoxLayout()
             self.axis = QtWidgets.QComboBox()
             self.axis.setObjectName("FW_ExplodeAxis")
@@ -794,7 +798,7 @@ class ExplodePanel:
             self._add(comp)
 
     def addSelection(self, doc, obj, sub, pnt):
-        QtCore.QTimer.singleShot(0, lambda: [self._add(c) for c in self.picked()])
+        from . import safe_later as _sl; _sl.later(0, lambda: [self._add(c) for c in self.picked()], self, "list")
 
     def removeSelection(self, *args):
         pass
@@ -905,7 +909,7 @@ class ExplodePanel:
             self.angle.setValue(math.degrees(turn.Angle))
         else:
             self.angle.setValue(0.0)
-        QtCore.QTimer.singleShot(0, self.add)
+        from . import safe_later as _sl; _sl.later(0, self.add, self, "distance")
 
     def handle_turn(self):
         """The rings' turn since the handle was put on the components."""
@@ -1086,6 +1090,15 @@ class ExplodePanel:
 
     def accept(self):
         self._finish()
+        if not steps(self.view) and getattr(self, "_made", False):
+            # asmpkg359: OK with no step makes nothing, so it leaves no empty "Exploded View" in Undo either
+            # (PM thread 11-27)
+            collapse(self.asm, self.view)
+            self.doc.abortTransaction()
+            self.doc.recompute()
+            Gui.Control.closeDialog()
+            _refresh()
+            return True
         if not steps(self.view):     # nothing exploded: no empty ExplView left behind
             collapse(self.asm, self.view)
             group = self.view.InList
@@ -1132,7 +1145,9 @@ class ExplodedViewCommand:
             return
         from . import asmui
         asmui.activate(asm)
-        panel = ExplodePanel(asm)
+
+        # the PropertyManager), it does not start an empty second one
+        panel = ExplodePanel(asm, exploded_view(asm))
         asmpm._track(panel)
         Gui.Control.showDialog(panel)
 

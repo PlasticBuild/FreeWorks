@@ -43,6 +43,7 @@ RANGES = ("All", "Current sheet", "Current screen image", "Sheets", "Selection")
 DEFAULT = {"fit": True, "scale": 100, "high": True, "paper": "Letter", "color": "Automatic",
            "landscape": True}
 ASK = {}           # checks answer the file dialog here: "file"
+SAVE_PDF = "Save as PDF"     # the printer list's own entry, as the part's Print box (filecmds.SAVE_PDF): needs no printer
 
 
 def print_support():
@@ -237,17 +238,41 @@ def _paper(name):
 
 
 def _setup_printer(printer, s):
-    printer.setPageSize(QtGui.QPageSize(_paper(s.get("paper", "Letter"))))
-    printer.setPageOrientation(QtGui.QPageLayout.Landscape if s.get("landscape", True)
-                               else QtGui.QPageLayout.Portrait)
+    """The sheet's Page Setup on the printer. Each setting is set only when it changes. A real printer that
+    is already printing (sheet 2 on) takes no new paper, orientation or colour: Qt refuses them ("Cannot be
+    changed while printer is active"). Then a sheet of the other orientation is drawn turned 90 degrees, fitted
+    to the page there (s["_turn"]). A PDF takes each sheet's own layout."""
+    QtPrintSupport = print_support()
+    s.pop("_turn", None)
+    want = QtGui.QPageLayout.Landscape if s.get("landscape", True) else QtGui.QPageLayout.Portrait
+    try:
+        locked = printer.printerState() == QtPrintSupport.QPrinter.Active and \
+            printer.outputFormat() != QtPrintSupport.QPrinter.PdfFormat
+    except Exception:
+        locked = False
+    layout = printer.pageLayout()
+    if locked:
+        if layout.orientation() != want:
+            s["_turn"] = True
+        return
+    size = _paper(s.get("paper", "Letter"))
+    if layout.pageSize().id() != size:
+        printer.setPageSize(QtGui.QPageSize(size))
+    if printer.pageLayout().orientation() != want:
+        printer.setPageOrientation(want)
     m = margins()
     if m is not None:
         top, bottom, left, right = m
-        printer.setPageMargins(QtCore.QMarginsF(left, top, right, bottom), QtGui.QPageLayout.Millimeter)
+        want_m = QtCore.QMarginsF(left, top, right, bottom)
+        have = printer.pageLayout().margins(QtGui.QPageLayout.Millimeter)
+        if any(abs(a - b) > 1e-6 for a, b in ((have.left(), left), (have.top(), top), (have.right(), right),
+                                              (have.bottom(), bottom))):
+            printer.setPageMargins(want_m, QtGui.QPageLayout.Millimeter)
     try:
-        QtPrintSupport = print_support()
-        printer.setColorMode(QtPrintSupport.QPrinter.GrayScale if s.get("color") == "Black and white"
-                             else QtPrintSupport.QPrinter.Color)
+        mode = QtPrintSupport.QPrinter.GrayScale if s.get("color") == "Black and white" \
+            else QtPrintSupport.QPrinter.Color
+        if printer.colorMode() != mode:
+            printer.setColorMode(mode)
     except Exception as _fw_err:
         _fw_log("drawprint.py:250", _fw_err)
 
@@ -332,6 +357,18 @@ def _white_paper(scene, page):
 
 
 def _draw(painter, printer, page, s, screen, scene):
+    if s.get("_turn"):                  # the printer kept the first sheet's orientation: this sheet turned to fit it
+        page_px = printer.pageLayout().paintRectPixels(printer.resolution())
+        painter.save()
+        try:
+            painter.translate(page_px.width(), 0)
+            painter.rotate(90)
+            t = dict(s)
+            t.pop("_turn")
+            t["fit"] = True
+            return _draw(painter, _Turned(printer), page, t, screen, scene)
+        finally:
+            painter.restore()
     src = _source_rect(page, screen)
     area = printer.pageLayout().paintRectPixels(printer.resolution())
     area = QtCore.QRectF(0, 0, area.width(), area.height())
@@ -360,6 +397,23 @@ def _draw(painter, printer, page, s, screen, scene):
             painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
         scene.render(painter, target, src, mode)
     return True
+
+
+class _Turned:
+    """The printer as a sheet drawn turned 90 degrees sees it: its paint area with width and height swapped."""
+
+    def __init__(self, printer):
+        self.printer = printer
+
+    def resolution(self):
+        return self.printer.resolution()
+
+    def pageLayout(self):
+        return self
+
+    def paintRectPixels(self, res):
+        r = self.printer.pageLayout().paintRectPixels(res)
+        return QtCore.QRect(0, 0, r.height(), r.width())
 
 
 def _fit(area, w, h):
@@ -584,8 +638,9 @@ def print_pages(printer, doc, rng="All", sheets_text="", copies=1, background=Fa
             draw_page(painter, printer, page, s, area if area is not None else rng == "Current screen image",
                       background)
             n += 1
-            area = printer.pageLayout().paintRectPixels(printer.resolution())
-            draw_header_footer(painter, QtCore.QRectF(0, 0, area.width(), area.height()), doc, page,
+            # (its own name: this used to overwrite the Selection area, so sheets 2 on printed the screen image)
+            paint = printer.pageLayout().paintRectPixels(printer.resolution())
+            draw_header_footer(painter, QtCore.QRectF(0, 0, paint.width(), paint.height()), doc, page,
                                chosen.index(page) + 1, len(chosen))
         if painter is not None:
             painter.end()
@@ -799,14 +854,14 @@ class PrintDialog(QtWidgets.QDialog):
         self.name = QtWidgets.QComboBox(dp)
         self.name.setObjectName("SWPrintPrinter")
         names = list(QtPrintSupport.QPrinterInfo.availablePrinterNames())
-        self.name.addItems(names or ["(no printer)"])
+        self.name.addItems(names + [SAVE_PDF])      # as the part's Print box: a PDF needs no printer
         default = QtPrintSupport.QPrinterInfo.defaultPrinterName()
-        if default:
-            self.name.setCurrentText(default)
+        self.name.setCurrentText(default if default in names else names[0] if names else SAVE_PDF)
         dl.addWidget(self.name, 1)
         self.props = QtWidgets.QPushButton("Properties...", dp)
         self.props.setObjectName("SWPrintProperties")
-        self.props.setEnabled(bool(names))
+        self.props.setEnabled(self.name.currentText() != SAVE_PDF)
+        self.name.currentTextChanged.connect(lambda t: self.props.setEnabled(t != SAVE_PDF))
         self.props.clicked.connect(self.properties)
         dl.addWidget(self.props)
         lay.addWidget(dp)
@@ -881,7 +936,7 @@ class PrintDialog(QtWidgets.QDialog):
     def printer(self):
         QtPrintSupport = print_support()
         p = QtPrintSupport.QPrinter(QtPrintSupport.QPrinter.HighResolution)
-        if self.name.currentText() and self.name.currentText() != "(no printer)":
+        if self.name.currentText() and self.name.currentText() != SAVE_PDF:
             p.setPrinterName(self.name.currentText())
         return p
 
@@ -903,7 +958,7 @@ class PrintDialog(QtWidgets.QDialog):
     def ok(self):
         QtPrintSupport = print_support()
         p = self.printer()
-        if self.to_file.isChecked():
+        if self.to_file.isChecked() or self.name.currentText() == SAVE_PDF:
             path = ASK.pop("file", None)
             if path is None:
                 path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Print to File", (self.doc.Label or "drawing")
@@ -919,15 +974,62 @@ class PrintDialog(QtWidgets.QDialog):
 
 
 def preview(doc, parent=None):
+    try:
+        from . import filecmds
+        own = getattr(filecmds, "DrawingPreviewDialog", None)
+    except Exception:
+        own = None
+    if own is not None:
+        dlg = own(doc)
+        return dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
     QtPrintSupport = print_support()
     p = QtPrintSupport.QPrinter(QtPrintSupport.QPrinter.HighResolution)
     dlg = QtPrintSupport.QPrintPreviewDialog(p, parent or Gui.getMainWindow())
     dlg.setObjectName("SWPrintPreview")
     dlg.setWindowTitle("Print Preview")
     dlg.paintRequested.connect(lambda printer: print_pages(printer, doc, "All"))
+    preview_buttons(dlg, doc)
 
     dlg.setWindowState(dlg.windowState() | QtCore.Qt.WindowMaximized)
     dlg.exec_()
+
+
+def preview_buttons(dlg, doc):
+    ""
+
+
+    done = []
+    for act in dlg.findChildren(QtGui.QAction):
+        text = act.text().replace("&", "").strip().lower()
+        if text not in ("print", "page setup"):
+            continue
+        try:
+            act.triggered.disconnect()
+        except Exception as _fw_err:
+            _fw_log("drawprint.py:preview button", _fw_err)
+        if text == "print":
+            def _print(*_a, d=dlg):
+                d.accept()                          # the preview closes, then File > Print's box opens
+                QtCore.QTimer.singleShot(0, lambda: open_print(doc))
+            act.triggered.connect(_print)
+        else:
+            def _setup(*_a, d=dlg):
+                box = PageSetupDialog(doc, d)
+                if (box.exec_() if hasattr(box, "exec_") else box.exec()):
+                    try:
+                        d.updatePreview()
+                    except Exception as _fw_err:
+                        _fw_log("drawprint.py:preview update", _fw_err)
+            act.triggered.connect(_setup)
+        act.setObjectName("SWPreview" + text.title().replace(" ", ""))
+        done.append(text)
+    return done
+
+
+def open_print(doc):
+    """File > Print for the drawing (the same box the menu opens)."""
+    dlg = PrintDialog(doc)
+    return dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
 
 
 # =========================================================================== commands

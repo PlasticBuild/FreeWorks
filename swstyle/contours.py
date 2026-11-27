@@ -13,6 +13,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -163,8 +164,10 @@ def edge_name(sketch, key):
     return _element_map(sketch).get(key + ";SKT")
 
 
-def contour_of(sketch, edge_name_or_key):
-    """The closed wire of the sketch (local) holding that edge, or None."""
+def contour_of(sketch, edge_name_or_key, open_ok=False):
+    ""
+
+
     shape = _local(sketch)
     name = edge_name(sketch, edge_name_or_key)
     if not name:
@@ -176,7 +179,23 @@ def contour_of(sketch, edge_name_or_key):
     for wire in shape.Wires:
         if wire.isClosed() and any(e.isSame(edge) for e in wire.Edges):
             return wire
+    if open_ok:
+        for wire in shape.Wires:
+            if any(e.isSame(edge) for e in wire.Edges):
+                return wire
     return None
+
+
+def open_picked(sketch, picks):
+    """[wire] the open contours among the picks (they make a Thin Feature's wall, no area)."""
+    out = []
+    for pick in picks:
+        kind, value = _parse(pick)
+        if kind == "C" and contour_of(sketch, value) is None:
+            wire = contour_of(sketch, value, open_ok=True)
+            if wire is not None and not any(wire.isSame(w) for w in out):
+                out.append(wire)
+    return out
 
 
 def _parse(pick):
@@ -485,6 +504,8 @@ def profile_shape(sketch, picks, opts=None, part=None, at=None):
     if picks:
         faces = picked_faces(sketch, picks)
         wires = [w for f in faces for w in f.Wires]
+        if thin:
+            wires += open_picked(sketch, picks)
     else:
         local = _local(sketch)
         wires = local.Wires
@@ -977,7 +998,7 @@ def set_picks(feature, picks):
 def _edited():
     try:
         vp = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument is not None else None
-        return vp.Object if vp is not None else None
+        return editobj.of(vp) if vp is not None else None
     except Exception:
         return None
 
@@ -1109,12 +1130,12 @@ class Contours(QtCore.QObject):
                     self.apply()
                     return True
         else:
-            wire = contour_of(sketch, value)
+            wire = contour_of(sketch, value, open_ok=True)
             if wire is None:
                 return False
             for old in list(self.picks):
                 k, v = _parse(old)
-                other = contour_of(sketch, v) if k == "C" else None
+                other = contour_of(sketch, v, open_ok=True) if k == "C" else None
                 if old == pick or (other is not None and other.isSame(wire)):
                     self.picks.remove(old)       # any entity of a picked contour un-picks it
                     self.apply()
@@ -1226,7 +1247,9 @@ class Contours(QtCore.QObject):
         pick = None
         info = self.view.getObjectInfo((int(pos[0]), int(pos[1])))
         if info and info.get("Object") == sketch.Name and str(info.get("Component", "")).startswith("Edge"):
-            if contour_of(sketch, info["Component"]) is not None:
+
+            # picks the region under the pointer
+            if contour_of(sketch, info["Component"], open_ok=self._thin_on()) is not None:
                 pick = "C:" + stable_edge(sketch, info["Component"])
         if pick is None:
             hit = _ray_hit(self.view, pos, sketch.getGlobalPlacement())
@@ -1237,6 +1260,12 @@ class Contours(QtCore.QObject):
         cb.setHandled()
         self._took = True
         QtCore.QTimer.singleShot(0, lambda p=pick: self._take(p))
+
+    def _thin_on(self):
+        try:
+            return bool(getattr(settings(self.feature()), "Thin", False))
+        except Exception:
+            return False
 
     def _take(self, pick):
         doc = App.getDocument(self.doc)
@@ -1391,6 +1420,8 @@ class FromBox(_Part):
         self.ref.setObjectName(FROM_BOX + "Ref")
         self.ref.setReadOnly(True)
         self.ref.setPlaceholderText("Pick a face or plane")
+        self.ref.installEventFilter(self)
+        self._want_pick = False
         lay.addWidget(self.ref)
         self.msg = QtWidgets.QLabel(self.box)
         self.msg.setObjectName(FROM_BOX + "Note")
@@ -1414,7 +1445,8 @@ class FromBox(_Part):
     def _show_ref(self, ref):
         if ref and ref[0] is not None:
             sub = ref[1][0] if ref[1] and ref[1][0] else ""
-            self.ref.setText(("%s of %s" % (sub, ref[0].Label)) if sub else ref[0].Label)
+            from . import pmboxes
+            self.ref.setText(pmboxes.sw_name(("%s of %s" % (sub, ref[0].Label)) if sub else ref[0].Label))
         else:
             self.ref.clear()
 
@@ -1424,15 +1456,29 @@ class FromBox(_Part):
         self.flip.setVisible(mode == "Offset")
         self.ref.setVisible(mode in ("Surface/Face/Plane", "Vertex"))
         self.ref.setPlaceholderText("Pick a vertex" if mode == "Vertex" else "Pick a face or plane")
-        if mode in ("Surface/Face/Plane", "Vertex"):
+        if mode in ("Surface/Face/Plane", "Vertex") and (self._want_pick or not self.ref.text()):
             self._listen()
         else:
+            # filled (or not a picking mode): view clicks go to the next box, Selected Contours
+
             self._unlisten()
         self.note(self.msg.text() if self.msg.text() else "")
+
+    def eventFilter(self, obj, event):
+
+        try:
+            if obj is self.ref and event.type() in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.FocusIn):
+                if self.mode.currentText() in ("Surface/Face/Plane", "Vertex"):
+                    self._want_pick = True
+                    self._listen()
+        except RuntimeError:
+            pass
+        return False
 
     def mode_picked(self, *args):
         mode = self.mode.currentText()
         self.ref.clear()
+        self._want_pick = True
         if mode == "Offset":
             self.change(From=mode, FromOffset=self._signed(), FromRef=None)
         elif mode == "Sketch Plane":
@@ -1495,6 +1541,8 @@ class FromBox(_Part):
 
     def _take(self, mode, ref):
         self._show_ref(ref)
+        self._want_pick = False
+        self._unlisten()            # the box is filled: the next pick belongs to the next box
         self.change(From=mode, FromRef=ref)
         try:
             Gui.Selection.clearSelection()
@@ -1619,7 +1667,7 @@ class ThinBox(_Part):
         self.layout_for()
         if not opts.Thin and _open_only(feature):
 
-            QtCore.QTimer.singleShot(0, lambda: self.on.setChecked(True) if _alive_widget(self.on) else None)
+            from . import safe_later as _sl; _sl.later(0, lambda: self.on.setChecked(True) if _alive_widget(self.on) else None, self, "on")
 
     def layout_for(self):
         self.body.setVisible(self.on.isChecked())

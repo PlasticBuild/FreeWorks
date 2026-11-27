@@ -28,7 +28,7 @@ ALIASES = (
     ("Lofted Bend", "SWStyle_SMLoftedBend", "Makes a sheet metal transition between two open profiles."),
     ("Break Corner", "SWStyle_SMBreakCorner", "Chamfers or fillets sheet metal corners."),
     ("Surface Flatten", "SWStyle_Flatten", "Lays a curved face or surface out flat."),
-    ("Parting Surfaces", "SWStyle_PartingSurface", "Adds a parting surface to a mould design."),
+    ("Parting Surfaces", "SWStyle_PartingSurface", "Adds a parting surface to a mold design."),
     ("Dimension Expert", "FreeWorks_SmartDimension", "Dimensions the picked geometry (Smart Dimension)."),
     ("Dimensioning", "FreeWorks_SmartDimension", "Dimensions the picked geometry (Smart Dimension)."),
 ) + tuple((n + " Mate", "SWStyle_Mate", "Opens Mate: pick the two faces, then the " + n.lower() + " type.")

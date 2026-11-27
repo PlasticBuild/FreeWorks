@@ -19,7 +19,9 @@ import shutil
 import time
 
 ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
-_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.lck")
+# checked-hash bytecode (make_pycache.py) travels with the copy: Python re-validates it against the source,
+# so a stale one is recompiled, never run, and another Python version ignores it
+_IGNORE = shutil.ignore_patterns("*.lck")
 
 
 def updates_dir():

@@ -252,6 +252,7 @@ def dock():
     mw.addDockWidget(QtCore.Qt.BottomDockWidgetArea, d)
     d.hide()
     _pane[:] = [d]
+    _hook()
     return d
 
 
@@ -286,6 +287,38 @@ class CaptureCommand:
     def Activated(self):
         show_pane(True)
         capture()
+
+
+_hidden_for_sheet = [False]
+
+
+def _follow(*_):
+    """The pane belongs to a part window: close it over a drawing sheet, bring it back on return (views3d-sheet-1127)."""
+    try:
+        from . import drawings
+        if not (_pane and alive(_pane[0])):
+            return
+        d = _pane[0]
+        if drawings.in_drawing():
+            if d.isVisible():
+                _hidden_for_sheet[0] = True
+                d.hide()
+        elif _hidden_for_sheet[0]:
+            _hidden_for_sheet[0] = False
+            d.show()
+            d.widget().refresh()
+    except Exception as e:
+        _fw_log("views3d._follow", e)
+
+
+def _hook():
+    try:
+        mdi = Gui.getMainWindow().findChild(QtWidgets.QMdiArea)
+        if mdi is not None and not mdi.property("sw3dvHook"):
+            mdi.setProperty("sw3dvHook", True)
+            mdi.subWindowActivated.connect(lambda *_: QtCore.QTimer.singleShot(250, _follow))
+    except Exception as e:
+        _fw_log("views3d._hook", e)
 
 
 def register():

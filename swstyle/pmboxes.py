@@ -213,24 +213,132 @@ def _watch(box):
 import re as _re
 
 _SUB = _re.compile(r"^(Edge|Face|Vertex)<?(\d+)>?(@.*)?$")
-_DOTTED = _re.compile(r"^(.+)\.((?:Edge|Face|Vertex)\d+)$")     # "Boss-Extrude1.Edge9" (Curve Driven Pattern)
+# pick-449: every way a page writes a picked element, as (owner, element): "Boss-Extrude1.Edge9" (Curve
+# Driven Pattern), "Body: Face2", "Body:Face2", "Face2 of Body", "Body Face2", "Body@Face2"
+_OWNED = (_re.compile(r"^(.+?)(?:\.|: ?|@| )((?:Edge|Face|Vertex)\d+)$"),
+          _re.compile(r"^((?:Edge|Face|Vertex)\d+) of (.+)$"))
 
 
-def sw_names(texts):
+def _split(t):
+    """(kind, owner) of a picked element's text, owner "" when it has none; None for any other text."""
+    got = _split_n(t)
+    return got and got[:2]
+
+
+def _split_n(t):
+    """(kind, owner, FreeCAD's number) of a picked element's text; None for any other text."""
+    m = _SUB.match(t)
+    if m is not None:
+        return m.group(1), (m.group(3) or "")[1:], int(m.group(2))
+    m = _OWNED[0].match(t)
+    if m is not None:
+        kind = _re.match(r"[A-Za-z]+", m.group(2)).group(0)
+        return kind, m.group(1), int(m.group(2)[len(kind):])
+    m = _OWNED[1].match(t)
+    if m is not None:
+        kind = _re.match(r"[A-Za-z]+", m.group(1)).group(0)
+        return kind, m.group(2), int(m.group(1)[len(kind):])
+    return None
+
+
+def _sketch_of(owner, doc):
+    try:
+        for o in doc.getObjectsByLabel(owner) if owner and doc is not None else ():
+            if o.isDerivedFrom("Sketcher::SketchObject"):
+                return o
+    except Exception:
+        pass
+    return None
+
+
+def sketch_entity(sketch, edge):
     ""
 
+    try:
+        from . import relationspm
+        geos = sketch.Geometry
+        names = relationspm._entity_names(geos)
+        edges = sketch.Shape.Edges
+        if not 1 <= edge <= len(edges):
+            return None
+        shown = [i for i, g in enumerate(geos)
+                 if type(g).__name__ != "Point" and not sketch.getConstruction(i) and names[i]]
+        target = edges[edge - 1]
+
+        def same(i):
+            e = geos[i].toShape()
+            return abs(e.Length - target.Length) < 1e-6 and e.Vertexes[0].Point.distanceToPoint(target.Vertexes[0].Point) < 1e-6
+
+        if edge <= len(shown) and same(shown[edge - 1]):
+            return names[shown[edge - 1]]
+        for i in shown:      # the shape's edges were built in another order: find it by shape
+            if same(i):
+                return names[i]
+    except Exception as _fw_err:
+        _fw_log("pmboxes:sketch-entity", _fw_err)
+    return None
+
+
+_ASM = [None, 0.0, False]        # document, when looked, is an assembly
+
+
+def _in_assembly(doc):
+    import time
+    now = time.monotonic()
+    if _ASM[0] is doc and now - _ASM[1] < 1.0:
+        return _ASM[2]
+    try:
+        from . import asmcore
+        found = bool(doc is not None and asmcore.is_assembly(doc))
+    except Exception:
+        found = False
+    _ASM[:] = [doc, now, found]
+    return found
+
+
+def _keeps_owner(owner, doc):
+    ""
+
+    if not owner:
+        return False
+    if _in_assembly(doc):
+        return True
+    try:
+        return any(o.isDerivedFrom("Sketcher::SketchObject") for o in doc.getObjectsByLabel(owner))
+    except Exception:
+        return False
+
+
+def sw_names(texts, doc=None):
+    ""
+
+
+    if doc is None:
+        try:
+            doc = __import__("FreeCAD").ActiveDocument
+        except Exception:
+            doc = None
     seen, out = {}, []
     for t in texts:
-        d = _DOTTED.match(t or "")
-        if d is not None:
-            t = "%s@%s" % (d.group(2), d.group(1))      # the same "Edge<1>@Boss-Extrude1" as the other boxes
-        m = _SUB.match(t or "")
-        if m is None:
+        got = _split(t or "")
+        if got is None:
             out.append(t)
             continue
-        seen[m.group(1)] = seen.get(m.group(1), 0) + 1
-        out.append("%s<%d>%s" % (m.group(1), seen[m.group(1)], m.group(3) or ""))
+        kind, owner = got
+        if kind == "Edge" and owner:        # pick-451: an edge of a sketch is its entity: Line1@Sketch2
+            sk = _sketch_of(owner, doc)
+            ent = sketch_entity(sk, _split_n(t or "")[2]) if sk is not None else None
+            if ent:
+                out.append("%s@%s" % (ent, owner))
+                continue
+        seen[kind] = seen.get(kind, 0) + 1
+        out.append("%s<%d>%s" % (kind, seen[kind], ("@" + owner) if _keeps_owner(owner, doc) else ""))
     return out
+
+
+def sw_name(text, doc=None):
+    ""
+    return sw_names([text], doc)[0]
 
 
 class _Names(QtWidgets.QStyledItemDelegate):
@@ -240,7 +348,7 @@ class _Names(QtWidgets.QStyledItemDelegate):
     def paint(self, painter, option, index):
         model = index.model()
         texts = [model.data(model.index(r, 0, index.parent())) for r in range(index.row() + 1)]
-        shown = sw_names([str(t or "") for t in texts])[-1]
+        shown = sw_names([str(t or "") for t in texts])[-1]      # pick-449: owner kept only in an assembly / sketch
         if shown == str(texts[-1] or ""):
             return super().paint(painter, option, index)
         opt = QtWidgets.QStyleOptionViewItem(option)
@@ -261,7 +369,12 @@ def _name_box(box):
         return          # the page draws its items itself
     d = _Names(box)
     box.setItemDelegate(d)
-    _names[id(box)] = (box, d)
+    key = id(box)
+    _names[key] = (box, d)
+    try:        # perf-1126: the entry (and the box it holds) goes when the box is destroyed
+        box.destroyed.connect(lambda *_a, k=key: _names.pop(k, None))
+    except Exception as _fw_err:
+        _fw_log("pmboxes:names-gc", _fw_err)
 
 
 def install(view):

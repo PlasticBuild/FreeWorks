@@ -37,6 +37,48 @@ except ImportError:
 V = App.Vector
 
 
+def _part_of(obj):
+    ""
+
+
+
+
+    part = getattr(obj, "Part", None)
+    if part is None or getattr(part, "TypeId", "") != "PartDesign::Body":
+        return part
+    at = getattr(obj, "PartAt", None) if "PartAt" in obj.PropertiesList else None
+    if at is not None and at in (part.Group or []) and not getattr(at, "Suppressed", False):
+        return at
+    return part
+
+
+def _bind_part(obj):
+    """Ties a Parting Line to the body's feature at the end of the part when it is made (or when its
+    part is changed, or that feature is deleted)."""
+    part = getattr(obj, "Part", None)
+    if part is None or getattr(part, "TypeId", "") != "PartDesign::Body" or part.Tip is None:
+        return
+    if "PartAt" not in obj.PropertiesList:
+        obj.addProperty("App::PropertyLink", "PartAt", "Parting Line", "The body's feature the mold is made from")
+        obj.setEditorMode("PartAt", 2)
+    at = obj.PartAt
+    if at is None or at not in (part.Group or []) or getattr(at, "Suppressed", False):
+        obj.PartAt = part.Tip
+
+
+def _picked_on(obj, solid):
+    """The picked parting-line edges, by name on the part the line is made from."""
+    out = []
+    for _o, sub in _edge_pairs(obj):
+        name = sub.split(".")[-1]
+        if name.startswith("Edge"):
+            try:
+                out.append(solid.Edges[int(name[4:]) - 1])
+            except (ValueError, IndexError):
+                pass
+    return out
+
+
 def _solid_of(obj):
     shape = Part.getShape(obj) if obj is not None else Part.Shape()
     if shape.isNull() or not shape.Solids:
@@ -88,8 +130,12 @@ def _split_edges(obj, solid):
 def parting_edges(obj):
     """The part's edges on the parting line: the picked ones, else those Parting Line Analysis finds,
     with the split-face curves when Split faces is on."""
-    solid = _solid_of(obj.Part)
-    picked = [e for _, e in sf.elements(obj, "Edges") if e.ShapeType == "Edge"]
+    held = _part_of(obj)
+    solid = _solid_of(held)
+    if held is obj.Part:
+        picked = [e for _, e in sf.elements(obj, "Edges") if e.ShapeType == "Edge"]
+    else:
+        picked = _picked_on(obj, solid)
     split = _split_edges(obj, solid)
     if picked:
         return solid, ([e for e in solid.Edges if any(_same_edge(e, p) for p in picked)] or picked) + split
@@ -208,6 +254,7 @@ def _outer_loops(wires, pull):
 def _parting_line(obj, base):
     if obj.Part is None:
         return None, None
+    _bind_part(obj)
     solid, edges = parting_edges(obj)
     if not edges:
         raise RuntimeError("No parting line: the part has no faces on both sides of the pull direction")
@@ -334,7 +381,7 @@ def zoom_to_edges(obj):
     ""
     if Gui is None or Gui.ActiveDocument is None:
         return False
-    solid = _solid_of(obj.Part) if obj.Part is not None else None
+    solid = _solid_of(_part_of(obj)) if obj.Part is not None else None
     edges = []
     for _o, n in _edge_pairs(obj):
         try:
@@ -365,15 +412,15 @@ def zoom_to_edges(obj):
 
 PARTING_LINE = sf.Spec(
     "SWStyle_PartingLine", "Parting Line", "Parting Line",
-    "The edges where a two-part mould opens, from the draft against the direction of pull.",
+    "The edges where a two-part mold opens, from the draft against the direction of pull.",
     "MOLD_PARTING_LINE", "Part_Section",
-    [Field("Part", "pick", "Part", tip="The part to mould (a body)", what="Object", box="Mold Parameters"),
-     Field("Direction", "pick", "Direction of Pull", what=("Face", "Edge"), optional=True,
-           tip="A plane, a flat face or a straight edge (Z when empty)", box="Mold Parameters"),
+    [Field("Part", "pick", "Part", tip="The part to mold (a body)", what="Object", box="Mold Parameters"),
+     Field("Direction", "pick", "Direction of Pull", what=("Face", "Edge"),
+           tip="A plane, a flat face or a straight edge (needed before OK)", box="Mold Parameters"),
      Field("Reverse", "bool", "Reverse direction", False, box="Mold Parameters"),
      Field("DraftAngle", "angle", "Draft angle", 1.0, low=0.0, high=30.0, box="Mold Parameters"),
      Field("DraftAnalysis", "button", "Draft Analysis", action=lambda o: _show_draft(o),
-           tip="Colours the part's faces by draft against this pull", box="Mold Parameters"),
+           tip="Colors the part's faces by draft against this pull", box="Mold Parameters"),
      Field("UseForSplit", "bool", "Use for Core/Cavity Split", True, box="Mold Parameters"),
      Field("SplitFaces", "bool", "Split faces", False, box="Mold Parameters"),
      Field("SplitAt", "radio", "", "At +/- draft transition", values=["At +/- draft transition", "At specified angle"],
@@ -390,6 +437,7 @@ PARTING_LINE = sf.Spec(
            tip="Zooms to the parting line edges", box="Parting Lines"),
      Field("Info", "info", "Messages", "", box="Parting Lines")],
     _parting_line, needs_body=False)
+PARTING_LINE.restored = _bind_part      # older parts: tie to the part as it was saved
 
 
 def _line_of(obj, name="PartingLine", split=True):
@@ -426,7 +474,7 @@ def _shut_off(obj, base):
     line = _line_of(obj)
     if line is None:
         return None, None
-    solid = _solid_of(line.Part)
+    solid = _solid_of(_part_of(line))
     pull = _pull(line)
     # Reset All Patch Types: a new choice there clears the loops set one by one
     reset = getattr(obj, "PatchType", "All Contact")
@@ -580,7 +628,7 @@ def _patch(solid, wire, kind):
 
 SHUT_OFF = sf.Spec(
     "SWStyle_ShutOffSurfaces", "Shut-Off Surfaces", "Shut-Off Surface",
-    "Patches over the holes through the part, so the mould closes there.", "MOLD_SHUT_OFF_SURFACES",
+    "Patches over the holes through the part, so the mold closes there.", "MOLD_SHUT_OFF_SURFACES",
     "Surface_Filling",
     [Field("PartingLine", "pick", "Parting Line", what="Object"),
      Field("Loops", "pick", "Edges", what=("Edge",), many=True, optional=True,
@@ -708,19 +756,44 @@ def _surface_way(solid, edge, t, out, kind):
     return best if best.dot(out) > -0.999 else None
 
 
+def _loose_topology(faces):
+    """The flanges as a compound, their free edges and a face count at a point. The flanges of a
+    parting line meet only at its corner points and are never sewn there, so a vertex shared by two
+    flanges is two vertices: shared edges and corners are found by position, not by topology."""
+    comp = Part.makeCompound(list(faces))
+
+    def key(e):
+        try:
+            ends = sorted(tuple(round(c, 5) for c in v.Point) for v in e.Vertexes)
+            mid = e.valueAt((e.FirstParameter + e.LastParameter) / 2.0)
+            return (tuple(ends), tuple(round(c, 5) for c in mid))
+        except Exception:
+            return id(e)
+    groups = {}
+    for f in faces:
+        for e in f.Edges:
+            groups.setdefault(key(e), []).append(e)
+    free = [g[0] for g in groups.values() if len(g) == 1]
+    corners = [[v.Point for v in f.Vertexes] for f in faces]
+
+    def at(p):
+        return sum(1 for pts in corners if any(q.distanceToPoint(p) < 1e-6 for q in pts))
+    return comp, free, at
+
+
 def _sharp_corners(faces):
     ""
 
 
     out = list(faces)
     try:
-        shell = surf._sew(faces)
-        free = [e for e in shell.Edges if len(shell.ancestorsOfType(e, Part.Face)) == 1]
-    except Exception:
+        shell, free, at = _loose_topology(faces)
+    except Exception as _fw_err:
+        _fw_log("molds.py:corner topology", _fw_err)
         return out
     # a flange's side edge has one end on the parting line (two faces meet there) and one free end; the
     # parting line's own edges have both ends shared and are not sides
-    sides = [e for e in free if sum(len(shell.ancestorsOfType(v, Part.Face)) >= 2 for v in e.Vertexes) == 1]
+    sides = [e for e in free if sum(at(v.Point) >= 2 for v in e.Vertexes) == 1]
 
     def far_end(edge, p):
         ends = [v.Point for v in edge.Vertexes if v.Point.distanceToPoint(p) > 1e-6]
@@ -783,14 +856,14 @@ def _smooth_corners(faces, distance):
     outer edge bulges out by the smoothing distance."""
     out = list(faces)
     try:
-        shell = surf._sew(faces)
-        free = [e for e in shell.Edges if len(shell.ancestorsOfType(e, Part.Face)) == 1]
-    except Exception:
+        shell, free, at = _loose_topology(faces)
+    except Exception as _fw_err:
+        _fw_log("molds.py:corner topology", _fw_err)
         return out
     # a corner gap is a pair of free side edges sharing a vertex on the parting line
     # a flange's side edge has one end on the parting line (two faces meet there) and one free end; the
     # parting line's own edges have both ends shared and are not sides
-    sides = [e for e in free if sum(len(shell.ancestorsOfType(v, Part.Face)) >= 2 for v in e.Vertexes) == 1]
+    sides = [e for e in free if sum(at(v.Point) >= 2 for v in e.Vertexes) == 1]
     used = set()
     for i, a in enumerate(sides):
         for j in range(i + 1, len(sides)):
@@ -810,7 +883,9 @@ def _smooth_corners(faces, distance):
                 bulge = m - p
                 bulge.normalize()
                 arc = Part.Arc(fa[0], m + bulge * max(distance, 1e-3), fb[0]).toShape()
-                out.append(Part.Face(Part.Wire([a, arc, b])))
+                # fresh edges: a and b belong to separate flanges and do not share vertices with the arc
+                out.append(Part.Face(Part.Wire([Part.LineSegment(p, fa[0]).toShape(), arc,
+                                                Part.LineSegment(fb[0], p).toShape()])))
                 used.update((i, j))
             except Exception:
                 try:
@@ -823,7 +898,7 @@ def _smooth_corners(faces, distance):
 
 PARTING_SURFACE = sf.Spec(
     "SWStyle_PartingSurface", "Parting Surface", "Parting Surface",
-    "A surface out from the parting line, square to the pull, that splits the mould block.",
+    "A surface out from the parting line, square to the pull, that splits the mold block.",
     "MOLD_PARTING_SURFACE", "Part_Extrude",
     [Field("Type", "radio", "", "Perpendicular to pull",
            values=["Tangent to surface", "Normal to surface", "Perpendicular to pull"], box="Mold Parameters"),
@@ -860,7 +935,7 @@ def _tooling_split(obj, base):
     psurf = obj.PartingSurface
     if line is None or psurf is None:
         return None, None
-    solid = _solid_of(line.Part)
+    solid = _solid_of(_part_of(line))
     pull = _pull(line)
     place = _frame(pull)
     inverse = place.inverse()
@@ -947,7 +1022,7 @@ def _tooling_split(obj, base):
         core.translate(pull * -gap)
     show = obj.Show
     kept = [core] if show == "Core" else [cavity] if show == "Cavity" else [core, cavity]
-    text = "Core %.0f mm3, cavity %.0f mm3" % (core.Volume, cavity.Volume)
+    text = "Core %.0f mm³, cavity %.0f mm³" % (core.Volume, cavity.Volume)
     if obj.Info != text:
         obj.Info = text
     return Part.makeCompound(kept), None
@@ -1143,7 +1218,7 @@ def _core(obj, base):
     if getattr(obj, "CapEnds", True):
         # Cap ends: the core runs the whole extract depth, closed flat at its end, even past the block
         cores = list(prism.Solids)
-    text = "Core %.0f mm3 pulled out of %d tooling bodies" % (sum(c.Volume for c in cores), len(tooling.Solids))
+    text = "Core %.0f mm³ pulled out of %d tooling bodies" % (sum(c.Volume for c in cores), len(tooling.Solids))
     if obj.Info != text:
         obj.Info = text
     for source in (split, sketch):
@@ -1185,7 +1260,7 @@ FOLDERS = ("Surface Bodies", "Cavity Surface Bodies", "Core Surface Bodies", "Pa
 
 class MoldFolders:
     def GetResources(self):
-        return {"MenuText": "Insert Mold Folders", "ToolTip": "Adds the folders for the mould's surface bodies.",
+        return {"MenuText": "Insert Mold Folders", "ToolTip": "Adds the folders for the mold's surface bodies.",
                 "Pixmap": "folder"}
 
     def IsActive(self):
@@ -1210,6 +1285,21 @@ class MoldFolders:
 
 
 ALL = [PARTING_LINE, SHUT_OFF, PARTING_SURFACE, TOOLING_SPLIT, CORE]
+
+
+def _held_shape(obj):
+    """The part a mold feature is made from, as it was when its Parting Line was made."""
+    line = obj if "Part" in obj.PropertiesList else getattr(obj, "PartingLine", None)
+    held = _part_of(line) if line is not None else None
+    return Part.getShape(held) if held is not None else None
+
+
+# The body link alone changes whenever anything later in the body does: the key holds the part as the
+# mold uses it instead (and each linked feature's shape), so those rebuilds take nothing
+for _spec in (PARTING_LINE, SHUT_OFF, PARTING_SURFACE, TOOLING_SPLIT):
+    _spec.cache = True
+    _spec.held = _held_shape
+    _spec.cache_skip = ("Part",)
 
 
 class MoldCommand(surf.Command):

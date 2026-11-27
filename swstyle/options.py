@@ -151,12 +151,46 @@ def _read_standard():
     doc = App.ActiveDocument
     if doc is not None:
         try:
+            if any(o.TypeId == "TechDraw::DrawPage" for o in doc.Objects):
+                # fh255: a drawing keeps its standard in its own Document Properties (a drawing template's
+                # ANSI or ISO): that one, not the system default
+                from . import drawdocprops
+                value = dict(drawdocprops.stored(doc)).get("standard")
+                if value in STANDARDS:
+                    return value
             value = migrate.doc_meta(doc)
             if value in STANDARDS:
                 return value
         except Exception as _fw_err:
             _fw_log("options.py:156", _fw_err)
     return paths.params().GetString(DRAFTING, "ISO")
+
+
+def _keep_others(doc):
+    ""
+
+
+    if doc is None:
+        return
+    try:
+        from . import migrate
+        key = migrate.DOC_META_NEW
+    except Exception:
+        key = "SolidWorksDraftingStandard"
+    old = paths.params().GetString(DRAFTING, "ISO")
+    for d in App.listDocuments().values():
+        try:
+            meta = dict(d.Meta or {})
+            if d is doc or meta.get("FreeWorksDraftingStandard") or meta.get("SolidWorksDraftingStandard"):
+                continue
+            gd = Gui.getDocument(d.Name) if App.GuiUp else None
+            was = gd.Modified if gd is not None else None
+            meta[key] = old
+            d.Meta = meta
+            if gd is not None and was is False:
+                gd.Modified = False
+        except Exception as _fw_err:
+            _fw_log("options.py:keep_others", _fw_err)
 
 
 def _write_standard(name):
@@ -168,6 +202,7 @@ def _write_standard(name):
             doc.Meta = meta
         except Exception as _fw_err:
             _fw_log("options.py:168", _fw_err)
+    _keep_others(doc)
     paths.params().SetString(DRAFTING, name)
     # ANSI and JIS draw third-angle views, the others first-angle; ANSI dimensions the ASME way.
     _param(TECHDRAW_GENERAL).SetInt("ProjectionAngle", 1 if name in ("ANSI", "JIS") else 0)
@@ -780,7 +815,17 @@ class OptionsDialog(QtWidgets.QDialog):
             sw, sh = 1920, 1040
         if w < 400 or h < 300:
             w, h = int(sw * 0.73), int(sh * 0.91)
-        self.resize(max(760, min(w, sw)), max(560, min(h, sh)))
+        # BB44 DS-2: the floor never past the screen (1080p at 200% leaves 540 logical px: OK/Cancel stay on it)
+        bar = self.frameGeometry().height() - self.height()
+        bar = bar if bar > 0 else 32        # the title bar (not drawn yet): Windows' at 100 %
+        self.resize(min(max(760, w), sw), min(max(560, h), sh - bar))
+        try:
+            top = screen.topLeft() if "screen" in locals() else None
+            if top is not None:
+                self.move(max(top.x(), screen.x() + (sw - self.width()) // 2),
+                          max(top.y(), screen.y() + (sh - self.height() - bar) // 2))
+        except Exception as _fw_err:
+            _fw_log("options.py:size place", _fw_err)
 
     def done(self, result):
         try:
@@ -792,6 +837,9 @@ class OptionsDialog(QtWidgets.QDialog):
         super().done(result)
 
     def accept(self):
+        from . import smengine
+
+        old_sheet_metal = smengine.enabled()
         theme = None
         for s in self.settings:
             if isinstance(s, Choice) and s.write is _write_theme:
@@ -808,6 +856,10 @@ class OptionsDialog(QtWidgets.QDialog):
             except Exception as error:
                 App.Console.PrintWarning("FreeCAD: drawing document properties not saved: %s\n" % error)
         super().accept()
+        if smengine.enabled() != old_sheet_metal:
+            from . import cmtabs
+
+            cmtabs.apply()
         if theme is not None and theme.changed():
             QtCore.QTimer.singleShot(0, theme.save)
 
@@ -816,12 +868,16 @@ reset_hook = None       # checks: callable(page title) -> "all" / "page" / None 
 
 
 def reset_setting(s):
-    """Shows a setting's default value in its box (saved on OK). Settings over a read() function keep
-    FreeCAD's own value: FreeCAD records no default for them. True when the box changed."""
+    ""
+
     if isinstance(s, optionspages.ColorList):
         s.reset_all()
         return True
-    if callable(getattr(s, "read", None)) or not getattr(s, "path", "") or getattr(s, "default", None) is None:
+    if isinstance(s, optionspages.Radio):
+        return s.reset()        # fh236: round buttons with a default (Import > Unit, Solid and Surface)
+    if callable(getattr(s, "read", None)):
+        return _factory_reset(s)
+    if not getattr(s, "path", "") or getattr(s, "default", None) is None:
         return False
     box, d = getattr(s, "box", None), s.default
     if isinstance(box, QtWidgets.QCheckBox):
@@ -829,6 +885,12 @@ def reset_setting(s):
             return False
         box.setChecked(bool(d))
     elif isinstance(box, (QtWidgets.QDoubleSpinBox, QtWidgets.QSpinBox)):
+        if isinstance(d, str):          # fh252: a value kept as text with its unit ("0.00deg", Area Hatch/Fill)
+            import re
+            m = re.match(r"\s*([-+]?\d*\.?\d+)", d)
+            if m is None:
+                return False
+            d = float(m.group(1))
         box.setValue(type(box.value())(d))
     elif isinstance(box, QtWidgets.QComboBox):
         if isinstance(s, Choice):
@@ -845,6 +907,58 @@ def reset_setting(s):
         box.setText(str(d))
     elif isinstance(box, QtWidgets.QSlider) and str(d) in getattr(s, "stops", ()):     # extapps82
         box.setValue(s.stops.index(str(d)))
+    else:
+        return False
+    return True
+
+
+def _factory_reset(s):
+    ""
+
+
+
+    try:
+        from . import optionsfactory
+        got = optionsfactory.FACTORY.get(getattr(s, "key", None))
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: option defaults: %s\n" % error)
+        got = None
+    if got is None:
+        return False
+    kind, d = got
+    box = getattr(s, "box", None)
+    if kind == "bool" and isinstance(box, QtWidgets.QCheckBox):
+        if box.isChecked() == bool(d):
+            return False
+        box.setChecked(bool(d))
+    elif kind == "number" and isinstance(box, (QtWidgets.QDoubleSpinBox, QtWidgets.QSpinBox)):
+        if abs(box.value() - d) < 1e-9:
+            return False
+        box.setValue(type(box.value())(d))
+    elif kind == "combo" and isinstance(box, QtWidgets.QComboBox):
+        i = box.findText(str(d))
+        if i < 0 or i == box.currentIndex():
+            return False
+        box.setCurrentIndex(i)
+    elif kind == "slider" and isinstance(box, QtWidgets.QSlider):
+        if box.value() == int(d):
+            return False
+        box.setValue(int(d))
+    elif kind == "checknumber" and isinstance(box, QtWidgets.QCheckBox) and hasattr(s, "number"):
+        on, n = d
+        if box.isChecked() == bool(on) and s.number.value() == int(n):
+            return False
+        box.setChecked(bool(on))
+        s.number.setValue(int(n))
+    elif kind == "checkcombo" and isinstance(getattr(s, "check", None), QtWidgets.QCheckBox) \
+            and isinstance(box, QtWidgets.QComboBox):
+        on, choice = d
+        i = box.findText(str(choice))
+        if s.check.isChecked() == bool(on) and (i < 0 or i == box.currentIndex()):
+            return False
+        s.check.setChecked(bool(on))
+        if i >= 0:
+            box.setCurrentIndex(i)
     else:
         return False
     return True
@@ -921,5 +1035,26 @@ class OptionsCommand:
         return True
 
 
+class _GridWatch:
+    """fh267: the active document's own Grid/Snap goes into FreeCAD's sketcher settings when it becomes active."""
+
+    def slotActivateDocument(self, doc):
+        QtCore.QTimer.singleShot(0, lambda name=doc.Name: _apply_grid(name))
+
+
+def _apply_grid(name):
+    try:
+        if name in App.listDocuments():
+            optionspages.apply_doc_grid(App.getDocument(name))
+    except Exception as _fw_err:
+        _fw_log("options.py:apply_grid", _fw_err)
+
+
+_GRID_WATCH = []
+
+
 def register():
     Gui.addCommand("SWStyle_Options", OptionsCommand())
+    if not _GRID_WATCH:
+        _GRID_WATCH.append(_GridWatch())
+        App.addDocumentObserver(_GRID_WATCH[0])

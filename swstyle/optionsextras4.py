@@ -266,12 +266,42 @@ def move_backups(path):
                 continue
             if time.time() - os.path.getmtime(full) > 120:
                 continue
-            target = os.path.join(backup_folder(), other)
-            if os.path.exists(target):
-                os.remove(target)
+            target = _free_name(os.path.join(backup_folder(), other))
             shutil.move(full, target)
+        _keep_newest(os.path.join(backup_folder(), name))
     except Exception as error:
         App.Console.PrintLog("FreeCAD: backup folder: %s\n" % error)
+
+
+def _free_name(target):
+    """fh230: two saves in one second give FreeCAD's backups the same name, as do same-named files from two folders:
+    the one already in the Backup folder is kept and this one is numbered, as FreeCAD numbers them beside the file."""
+    if not os.path.exists(target):
+        return target
+    import re
+    stem, ext = os.path.splitext(target)
+    m = re.match(r"(\.fcstd)(\d+)$", ext, re.I)
+    if m:                       # name.FCStd1: the next free number (the newest is found by its date, not its number)
+        n = int(m.group(2)) + 1
+        while os.path.exists("%s%s%d" % (stem, m.group(1), n)):
+            n += 1
+        return "%s%s%d" % (stem, m.group(1), n)
+    n = 1
+    while os.path.exists("%s-%d%s" % (stem, n, ext)):
+        n += 1
+    return "%s-%d%s" % (stem, n, ext)
+
+
+def _keep_newest(path):
+    """fh230: Number of backup copies per document holds in the Backup folder too (FreeCAD only counts beside the file)."""
+    try:
+        from . import optionsextras2
+        count = max(1, App.ParamGet("User parameter:BaseApp/Preferences/Document").GetInt("CountBackupFiles", 1))
+        found = sorted(optionsextras2.backups_of(path), key=os.path.getmtime, reverse=True)
+        for old in found[count:]:
+            os.remove(old)
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: backup copies: %s\n" % error)
 
 
 # ---------------------------------------------------------------- import

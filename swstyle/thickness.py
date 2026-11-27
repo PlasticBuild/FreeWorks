@@ -167,7 +167,7 @@ class ThicknessWindow(evaluate.ReportWindow):
         if not found:
             self.results = {}
             self.set_rows([(("Thinnest wall", "-"), [])])
-            self.summary.setText("No visible solid to analyse.")
+            self.summary.setText("No visible solid to analyze.")
             return
         low, high = min(found), max(found)
         thin = self.thin.isChecked()
@@ -192,9 +192,9 @@ class ThicknessWindow(evaluate.ReportWindow):
             (("Target thickness", evaluate.len_text(target)), []),
             (("Area thinner than the target", "%.1f %%" % share), []),
         ])
-        self.summary.setText("Red faces are the thinnest, yellow are at the target, grey are outside the range "
+        self.summary.setText("Red faces are the thinnest, yellow are at the target, gray are outside the range "
                              "shown." if thin else
-                             "Yellow faces are at the target, blue are the thickest, grey are thinner than the "
+                             "Yellow faces are at the target, blue are the thickest, gray are thinner than the "
                              "target.")
 
     def cleanup(self):
@@ -202,7 +202,7 @@ class ThicknessWindow(evaluate.ReportWindow):
 
 
 @evaluate.command("SWStyle_ThicknessAnalysis", "Thickness Analysis",
-                  "Colours the faces by the wall thickness under them, against a target thickness.")
+                  "Colors the faces by the wall thickness under them, against a target thickness.")
 def thickness_analysis():
     return evaluate._show(ThicknessWindow)
 

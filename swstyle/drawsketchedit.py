@@ -1411,7 +1411,7 @@ class PatternPanel(_EditPanel):
         else:
             box, lay = D._group("Parameters", self.form)
             g = QtWidgets.QFormLayout()
-            self.centre_label = QtWidgets.QLabel("Click the pattern centre (else the view's origin).", box)
+            self.centre_label = QtWidgets.QLabel("Click the pattern center (else the view's origin).", box)
             self.centre_label.setObjectName("SWCircPatternCentreLabel")
             self.centre_label.setWordWrap(True)          # one line made the pane 344 px wide
             g.addRow(self.centre_label)
@@ -1441,7 +1441,7 @@ class PatternPanel(_EditPanel):
             self.add_pick(v, i)
         elif self.CIRCULAR:
             self.centre = p
-            self.centre_label.setText("Centre: %.2f, %.2f" % p)
+            self.centre_label.setText("Center: %.2f, %.2f" % p)
         return True
 
     def finish(self):
@@ -1895,7 +1895,7 @@ COMMANDS = {
     "FreeWorks_DrawLinearSketchPattern": ("Linear Sketch Pattern", "Sketcher_RectangularArray",
                                           "Copies sketch entities in rows and columns."),
     "FreeWorks_DrawCircularSketchPattern": ("Circular Sketch Pattern", "Sketcher_RectangularArray",
-                                            "Copies sketch entities round a centre."),
+                                            "Copies sketch entities round a center."),
     "FreeWorks_DrawMoveEntities": ("Move Entities", "Sketcher_Move", "Moves sketch entities."),
     "FreeWorks_DrawCopyEntities": ("Copy Entities", "Sketcher_Copy", "Copies sketch entities."),
     "FreeWorks_DrawRotateEntities": ("Rotate Entities", "Sketcher_Rotate", "Rotates sketch entities."),

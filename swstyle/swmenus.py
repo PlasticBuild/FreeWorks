@@ -79,7 +79,7 @@ FILE = ("&File", (
     ("Reload...", "Reload"),
     ("when:multiuser", (("Make Read-Only", C("SWStyle_MakeReadOnly")), ("Get Write Access", C("SWStyle_GetWriteAccess")))),
     ("Find References...", C("SWStyle_FindReferences")),
-    ("when:part", (("Derive Part...", C("SWStyle_DerivePart")),)),
+    ("when:partdoc", (("Derive Part...", C("SWStyle_DerivePart")),)),     # derivepart-1126: parts only
     ("Properties...", "FileProperties"),
     S,
     ("Exit", F("exit")),
@@ -120,6 +120,7 @@ EDIT = ("&Edit", (
         ("Edit Table", C("SWStyle_EditDesignTable")), ("Edit Table in New Window", C("SWStyle_EditDesignTableWindow")),
     )),
     ("Bend Table", (
+        ("New...", "SM_BendTableNew"),     # bendtable-1126: always (Features); no sheet metal body: its first-step page
         ("Edit Table", C("SWStyle_BendTableEdit")), ("Edit Table in New Window", C("SWStyle_BendTableEditWindow")),
         ("Delete", C("SWStyle_BendTableDelete")),
     )),
@@ -157,7 +158,9 @@ VIEW = ("&View", (
         # have nothing behind them here, so they are left out (no dead controls)
         ("Perspective", C("SWStyle_PerspectiveToggle")), "SectionView", "CameraView",
         "Curvature", ("Zebra Stripes", "Zebra"), "SurfaceCurvatureCombs", "HideCurvatureCombs", "DraftAnalysis", "UndercutAnalysis",
-        "PartingLineAnalysis", "BodyCompare", "RealViewGraphics", "Cartoon",
+        "PartingLineAnalysis", "BodyCompare", "RealViewGraphics",
+        ("RealView Plus Graphics", "RealViewPlusGraphics"),     # viewrows-1126: View/display pkg157 (MENU 12, 26)
+        "Cartoon",
         S,
         "TangentEdgesVisible", "TangentEdgesPhantom", "TangentEdgesRemoved",
         S,
@@ -177,7 +180,6 @@ VIEW = ("&View", (
             ("Top", C("SWStyle_SetCurrentViewAsTop")), ("Bottom", C("SWStyle_SetCurrentViewAsBottom")),
             ("Left", C("SWStyle_SetCurrentViewAsLeft")), ("Right", C("SWStyle_SetCurrentViewAsRight")),
         )),
-        S,
         "RotateAboutSceneFloor",
         ("Zoom About Screen Center", C("SWStyle_ZoomAboutScreenCenter")),
         S,
@@ -198,7 +200,6 @@ VIEW = ("&View", (
     S,
     ("Hide / Show", (
         "HideAllTypes",
-        S,
         ("All Annotations", "ViewAllAnnotations"),
         ("Axes", "ToggleAxisCross"),
         ("Temporary Axes", "ViewTemporaryAxes"),
@@ -209,6 +210,7 @@ VIEW = ("&View", (
         ("Curves", "ViewCurves"),
         ("Dimension Names", "ViewDimensionNames"),
         ("Lights", C("SWStyle_ViewLights")),
+        ("Live Section Planes", "ViewLiveSectionPlanes"),     # viewrows-1126: View/display pkg154 (MENU 12)
         ("Origins", "ViewOrigins"),
         ("Parting Lines", C("SWStyle_ViewPartingLines")),
         ("Planes", "ViewPlanes"),
@@ -220,6 +222,7 @@ VIEW = ("&View", (
         ("Weld Bead", C("SWStyle_ViewWeldBead")),
         ("Markups", C("SWStyle_ViewMarkups")),
         S,
+        ("Decals", "ViewDecals"),           # bendtable-1126: View/display pkg153; hidden until it is there
         ("Grid", "ViewGrid"),
         ("Sketch Relations", "ViewSketchRelations"),
         S,
@@ -243,9 +246,9 @@ INSERT = ("&Insert", (
         ("Drawing View", (
             ("Model...", "DrawModelView"), ("Projected", "DrawProjectedView"), ("Auxiliary", "DrawAuxiliaryView"),
             ("Section", "DrawSectionView"), ("Removed Section", "DrawRemovedSection"), ("Detail", "DrawDetailView"),
-            ("Relative To Model", "DrawRelativeView"), ("Standard 3 View...", "DrawStandard3View"),
+            ("Relative To Model", "DrawRelativeView"), S, ("Standard 3 View...", "DrawStandard3View"), S,   # toolsins-1126: MENU 33 lines
             ("Broken-out Section...", "DrawBrokenOut"), ("Break", "DrawBreak"), ("Crop", "DrawCrop"),
-            ("Alternate Position...", "DrawAlternatePosition"),
+            ("Alternate Position...", "DrawAlternatePosition"), S,
             ("Empty", "DrawEmptyView"), ("Predefined...", "DrawPredefinedView"),
         )),
         ("Annotations", (                    # menus-sldresu.txt MENU 33 order, the ones that exist
@@ -510,6 +513,7 @@ TOOLS = ("&Tools", (
         ("Scale", "ScaleEntities"), ("Copy", "CopyEntities"), "ReplaceEntity",
         ("Linear Pattern", "LinearSketchPattern"), ("Circular Pattern", "CircularSketchPattern"),
         ("Edit Linear Pattern...", C("SWStyle_EditLinearPattern")), ("Edit Circular Pattern...", C("SWStyle_EditCircularPattern")),
+        S,                                  # mbletters-1127: Edit Polygon sits between dividers
         "EditPolygon",
         S,
         "CreateSketchFromSelections", "RepairSketch", "SketchXpert",
@@ -759,6 +763,12 @@ def _shown_key(name, key):
     ""
     if key or not name:
         return key
+    try:    # repeatkey-1126: Enter/Tab/D/A live in key filters (filterkeys); show the key the user chose there
+        from . import filterkeys
+        if name in filterkeys.DEFAULTS:
+            return filterkeys.shown(name)
+    except Exception as e:
+        _fw_log("swmenus.filterkey", e)
     key = _pending_key(name)
     if key:
         return key
@@ -805,6 +815,17 @@ def _binding_icon(b, action):
     return b.icon() if _pixmap_known(pixmap) else None
 
 
+def _as_is_shaded_edges(shell):
+    """mbar-1126: View > Display ticks the mode in use; a new document is in FreeCAD's "As is" style."""
+    try:
+        from . import hlv
+        if hlv.mode() is not None:
+            return False
+        return shell.draw_style_index() in (0, None)
+    except Exception:
+        return False
+
+
 def _catalog_item(shell, key, label):
     from . import catalog
     if key not in catalog.BY_KEY:
@@ -820,10 +841,14 @@ def _catalog_item(shell, key, label):
     from . import checkstate
     toggle = (action is not None and action.isCheckable()) or bool(native and checkstate.known(native))
     checked = bool(b.checked) if toggle or b.checked else None
+    if key == "ShadedEdges" and not checked and _as_is_shaded_edges(shell):
+        checked = True
     if key in ("Undo", "Redo") and action is not None and action.text().strip():
         label = action.text().replace("&", "")         # undowording.py names the step: "Undo Extrude"
-    return Item(label or b.cmd.label, b.enabled, b.run, _binding_icon(b, action),
+    item = Item(label or b.cmd.label, b.enabled, b.run, _binding_icon(b, action),
                 _shown_key(native, _key_text(native, action) if native else "") or _shown_key(key, ""), checked)
+    item.catkey = key       # tooltips-1126: rctips reads this entry's line (Cut > Revolve is not Freeshape Revolve)
+    return item
 
 
 _PACK = {}
@@ -879,7 +904,10 @@ def _sheet_capture_item(label):
     return item
 
 
-ONLY_WHEN_ACTIVE = ("SWStyle_RecordVideo", "SWStyle_StopVideoRecord")     # greyed counts as dead: left out
+NOT_TOGGLES = ("Select over Geometry",)     # mbar-1126: the drawing one runs Box Selection
+ONLY_WHEN_ACTIVE = ("SWStyle_RecordVideo", "SWStyle_StopVideoRecord",
+
+                    "SWStyle_BendTableEdit", "SWStyle_BendTableEditWindow", "SWStyle_BendTableDelete")     # greyed counts as dead: left out
 
 
 def _command_item(name, label):
@@ -934,6 +962,10 @@ def _command_item(name, label):
     icon = _pack_icon(name, label) or menurowart.icon(name, label) or icon
     if menunoicon.none_for(name):
         icon = None
+    if label in NOT_TOGGLES:
+        checked = None
+    if name in ("Std_Undo", "Std_Redo") and action is not None and action.text().strip():
+        label = action.text().replace("&", "")      # fh257: the drawing Edit menu names the step too ("Undo Model View")
     item = Item(label or name, active, run, icon, _shown_key(name, _key_text(name, action)), checked)
     item.command = name           # Show command location finds the entry by it
     return item
@@ -983,8 +1015,18 @@ def _special_item(name, label):
     return None
 
 
-SUBMENUS = ("recent", "recent_macros", "panels", "toolbars", "freecad", "lightprops", "lightdelete", "sw_toolbars", "workspace", "user_interface",
-            "user_interface_drawing")
+INLINE = ("recent_inline",)       # nodocfile-1127: specials whose rows go in the menu itself, not a submenu
+SUBMENUS = ("recent", "recent_inline", "recent_macros", "panels", "toolbars", "freecad", "lightprops", "lightdelete", "sw_toolbars", "workspace", "user_interface",
+            "user_interface_drawing", "draw_quick_snaps")
+
+DRAW_QUICK_SNAPS = (("Points", "Point", "QSPoint"), ("Center Points", "Center Point", "QSCenterPoint"),
+                    ("Mid-points", "Midpoint", "QSMidpoint"), ("Quadrant Points", "Quadrant", "QSQuadrant"),
+                    ("Intersections", "Intersection", "QSIntersection"), None,
+                    ("Nearest", "Nearest", "QSNearest"), ("Tangent", "Tangent", "QSTangent"),
+                    ("Perpendicular", "Perpendicular", "QSPerpendicular"), ("Parallel", "Parallel", "QSParallel"),
+                    ("Horizontal/Vertical", "Horizontal/Vertical Lines", "QSHV"),
+                    ("H/V To Points", "Horizontal/Vertical to Points", "QSHVPoint"), None,
+                    ("Length", "Length", "QSLength"), ("Grid", "Grid", "QSGrid"), ("Angle", "Angle", "QSAngle"))
 
 
 def drawing_in_front():
@@ -1008,8 +1050,19 @@ def no_document():
     return App.ActiveDocument is None
 
 
+def part_in_front():
+    """derivepart-1126: a part document in front: not a drawing, not an assembly."""
+    if no_document() or drawing_in_front():
+        return False
+    try:
+        from . import asmtabs
+        return not asmtabs._assembly_active()
+    except Exception:
+        return True
+
+
 WHEN = {"drawing": drawing_in_front, "part": lambda: not drawing_in_front(), "multiuser": _multiuser,
-        "doc": lambda: not no_document(), "nodoc": no_document}
+        "doc": lambda: not no_document(), "nodoc": no_document, "partdoc": part_in_front}
 
 
 # no Customize Menu at their feet, no Toolbox (Interface read 11-20, READ-LIST-1119 RESULTS part 7)
@@ -1018,7 +1071,9 @@ NODOC = {
     "&File": (
         ("New...", "New"), ("Open...", "Open"),
         S,
-        ("Open Recent", F("recent")),
+
+        # "20 ..."), then the two Browse rows; no Open Recent submenu (READ-LIST-1119 RESULTS part 7)
+        ("Recent Files", F("recent_inline")),
         ("Browse Recent Documents...", C("SWStyle_BrowseRecentDocuments")),
         ("Browse Recent Folders...", C("SWStyle_BrowseRecentFolders")),
         S,
@@ -1088,6 +1143,11 @@ def resolve(shell, entry):
     else:
         label, target = entry
     if isinstance(target, (tuple, list)):
+        if label and label.replace("&", "") == "Sheet Metal":
+            from . import smengine
+
+            if not smengine.enabled():
+                return None
         return label, target
     if target.startswith("fn:"):
         name = target[3:]
@@ -1173,22 +1233,58 @@ def _add_item(menu, item):
     if item.checked is not None:
         act.setCheckable(True)
         act.setChecked(bool(item.checked))
-    act.triggered.connect(lambda checked=False, run=item.run: _later(run))
+    run = item.run
+    if not item.enabled:
+        try:        # greyrows-1126: NO DEAD CONTROLS: the row stays live and says what to do first
+            from . import menunotready
+            run = menunotready.wire(menu, act, item)
+        except Exception as _fw_err:
+            _fw_log("swmenus.py:greyrows", _fw_err)
+    act.triggered.connect(lambda checked=False, run=run: _later(run))
     if getattr(item, "command", None):
         act.setData(item.command)
+    if getattr(item, "catkey", None):
+        act.setProperty("swCatKey", item.catkey)        # tooltips-1126
     return act
+
+
+def _recent_path(text):
+    """nodocfile-1127: a recent file's path. FreeCAD gives the full path as the tooltip (an "&" in it is a
+    real "&"); only its "&1 name" menu text, the fallback, carries marks."""
+    import os
+    if os.path.isabs(text):
+        return text
+    import re
+    return re.sub(r"^&?\d+\s+", "", text).replace("&&", "\0").replace("&", "").replace("\0", "&")
+
+
+def _inline_special(name):
+    """nodocfile-1127: (text, tooltip, run) rows that go straight into the menu."""
+    if name == "recent_inline":
+
+        import os
+        from . import swkeys
+        rows = []
+        for i, (text, action) in enumerate(swkeys.recent_actions(), 1):
+            base = os.path.splitext(os.path.basename(_recent_path(text)))[0] or text
+            mark = "&%d " % i if i < 10 else "%d " % i
+            rows.append((mark + base.replace("&", "&&"), text, action.trigger))
+        return rows
+    return []
 
 
 def _fill_special(menu, name):
     if name == "recent":
 
         from . import swkeys
-        for text, action in swkeys.recent_actions():
+        recent = swkeys.recent_actions()
+        for text, action in recent:
             import os
-            act = menu.addAction(os.path.basename(text.replace("&", "")) or text)
+            act = menu.addAction((os.path.basename(_recent_path(text)) or text).replace("&", "&&"))
             act.setToolTip(text)
             act.triggered.connect(lambda checked=False, a=action: _later(a.trigger))
-        menu.addSeparator()
+        if recent:
+            menu.addSeparator()     # nodocfile-1127: no line at the top when there are no recent files
         for cmd, label in (("SWStyle_BrowseRecentDocuments", "Browse Recent Documents..."),
                            ("SWStyle_BrowseRecentFolders", "Browse Recent Folders...")):
             item = _command_item(cmd, label)
@@ -1207,6 +1303,26 @@ def _fill_special(menu, name):
                 act.setToolTip(action.toolTip())
                 act.triggered.connect(lambda checked=False, a=action: _later(a.trigger))
         return bool(menu.actions())     # none yet: Recent Macros is left out, no greyed placeholder (pkg216)
+    if name == "draw_quick_snaps":
+        from . import drawsketchedit as dse       # toolsins-1126: ticks are the sheet sketch's own snaps
+        for row in DRAW_QUICK_SNAPS:
+            if row is None:
+                menu.addSeparator()
+                continue
+            label, snap, key = row
+            if snap not in dse.SNAP_ON:
+                continue
+            act = menu.addAction(label)
+            try:        # the part's Quick Snaps picture for the same snap
+                pic = _catalog_item(_shell(), key, label) if _shell() is not None else None
+                if pic is not None and pic.icon is not None and not pic.icon.isNull():
+                    act.setIcon(pic.icon)
+            except Exception as _fw_err:
+                _fw_log("swmenus.py:draw-snaps-icon", _fw_err)
+            act.setCheckable(True)
+            act.setChecked(bool(dse.SNAP_ON.get(snap)))
+            act.triggered.connect(lambda on=False, s=snap: dse.SNAP_ON.__setitem__(s, bool(on)))
+        return bool(menu.actions())
     if name == "panels":
         # FreeCAD's View > Panels (Std_DockViewMenu): its dock panels' show/hide ticks
         action = _native_action("Std_DockViewMenu")
@@ -1224,6 +1340,13 @@ def _fill_special(menu, name):
                 own.triggered.connect(lambda *_: Gui.runCommand("SWStyle_FeatureManagerArea"))
                 menu.addAction(own)
                 continue
+            if not a.isEnabled() and a.isVisible() and a.menu() is None:
+                try:        # greyrows-1126: a live row that says what to do first
+                    from . import menunotready
+                    menu.addAction(menunotready._stand_in(menu, a))
+                    continue
+                except Exception as _fw_err:
+                    _fw_log("swmenus.py:greyrows-panels", _fw_err)
             menu.addAction(a)
         return bool(menu.actions())
     if name == "sw_toolbars":
@@ -1271,9 +1394,11 @@ def _fill_special(menu, name):
                 menu.removeAction(a)
         return bool(menu.actions())
     if name == "freecad":
-        for native in hidden_natives():
-            proxy = _new_menu(native.title(), menu)
-            proxy.aboutToShow.connect(lambda p=proxy, n=native: _proxy(p, n))
+        for i, native in enumerate(hidden_natives()):
+            title = native.title()
+            proxy = _new_menu(title, menu)
+            # found again when it opens: FreeCAD builds its menus again on a workbench change
+            proxy.aboutToShow.connect(lambda p=proxy, i=i, t=title: _proxy(p, _native_at(i, t)))
             menu.addMenu(proxy)
         return bool(menu.actions())
     return False
@@ -1284,7 +1409,13 @@ def _proxy(proxy, native):
     proxy.clear()
     if alive(native):
         native.aboutToShow.emit()
-        proxy.addActions(native.actions())
+        try:        # greyrows-1126: a disabled FreeCAD entry shows as a live row that says what to do first
+            from . import menunotready
+            menunotready.proxy_actions(proxy, native.actions())
+        except Exception as _fw_err:
+            _fw_log("swmenus.py:greyrows-proxy", _fw_err)
+            proxy.clear()
+            proxy.addActions(native.actions())
 
 
 def _sw_dots(menu, item):
@@ -1326,6 +1457,17 @@ def fill(menu, entries, shell):
                 pending_separator = False
             _add_item(menu, _sw_dots(menu, what))
             shown += 1
+            continue
+        if isinstance(what, str) and what in INLINE:
+            rows = _inline_special(what)
+            if rows and pending_separator:
+                menu.addSeparator()
+                pending_separator = False
+            for text, tip, run in rows:
+                act = menu.addAction(text)
+                act.setToolTip(tip)
+                act.triggered.connect(lambda checked=False, run=run: _later(run))
+                shown += 1
             continue
         sub = _new_menu(label, menu)
         if isinstance(what, str):
@@ -1372,6 +1514,10 @@ def _drawing_entries(title):
                         out.append((label, C(name)))
         return out
     entries = convert(layout[title])
+    if title == TOOLS[0] and not any(isinstance(e, tuple) and e[1:] == (F("freecad"),) for e in entries):
+        # wbswitch-1126: FreeCAD's own menus of the active workbench, last, as in the part Tools menu (users
+        # never lose FreeCAD functionality, also with a drawing in front)
+        entries += [S, ("FreeCAD", F("freecad"))]
     if title == VIEW[0]:
 
         # MotionManager, Status Bar, Rulers, Zone Lines), Touch Mode, Full Screen (menus-sldresu.txt 2752-2765)
@@ -1582,8 +1728,28 @@ def hidden_natives():
     bar = mw.menuBar() if mw is not None else None
     if bar is None:
         return []
-    return [a.menu() for a in bar.actions() if a.menu() is not None and not _ours(a.menu())
-            and a.menu().title().strip()]
+    # GitHub #3: PySide treats the menu QAction.menu() hands back as the action's child, and when that
+    # action's wrapper goes (the loop moves on) the menu's wrapper is dropped with it, though the menu lives:
+    # "Internal C++ object (QMenu) already deleted" on the next use. The actions are held while the menus are used.
+    actions = list(bar.actions())
+    _HELD_ACTIONS[:] = actions
+    out = []
+    for a in actions:
+        m = a.menu()
+        if m is not None and alive(m) and not _ours(m) and m.title().strip():
+            out.append(m)
+    return out
+
+
+_HELD_ACTIONS = []
+
+
+def _native_at(i, title):
+    """FreeCAD's hidden menu number i when it still has that title, else the first one with it (None when gone)."""
+    natives = hidden_natives()
+    if i < len(natives) and alive(natives[i]) and natives[i].title() == title:
+        return natives[i]
+    return next((n for n in natives if alive(n) and n.title() == title), None)
 
 
 def _actions_deep(menu, out, depth=0):
@@ -1788,6 +1954,10 @@ def _free_pending():
             parent = menu.parent()
             if parent is None or parent.objectName() != "SWLeftOutMenus" or menu.isVisible() or menu.actions():
                 continue        # put back or used again: FreeCAD's, left alone
+            if menu.findChildren(QtWidgets.QMenu):
+                # fh239: an emptied menu still owns submenus FreeCAD keeps pointers to (View > Workbench: the
+                # workbench list refills it whenever Preferences are applied); deleting it crashed FreeCAD there
+                continue
             if QtWidgets.QApplication.activePopupWidget() is not None:
                 keep.append((when, menu))       # a menu is open: wait
                 continue
@@ -1830,12 +2000,37 @@ def _left_out(bar, name):
     return _SPARE.pop(name, None)
 
 
+def _busy():
+    """menubusy-1127: a file is opening or a document is rebuilding (File handling's recovery.busy())."""
+    try:
+        from . import recovery
+        return bool(recovery.busy())
+    except Exception:
+        return False
+
+
+def _bar_settled(bar):
+    """menubusy-1127: our menus are in the bar and none of FreeCAD's own shows: nothing for _hook to do now."""
+    mine = False
+    for a in bar.actions():
+        menu = a.menu()
+        if menu is None:
+            continue
+        if _ours(menu):
+            mine = True
+        elif a.isVisible() and menu.objectName() != "&Windows":
+            return False
+    return mine
+
+
 def _hook():
     try:
         mw = Gui.getMainWindow()
         if mw is None:
             return
         bar = mw.menuBar()
+        if _busy() and _bar_settled(bar):
+            return      # menubusy-1127: done on the first tick after the open or the rebuild (PERF-1127)
         watch_bar(bar)
         on = enabled() and _shell() is not None
         mine = {a.menu().objectName(): a for a in bar.actions() if a.menu() is not None

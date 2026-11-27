@@ -83,7 +83,7 @@ COMMANDS = {"FreeWorks_PenSketch": ("Pen Sketch", "Draw", "Sketcher_CreateBSplin
             "FreeWorks_PenRuler": ("Ruler", "Ruler", "umf-measurement",
                                    "Lays a ruler (drag along it): ink drawn along it comes out straight."),
             "FreeWorks_PenProtractor": ("Protractor", "Protractor", "Sketcher_CreateCircle",
-                                        "Lays a protractor (drag from its centre out): ink along its rim comes out "
+                                        "Lays a protractor (drag from its center out): ink along its rim comes out "
                                         "round."),
             "FreeWorks_PenConvertToShape": ("Convert to Shape", None, "Sketcher_CreatePolyline",
                                             "Turns the ink (the picked ink, else all) into lines, arcs and circles."),
@@ -966,7 +966,7 @@ class _Properties:
     """Pen Properties: the ink's colour and width."""
 
     def GetResources(self):
-        return {"MenuText": "Pen Properties", "ToolTip": "The colour and width of the ink.", "CmdType": "ForEdit"}
+        return {"MenuText": "Pen Properties", "ToolTip": "The color and width of the ink.", "CmdType": "ForEdit"}
 
     def IsActive(self):
         return App.ActiveDocument is not None
@@ -986,13 +986,13 @@ class _Properties:
             swatch.setStyleSheet("background: %s;" % colour[0].name())
 
         def pick():
-            c = QtWidgets.QColorDialog.getColor(colour[0], dlg, "Ink colour")
+            c = QtWidgets.QColorDialog.getColor(colour[0], dlg, "Ink color")
             if c.isValid():
                 colour[0] = c
                 paint()
         paint()
         swatch.clicked.connect(pick)
-        form.addRow("Colour", swatch)
+        form.addRow("Color", swatch)
         width = QtWidgets.QSpinBox(dlg)
         width.setObjectName("SWPenPropertiesWidth")
         width.setRange(1, 12)

@@ -350,7 +350,7 @@ class EmbedHost(QtWidgets.QWidget):
         # a placeholder shows until the slicer has painted at its new size
         self.note.setText("Opening %s..." % self.title)
         self.wid = wid
-        QtCore.QTimer.singleShot(250, self._reveal)
+        from . import safe_later as _sl; _sl.later(250, self._reveal, self, "container")
         for ms in (600, 1200, 2500):          # after the layout has settled
             QtCore.QTimer.singleShot(ms, self.fit)
         self.embedded.emit(wid)
@@ -364,7 +364,7 @@ class EmbedHost(QtWidgets.QWidget):
         except Exception as _fw_err:
             _fw_log("slicerembed.py:315", _fw_err)
         self.fit()
-        QtCore.QTimer.singleShot(1300, self._painted)
+        from . import safe_later as _sl; _sl.later(1300, self._painted, self, "note")
 
     def _painted(self):
         self.fit()

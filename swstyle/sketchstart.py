@@ -14,6 +14,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -99,8 +100,9 @@ def _sheet_in_front():
 def is_draw_tool(native):
     if not native or native in DRAW_EXCLUDE:
         return False
-    if native.startswith("FreeWorks_Draw"):
-        return False            # drawing commands (sheet tools, BOM, Note, tables): no part sketch
+    if native.startswith(("FreeWorks_Draw", "FreeWorks_TDX_")):
+        return False            # drawing commands (sheet tools, BOM, Note, tables, Drawing Tools): no part sketch
+
     if native.startswith("FreeWorks_"):
         return not native.startswith(FREEWORKS_NOT_DRAWN)
     return native.startswith("Sketcher_Create")
@@ -205,9 +207,9 @@ def _then_feature(feature):
     def go(tries=[0]):
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
-        if edit is not None and edit.Object.TypeId == SKETCH:
+        if edit is not None and editobj.type_id(edit) == SKETCH:
             if _empty is not None:
-                _empty.resume[(edit.Object.Document.Name, edit.Object.Name)] = feature
+                _empty.resume[(editobj.of(edit).Document.Name, getattr(editobj.of(edit), "Name", None))] = feature
         elif tries[0] < 20:
             tries[0] += 1
             QtCore.QTimer.singleShot(100, go)
@@ -232,7 +234,7 @@ def _then_tool(tool):
     def go(tries=[0]):
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
-        if edit is not None and edit.Object.TypeId == SKETCH:
+        if edit is not None and editobj.type_id(edit) == SKETCH:
             Gui.runCommand(tool, 0)
         elif tries[0] < 20:
             tries[0] += 1
@@ -339,9 +341,13 @@ def _body():
             _fw_log("sketchstart.py:312", _fw_err)
         return bodies[0]
     if not bodies:
+        _BEFORE[doc.Name] = {o.Name for o in doc.Objects}
         Gui.runCommand("PartDesign_Body", 0)
         try:
-            return view.getActiveObject("pdbody")
+            body = view.getActiveObject("pdbody")
+            if body is not None:
+                _FRESH_BODIES.add((doc.Name, body.Name))     # pkg432: made only for this sketch
+            return body
         except Exception as _fw_err:
             _fw_log("sketchstart.py:322", _fw_err)
             return None
@@ -365,8 +371,70 @@ def _is_flat(obj, sub):
         return False
 
 
+_FRESH_BODIES = set()       # (document, body) made by _body() for a new sketch (pkg432)
+_BEFORE = {}                # document -> its objects before that body was made
+
+
 def discard(doc, name):
-    """Delete a sketch nothing was drawn in (undoable)."""
+    ""
+
+
+    obj = doc.getObject(name)
+    bodies = [p.Name for p in obj.InList if p.TypeId == "PartDesign::Body"] if obj is not None else []
+    _discard_sketch(doc, name)
+    for body in bodies:
+        _drop_fresh_body(doc, body)
+
+
+def _drop_fresh_body(doc, name):
+    key = (doc.Name, name)
+    body = doc.getObject(name)
+    if key not in _FRESH_BODIES or body is None:
+        return
+    if body.Group:
+        _FRESH_BODIES.discard(key)          # something was made in it: a real body now
+        return
+    _FRESH_BODIES.discard(key)
+    keep = sorted(o.Name for o in doc.Objects if o.Name != name and o not in body.OutListRecursive)
+    try:
+        if doc.UndoCount and not getattr(doc, "HasPendingTransaction", False):
+            doc.undo()                      # the newest step made the body: take it back
+            if doc.getObject(name) is None and sorted(o.Name for o in doc.Objects) == keep:
+                _drop_folders(doc)
+                return
+            doc.redo()
+    except Exception as _fw_err:
+        _fw_log("sketchstart.py:body-undo", _fw_err)
+    body = doc.getObject(name)
+    if body is None:
+        _drop_folders(doc)
+        return
+    doc.openTransaction("Delete empty body")
+    try:
+        body.removeObjectsFromDocument()
+        doc.removeObject(name)
+        _drop_folders(doc)
+        doc.commitTransaction()
+    except Exception as error:
+        doc.abortTransaction()
+        App.Console.PrintWarning("FreeCAD: could not delete empty body %s (%s)\n" % (name, error))
+
+
+def _drop_folders(doc):
+    """The tree's own rows made with the body (Solid Bodies, Material: App::FeaturePython, used by
+    nothing) go with it; a document that had no body before shows none of them."""
+    before = _BEFORE.pop(doc.Name, None)
+    if before is None:
+        return
+    for obj in list(doc.Objects):
+        try:
+            if obj.Name not in before and obj.TypeId == "App::FeaturePython" and not obj.InList:
+                doc.removeObject(obj.Name)
+        except Exception as _fw_err:
+            _fw_log("sketchstart.py:drop-folders", _fw_err)
+
+
+def _discard_sketch(doc, name):
     obj = doc.getObject(name)
     if obj is None:
         return
@@ -420,7 +488,11 @@ class _EmptySketches:
 
     def slotDeletedObject(self, obj):
         try:
-            self.fresh.discard((obj.Document.Name, obj.Name))
+            # the Gui side passes a view provider (its Document is a Gui.Document with no Name); the App side the object
+            doc = obj.Document
+            name = getattr(doc, "Name", None) or getattr(getattr(doc, "Document", None), "Name", None)
+            if name:
+                self.fresh.discard((name, obj.Name))
         except Exception as _fw_err:
             _fw_log("sketchstart.py:380", _fw_err)
 
@@ -445,7 +517,7 @@ class _EmptySketches:
         try:
             gdoc = Gui.getDocument(doc_name)
             edit = gdoc.getInEdit() if gdoc is not None else None
-            if edit is not None and edit.Object == sketch:
+            if edit is not None and editobj.of(edit) == sketch:
                 return
         except Exception as _fw_err:
             _fw_log("sketchstart.py:406", _fw_err)
@@ -683,6 +755,15 @@ class PlanePicker:
         self.done = True
         self._cleanup()
         Gui.Control.closeDialog()
+        # pkg432: Cancel / Esc before a plane was picked: a body made only for this sketch goes too
+        try:
+            body = self.body
+            doc = body.Document if body is not None else None
+            if doc is not None:
+                name = body.Name
+                QtCore.QTimer.singleShot(0, lambda: _drop_fresh_body(doc, name))
+        except Exception as _fw_err:
+            _fw_log("sketchstart.py:reject-body", _fw_err)
         return True
 
     def accept(self):

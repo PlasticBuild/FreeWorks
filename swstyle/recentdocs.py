@@ -99,9 +99,49 @@ def folders():
     return out
 
 
+def remove_recent(path):
+    # fh191 (item 119): a document that is no longer there comes off FreeCAD's recent list (File > Open Recent
+    # and Browse Recent Documents), as FreeCAD's own menu does when one of its entries is missing
+    group = App.ParamGet("User parameter:BaseApp/Preferences/RecentFiles")
+    most = group.GetInt("RecentFiles", 4)
+    norm = lambda s: os.path.normcase(os.path.abspath(s)) if s else ""
+    keep, n = [], 0
+    while True:
+        f = group.GetString("MRU%d" % n, "")
+        if not f and n >= most:
+            break
+        if f and norm(f) != norm(path) and f not in keep:
+            keep.append(f)
+        n += 1
+        if n > most + 50:
+            break
+    gone = n - len(keep)
+    for i in range(n):
+        if i < len(keep):
+            group.SetString("MRU%d" % i, keep[i])
+        else:
+            group.RemString("MRU%d" % i)
+    try:
+        # File > Open Recent keeps its own copy and writes it back at exit; it reads the list again when the count
+        # changes (as cleanopen.recent_add)
+        group.SetInt("RecentFiles", most + 1)
+        group.SetInt("RecentFiles", most)
+    except Exception as _fw_err:
+        _fw_log("recentdocs.py:remove_recent", _fw_err)
+    return gone > 0
+
+
 def open_document(path):
     if not os.path.exists(path):
-        QtWidgets.QMessageBox.warning(Gui.getMainWindow(), "Open", "%s\ncould not be found." % path)
+        if path in pinned(PIN_DOCS):
+            QtWidgets.QMessageBox.warning(Gui.getMainWindow(), "Open", "%s\ncould not be found. It may have been "
+                                          "moved, renamed or deleted.\n\nIt stays pinned; unpin it to take it off "
+                                          "the list." % path)
+        else:
+            remove_recent(path)
+            QtWidgets.QMessageBox.warning(Gui.getMainWindow(), "Open", "%s\ncould not be found. It may have been "
+                                          "moved, renamed or deleted, so it was taken off the recent documents "
+                                          "list." % path)
         return False
     try:
         for d in App.listDocuments().values():
@@ -218,6 +258,10 @@ class RecentPanel(QtWidgets.QFrame):
                 icon = QtGui.QIcon(self._with_pin(_thumbnail(path), pin))
             it = QtWidgets.QListWidgetItem(icon, name)
             it.setToolTip(path)
+            if not folders_tab and not os.path.exists(path):
+                # fh191: a document that is not there any more is shown greyed until it is clicked
+                it.setToolTip(path + "\n(not found)")
+                it.setForeground(QtGui.QBrush(QtGui.QColor("#808080")))
             it.setData(Qt.UserRole, path)
             it.setData(Qt.UserRole + 1, pin)
             if folders_tab and pin:

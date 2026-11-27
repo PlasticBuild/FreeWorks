@@ -168,6 +168,17 @@ def install():
             _fw_log("smengine:smoffer", _fw_err)
 
 
+def enabled():
+    """Keep the engine loaded so existing sheet-metal documents can reopen."""
+    from . import paths
+
+    return paths.params().GetBool("SheetMetalEnabled", True)
+
+
+def is_sheet_metal_command(key):
+    return key.startswith("SM_") or key == "WB_SheetMetal"
+
+
 def loaded(name):
     return _state.get(name) is True
 

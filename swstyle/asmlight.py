@@ -462,6 +462,12 @@ def marks_of(obj):
     m = mark_of(obj)
     if m:
         out.append((m, "Lightweight (out of date)" if m == "outofdate" else "Lightweight"))
+    try:        # asmtop-1127 (Menus): Unload Hidden Components
+        from . import asmunload
+        if asmunload.is_unloaded(obj):
+            out.append(("unloaded", "Unloaded"))
+    except Exception as _fw_err:
+        _fw_log("asmlight.py:unloaded", _fw_err)
     return out
 
 
@@ -488,6 +494,9 @@ def decorate(icon, marks):
             icon = speedpak_icon(icon, stale=(m == "speedpak-stale"))
         elif m in ("lightweight", "outofdate"):
             icon = feather_icon(icon, red=(m == "outofdate"))
+        elif m == "unloaded":       # asmtop-1127
+            from . import asmunload
+            icon = asmunload.unloaded_icon(icon)
     return icon
 
 
@@ -511,7 +520,7 @@ def _patch_tree():
 
     def data(self, index, role=Qt.DisplayRole):
         value = data0(self, index, role)
-        if role not in (Qt.DecorationRole, Qt.ToolTipRole) or not index.isValid():
+        if role not in (Qt.DecorationRole, Qt.ToolTipRole) or not index.isValid() or not getattr(self, "_fw_asm", True):
             return value
         try:
             node = self.node(index)

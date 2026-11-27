@@ -238,5 +238,17 @@ def edit(obj):
 
     panel.accept, panel.reject = _accept, _reject
     panel.editing = obj
+    _not_new()      # rgedit-fix01
     Gui.Control.showDialog(panel)
     return True
+
+
+def _not_new():
+    """rgedit-fix01: the page starts with the datum's own values. Its preview datums are objects made just before
+    the page opens, so the last-values helper (pmlast) took the page for a new feature and put the last value
+    typed in that PM over the feature's own (Plane1 at 25 opened at 30, and OK moved it)."""
+    try:
+        from . import pmlast
+        pmlast._created[0] = 0.0
+    except Exception as _fw_err:
+        _fw_log("refedit.py:pmlast", _fw_err)

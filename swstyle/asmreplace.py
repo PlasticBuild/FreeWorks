@@ -146,7 +146,7 @@ class ReplacePanel:
         if doc != self.doc.Name:
             return
         self.doc.Name      # its document closed: this raises here and selguard drops the observer
-        QtCore.QTimer.singleShot(0, lambda: selguard.quiet(lambda: self._pick(self.doc.getObject(obj), sub)))
+        from . import safe_later as _sl; _sl.later(0, lambda: selguard.quiet(lambda: self._pick(self.doc.getObject(obj), sub)), self, "list")
 
     def removeSelection(self, *args):
         pass

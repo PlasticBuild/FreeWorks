@@ -9,6 +9,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -414,7 +415,7 @@ def _still_editing(obj):
     try:
         gdoc = Gui.getDocument(obj.Document.Name)
         edit = gdoc.getInEdit()
-        return edit is not None and edit.Object is obj
+        return edit is not None and editobj.of(edit) is obj
     except Exception:
         return False
 

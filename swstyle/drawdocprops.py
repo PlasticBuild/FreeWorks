@@ -994,7 +994,7 @@ def paint_driven(dim):
     if max(tuple(vo.Color)[:3]) > 0.2:
         return                      # a colour of the user's own (the default is black, or near black by theme)
     try:
-        dim.addProperty("App::PropertyBool", "SWDrivenPainted", "FreeCAD", "drawn in the driven colour")
+        dim.addProperty("App::PropertyBool", "SWDrivenPainted", "FreeCAD", "drawn in the driven color")
         dim.setPropertyStatus("SWDrivenPainted", "Hidden")
         dim.SWDrivenPainted = True
         vo.Color = driven_color()
@@ -1770,7 +1770,8 @@ def _auto_insert(dname, name, tries):
         QtCore.QTimer.singleShot(200, lambda: _auto_insert(dname, name, tries + 1))
         return
     try:
-        auto_insert(view, v)
+        with DA.quiet_view(view):           # one redraw of the view at the end, not one per line
+            auto_insert(view, v)
     except Exception as error:
         App.Console.PrintWarning("FreeCAD: Auto insert: %s\n" % error)
 

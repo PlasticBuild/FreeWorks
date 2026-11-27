@@ -277,7 +277,7 @@ class ViewProviderWeldmentCut:
 
     def onDelete(self, vobj, subelements):
         wetrim.clear(vobj.Object)
-        QtCore.QTimer.singleShot(0, lambda: wetrim._refresh_later(vobj.Object.Document))
+        QtCore.QTimer.singleShot(0, lambda doc=vobj.Object.Document: wetrim._refresh_later(doc))
         return True
 
     def dumps(self):
@@ -422,7 +422,7 @@ class Panel:
         ref = wetrim.ref_of(obj)
         if ref and ref not in self.scope:
             self.scope.append(ref)
-            QtCore.QTimer.singleShot(0, self._changed)
+            from . import safe_later as _sl; _sl.later(0, self._changed, self, "error")
 
     def getStandardButtons(self):
         return QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel

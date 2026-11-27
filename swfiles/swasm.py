@@ -308,11 +308,11 @@ class Reader:
 def job_asm_tree(s, args):
     path = os.path.abspath(args[0])
     if s.is_open(path):
-        raise RuntimeError("%s is open in SolidWorks; it was not read" % os.path.basename(path))
+        raise RuntimeError("%s is open in the other CAD program; it was not read" % os.path.basename(path))
     err, warn = byref_int(), byref_int()
     model = s.sw.OpenDoc6(path, 2, 1 | 2, "", err, warn)       # swDocASSEMBLY, silent + read-only
     if model is None:
-        raise RuntimeError("SolidWorks could not open %s (error %s)" % (os.path.basename(path), err.value))
+        raise RuntimeError("The other CAD program could not open %s (error %s)" % (os.path.basename(path), err.value))
     s.opened.append(model.GetTitle)
     try:
         _try(lambda: model.ResolveAllLightWeightComponents(False))
@@ -333,11 +333,11 @@ def job_asm_edit(s, args):
     path = os.path.abspath(args[0])
     edits = json.load(open(args[1], encoding="utf-8"))
     if s.is_open(path):
-        raise RuntimeError("%s is open in SolidWorks" % os.path.basename(path))
+        raise RuntimeError("%s is open in the other CAD program" % os.path.basename(path))
     err, warn = byref_int(), byref_int()
     model = s.sw.OpenDoc6(path, 2, 1, "", err, warn)           # silent, writable
     if model is None:
-        raise RuntimeError("SolidWorks could not open %s (error %s)" % (os.path.basename(path), err.value))
+        raise RuntimeError("The other CAD program could not open %s (error %s)" % (os.path.basename(path), err.value))
     s.opened.append(model.GetTitle)
     done = []
     try:
@@ -489,10 +489,10 @@ class AsmMater(H.Mater):
         kind = m["kind"]
         mtype = self.s.c(ADV[kind])
         if mtype is None:
-            return "this SolidWorks has no %s mate" % kind
+            return "this program has no %s mate" % kind
         ents = self._entities(m["refs"])
         if ents is None:
-            return "its faces or edges were not found in SolidWorks"
+            return "its faces or edges were not found in the model"
         tries = []
         why = self._create_mate_data(m, mtype, ents, tries)
         if why is None:
@@ -500,7 +500,7 @@ class AsmMater(H.Mater):
         why2 = self._add_mate5(m, mtype, ents, tries)
         if why2 is None:
             return None
-        return "SolidWorks refused it (%s)" % "; ".join(tries)
+        return "It was refused (%s)" % "; ".join(tries)
 
     def _create_mate_data(self, m, mtype, ents, tries):
         kind, v = m["kind"], m.get("values", {})
@@ -634,7 +634,7 @@ class Writer:
         template = s.sw.GetUserPreferenceStringValue(s.c("swDefaultTemplateAssembly", 9))
         model = s.sw.NewDocument(template, 0, 0, 0)
         if model is None:
-            raise RuntimeError("SolidWorks could not make a new assembly (template %r)" % template)
+            raise RuntimeError("The other CAD program could not make a new assembly (template %r)" % template)
         s.opened.append(model.GetTitle)
         self.model = model
         H._units_mm(s, model)
@@ -658,7 +658,7 @@ class Writer:
                         loaded.append(doc)
                 c = model.AddComponent5(comp["file"], 0, "", False, "", 0.0, 0.0, 0.0)
                 if c is None:
-                    raise RuntimeError("SolidWorks could not add %s" % os.path.basename(comp["file"]))
+                    raise RuntimeError("The other CAD program could not add %s" % os.path.basename(comp["file"]))
                 c.Transform2 = H.transform(s, comp["matrix"])
                 comps[i] = c
                 self.report["components"].append(short(c.Name2))
@@ -677,7 +677,7 @@ class Writer:
                 self.report["components"].append(short(c.Name2))
             if loose:
                 self.report.setdefault("notes", []).append(
-                    "%d pattern instances were placed as fixed components, since SolidWorks did not make the pattern" % len(loose))
+                    "%d pattern instances were placed as fixed components, since the pattern was not made" % len(loose))
             real = [i for i, c in enumerate(comps) if c is not None]
             where = {i: k for k, i in enumerate(real)}
             mater = AsmMater(s, model, [comps[i] for i in real], [spec["components"][i]["matrix"] for i in real])
@@ -688,7 +688,7 @@ class Writer:
                 if m.get("suppressed"):
                     row["why"] = "suppressed in FreeCAD, so it was left out"
                 elif any(r is not None and r["comp"] not in where for r in m["refs"]):
-                    row["why"] = "it mates a component SolidWorks could not place"
+                    row["why"] = "it mates a component that could not be placed"
                 else:
                     mm = dict(m, refs=[dict(r, comp=where[r["comp"]]) if r else r for r in m["refs"]])
                     try:
@@ -770,7 +770,7 @@ class Writer:
         fm = self.model.FeatureManager
         names = {"linear": "swFmLocalLPattern", "circular": "swFmLocalCirPattern", "mirror": "swFmMirrorComponent"}
         if p["kind"] not in names:
-            return "%s patterns are not made in SolidWorks yet" % p["kind"]
+            return "%s patterns are not made in the saved file yet" % p["kind"]
         tries = []
         b = self._builder()
         if p["kind"] == "linear":
@@ -785,7 +785,7 @@ class Writer:
             for rev in (False, True):
                 d = _try(lambda: fm.CreateDefinition(self.s.c(names[p["kind"]])))
                 if d is None:
-                    return "SolidWorks gave no %s definition" % names[p["kind"]]
+                    return "No %s definition came back" % names[p["kind"]]
                 self.model.ClearSelection2(True)
                 select(0, False)
                 ent = _try(lambda: value(self.model.SelectionManager.GetSelectedObject6(1, -1)))

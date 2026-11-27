@@ -199,7 +199,7 @@ class Arrows(QtWidgets.QWidget):
                     text = str(index.data(Qt.DisplayRole) or "")
                     out[r.center().y()] = r.left() + scaled(24) + fm.horizontalAdvance(text) + scaled(6)
         except Exception as _fw_err:
-            App.Console.PrintLog("FreeWorks reference arrows: %s\n" % _fw_err)
+            App.Console.PrintLog("FreeCAD reference arrows: %s\n" % _fw_err)     # treelog-1126: "FreeCAD:" prefix
         return out
 
     def paintEvent(self, event):

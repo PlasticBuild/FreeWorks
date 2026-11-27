@@ -373,8 +373,13 @@ def new_part(asm):
     """The command: the part and its component now, the plane or face next."""
     if STATE["pick"] is not None:
         STATE["pick"].stop()
-    body, link = make_part(asm)
-    body = external(asm, body, link)
+    doc = asm.Document
+    doc.openTransaction("New Part")
+    try:
+        body, link = make_part(asm)
+        body = external(asm, body, link)
+    finally:
+        doc.commitTransaction()
     if Gui is not None:
         STATE["pick"] = _Pick(asm, body, link)
     return body, link

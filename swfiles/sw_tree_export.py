@@ -67,7 +67,7 @@ class Exporter:
         warnings = VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
         model = self.sw.OpenDoc6(path, SW_DOC_PART, SW_OPEN_SILENT | SW_OPEN_READONLY, "", errors, warnings)
         if model is None:
-            raise RuntimeError("SolidWorks could not open %s (error %s)" % (path, errors.value))
+            raise RuntimeError("The other CAD program could not open %s (error %s)" % (path, errors.value))
         return model
 
     # ------------------------------------------------------------ sketches
@@ -605,7 +605,7 @@ class Exporter:
         title = os.path.basename(path)
         already = self.sw.GetOpenDocumentByName(path)
         if already is not None:
-            raise RuntimeError("%s is already open in SolidWorks; not touching it" % title)
+            raise RuntimeError("%s is already open in the other CAD program; not touching it" % title)
         model = self.open(path)
         try:
             feats = []

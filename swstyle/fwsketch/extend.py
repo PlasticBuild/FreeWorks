@@ -121,6 +121,27 @@ def _preview_points(sketch, geo, ext):
             for k in range(25)]
 
 
+def _end_under(sketch):
+    ""
+
+    from .toolbase import preselected_subs
+    subs = preselected_subs(sketch)
+    sub = subs[0] if subs else ""
+    if not sub.startswith("Vertex"):
+        return None
+    try:
+        geo, pos = sketch.getGeoVertexIndex(int(sub[6:]) - 1)
+    except Exception:
+        return None
+    if pos not in (1, 2) or geo < 0:
+        return None
+    for c in sketch.Constraints:            # a corner shared with another curve is not a free end
+        if c.Type in ("Coincident", "Tangent") and ((c.First == geo and c.FirstPos == pos) or
+                                                     (c.Second == geo and c.SecondPos == pos)):
+            return None
+    return geo
+
+
 class ExtendTool(SketchTool):
     def __init__(self, gdoc, sketch):
         super().__init__(gdoc, sketch)
@@ -155,6 +176,8 @@ class ExtendTool(SketchTool):
         d = self.snap(p, px, allow_point=False, allow_edge=False, allow_angle=False, allow_grid=False)
         sk = self.sketch
         geo = T.hovered_edge(sk)
+        if geo is None:
+            geo = _end_under(sk)
         ok = geo is not None and 0 <= geo < sk.GeometryCount and \
             sk.Geometry[geo].TypeId in ("Part::GeomLineSegment", "Part::GeomArcOfCircle")
         if ok and not T.near_curve(sk.Geometry[geo], d.position, 8.0 * px):

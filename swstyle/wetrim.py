@@ -962,7 +962,7 @@ class Panel:
             except Exception as _fw_err:
                 _fw_log("wetrim.py:889", _fw_err)
             return
-        QtCore.QTimer.singleShot(0, lambda: self._picked(doc, name, sub))
+        from . import safe_later as _sl; _sl.later(0, lambda: self._picked(doc, name, sub), self, "error")
 
     def _picked(self, doc_name, name, sub):
         # The panel can close between addSelection and this queued callback. Recheck before touching
@@ -1153,7 +1153,7 @@ class _NeedMembersPage:
             QtCore.QTimer.singleShot(200, lambda: Gui.runCommand(name, 0))
 
     def getStandardButtons(self):
-        return int(QtWidgets.QDialogButtonBox.Cancel)
+        return QtWidgets.QDialogButtonBox.Cancel    # sketchfirst-1126
 
     def reject(self):
         Gui.Control.closeDialog()

@@ -221,6 +221,13 @@ def finish():
         return          # the open failed
     if not s.opening():
         return          # a new document, not an open
+    if not s.assembly:
+        # asmpkg372: a part open: no window, no message, nothing to wait for (the profile had 0.4 s here,
+        # the processEvents below drawing the part inside this call); the time is kept for the checks only
+        end = time.time()
+        last.clear()
+        last.update(name=s.label, total=end - s.t0, stages={}, files=0, objects=s.objects, assembly=False, window=False)
+        return
     s.go(2)
     try:
         from PySide import QtWidgets

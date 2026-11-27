@@ -142,10 +142,93 @@ class AppMenu:
         return menu
 
 
+
+# Tools, Freeshape, Sketch Ink, Surfaces, Sheet Metal, Structure System, Weldments, Mold Tools, ... and the Addon
+# Manager workbenches' own tabs) start hidden; the Add-Ins tab has a "More Tabs" button that lists them with a tick,
+
+TABS_KEY = "AI_MoreTabs"
+TABS_COMMAND = "SWStyle_AddInMoreTabs"
+TABS_TIP = "Turns the extra CommandManager tabs on and off (Sheet Metal, Weldments, Surfaces, Mold Tools, Freeshape, " \
+           "the Addon Manager workbenches...). The choice is kept."
+
+
+def optional_tabs():
+    ""
+    from . import cmtabs
+    try:
+        every = [t[0] for t in cmtabs.all_tabs()]
+    except Exception as error:
+        _fw_log("addinapps.py:all_tabs", error)
+        return []
+    optional = list(cmtabs.DEFAULT_HIDDEN)
+    try:
+        from . import otherwbtabs
+        optional += [t for t in otherwbtabs.others().values() if t not in optional]
+    except Exception as error:
+        _fw_log("addinapps.py:other tabs", error)
+    try:
+        from . import addintabs
+        have_wb = Gui.listWorkbenches()
+        missing = {t for t in every if addintabs.tab_missing(t, have_wb)}
+    except Exception:
+        missing = set()
+    off = set(cmtabs.hidden())
+    return [(t, t not in off) for t in every if t in optional and t not in missing and t != "3D Slicer"]
+
+
+class MoreTabs:
+    """The Add-Ins tab's "More Tabs" button: a menu of the extra tabs, ticked when shown."""
+
+    def GetResources(self):
+        return {"MenuText": "More Tabs", "ToolTip": TABS_TIP, "Pixmap": "freecad"}
+
+    def IsActive(self):
+        return True
+
+    def Activated(self):
+        menu = self.build()
+        menu.popup(QtGui.QCursor.pos())
+
+    def build(self):
+        from . import cmtabs
+        menu = QtWidgets.QMenu(Gui.getMainWindow())
+        menu.setObjectName("FWAddInMoreTabs")
+        menu.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        for title, shown in optional_tabs():
+            act = menu.addAction(title)
+            act.setObjectName("FWAddInTab_" + "".join(ch for ch in title if ch.isalnum()))
+            act.setCheckable(True)
+            act.setChecked(shown)
+            act.setToolTip(("Hides" if shown else "Shows") + " the %s tab." % title)
+            act.toggled.connect(lambda on, t=title: QtCore.QTimer.singleShot(0, lambda: set_tab(t, on)))
+        if not menu.isEmpty():
+            menu.addSeparator()
+        try:
+            menu.addAction("Customize Tabs...", lambda: cmtabs.TabsDialog().exec_())
+        except Exception as error:
+            _fw_log("addinapps.py:customize tabs", error)
+        return menu
+
+
+def set_tab(title, on):
+    """Shows or hides one CommandManager tab and keeps the choice (right-click > Tabs does the same)."""
+    from . import cmtabs
+    off = [t for t in cmtabs.hidden() if t != title]
+    if not on:
+        off.append(title)
+    cmtabs.set_hidden(off)
+    cmtabs.apply()
+
+
 def register():
     """Our three commands and catalog keys (once)."""
     from . import catalog
     have = set(Gui.listCommands()) if Gui is not None else set()
+    if TABS_COMMAND not in have:
+        Gui.addCommand(TABS_COMMAND, MoreTabs())
+    if TABS_KEY not in catalog.BY_KEY:
+        catalog.BY_KEY[TABS_KEY] = catalog.c(TABS_KEY, "More Tabs", (TABS_COMMAND,), "FLYOUT_ADD_INS", TABS_TIP,
+                                             caption="More\nTabs")
     for app, key in KEYS.items():
         name = COMMAND + app.replace(" ", "")
         if name not in have:
@@ -159,7 +242,7 @@ def register():
 def extend(layout):
     """The Add-Ins tab's layout with the apps that are on after it. Safe to call again on its own result."""
     layout = list(layout)
-    mine = set(KEYS.values())
+    mine = set(KEYS.values()) | {TABS_KEY}
     layout = [i for i in layout if not (len(i) > 1 and i[1] in mine)]
     while layout and layout[-1] == SEP:
         layout.pop()
@@ -167,4 +250,5 @@ def extend(layout):
     add = [("large", KEYS[app], None) for app in KEYS if _shown(app)]
     if add:
         layout += [SEP] + add
+    layout += [SEP, ("large", TABS_KEY, None)]          # addintabs2-1127: the extra tabs, on and off
     return tuple(layout)

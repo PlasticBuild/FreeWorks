@@ -338,8 +338,8 @@ class ViewProviderBom:
         _drop_overlay(vobj.Object)
         d = getattr(vobj.Object, "Data", None)
         if d is not None:
-            name, doc = d.Name, d.Document
-            QtCore.QTimer.singleShot(0, lambda: doc.getObject(name) and doc.removeObject(name))
+            name, docname = d.Name, d.Document.Name
+            QtCore.QTimer.singleShot(0, lambda: (App.listDocuments().get(docname) is not None and App.listDocuments()[docname].getObject(name) is not None) and App.listDocuments()[docname].removeObject(name))
         return True
 
     def dumps(self):
@@ -725,7 +725,7 @@ def _restore(name):
     if d is None:
         return
     if any(is_bom(o) for o in d.Objects):
-        QtCore.QTimer.singleShot(300, lambda: [overlay(o) for o in d.Objects if is_bom(o)])
+        QtCore.QTimer.singleShot(300, lambda: [overlay(o) for o in getattr(App.listDocuments().get(name), "Objects", []) if is_bom(o)])
 
 
 _OBS = None

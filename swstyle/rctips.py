@@ -95,8 +95,8 @@ TIPS = {
     "Hide Components": "Hides the picked components.",
     "Show Components": "Shows the picked components again.",
     "Isolate": "Shows only the picked items until you exit Isolate.",
-    "Appearance...": "Changes the colour and look of the item.",
-    "Appearances": "Changes the colour and look of the item.",
+    "Appearance...": "Changes the color and look of the item.",
+    "Appearances": "Changes the color and look of the item.",
     "Copy Appearance": "Copies the item's look to paste on another.",
     "Remove Appearance": "Takes the item's own look off.",
     "Face Properties...": "The face's name and appearance.",
@@ -173,7 +173,7 @@ TIPS = {
     "Alignment": "Lines the view up with another view, or breaks the line-up.",
     "Tangent Edge": "Shows tangent edges visible, with a line style, or not at all.",
     "Hide/Show Edges": "Hides or shows the picked edges of the view.",
-    "Line Color": "Changes the colour of the picked edges.",
+    "Line Color": "Changes the color of the picked edges.",
     "Line Thickness": "Changes the thickness of the picked edges.",
     "Line Style": "Changes the line style of the picked edges.",
     "Title Block Fields...": "Fills in the title block of the sheet.",
@@ -218,8 +218,8 @@ TIPS = {
     "Convert View to Sketch": "Copies the view's edges into a sketch.",
     "Show/Hide": "Shows or hides the item.",
     "Offset Text": "Puts the dimension text off to the side, with a leader.",
-    "Display Options": "How the dimension is shown: as radius, diameter, centred...",
-    "Center Dimension": "Keeps the dimension text centred between its extension lines.",
+    "Display Options": "How the dimension is shown: as radius, diameter, centered...",
+    "Center Dimension": "Keeps the dimension text centered between its extension lines.",
     "Reverse Direction": "Turns the direction the other way.",
     "OK": "Accepts the PropertyManager and closes it.",
     "Cancel": "Closes the PropertyManager without the changes.",
@@ -260,7 +260,7 @@ TIPS = {
     "Keep trimmed entities as construction geometry": "Turns trimmed pieces into construction geometry instead of deleting them.",
     "Ignore trimming of construction geometry": "Leaves construction geometry out of trimming.",
     "Display Mesh": "Shows the mesh of the surface.",
-    "Display Curvature": "Colours the surface by its curvature.",
+    "Display Curvature": "Colors the surface by its curvature.",
     "Default": "Uses the default setting.",
     "Check Body/Faces": "Checks the geometry for errors.",
     "Table Header": "Puts the header at the top or bottom of the table.",
@@ -385,7 +385,20 @@ def describe(action, menu=None):
         tip = _command_tip(name)
         if tip:
             return tip
-    tip = _catalog().get(text.rstrip("."))
+    catkey = action.property("swCatKey")
+    if isinstance(catkey, str) and catkey:
+        # tooltips-1126: a menu bar row from a catalog entry says that entry's line; the label lookup below
+        # would find the first entry with the same label (Insert > Cut > Revolve said "Freeshape Revolve")
+        try:
+            from . import catalog
+            entry = catalog.BY_KEY.get(catkey)
+            tip = getattr(entry, "tip", None) if entry is not None else None
+        except Exception as _fw_err:
+            _fw_log("rctips.py:catkey", _fw_err)
+            tip = None
+        if tip:
+            return tip
+    tip = None if isinstance(catkey, str) and catkey else _catalog().get(text.rstrip("."))
     if tip:
         return tip
     if text.rstrip(".") in TIPS:

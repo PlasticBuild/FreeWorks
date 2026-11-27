@@ -70,7 +70,7 @@ def follow_variables(dim):
         return False
     A.set_callout_format(dim, spec)
     out = A.expand_callout(spec, vals)
-    dim.FormatSpec = out
+    A.set_text(dim, out)
     if "SWCalloutAuto" in dim.PropertiesList:
         dim.SWCalloutAuto = out
     return True

@@ -224,7 +224,11 @@ def _load_contexts(part_doc):
     opened_before = set(BEFORE.pop(part_doc.Name, ()) or ())
     here = os.path.dirname(part_doc.FileName)
     files = []
-    for f in context_files(part_doc):
+    # the assemblies the references were made in (their contexts): a reference binds the other part's own
+    # file now (asmextref.reference_binder), so the part's links name that part, not the assembly; FreeCAD
+    # loads that part for the reference itself. Older references (made through the assembly) name it in the links.
+    contexts = [getattr(b, "FwContext", "") for b in bs if getattr(b, "FwContext", "")]
+    for f in (contexts or context_files(part_doc)):
         path = f if os.path.isabs(f) else os.path.normpath(os.path.join(here, f))
         if path not in files:
             files.append(path)
@@ -610,6 +614,15 @@ def _patch_close_prompt():
     closeprompt._fw_asm_patched = True
 
 
+_FILE = {}      # document name -> the file it was opened from or last saved to (Save As: its old name)
+
+
+def _note_file(name):
+    d = App.listDocuments().get(name)
+    if d is not None and d.FileName:
+        _FILE.setdefault(name, d.FileName)
+
+
 class _Watch:
     """FreeCAD 1.1 gives Python observers no restore signals: a document created with a file
     name, once the open returns (the next event loop turn), has been opened."""
@@ -621,6 +634,7 @@ class _Watch:
         except Exception as _fw_err:
             _fw_log("asmrefopts.py:613", _fw_err)
         QtCore.QTimer.singleShot(0, lambda: _after(name))
+        QtCore.QTimer.singleShot(0, lambda: _note_file(name))
 
     def slotStartSaveDocument(self, doc, path):
         if is_read_only(doc):
@@ -630,6 +644,9 @@ class _Watch:
     def slotFinishSaveDocument(self, doc, path):
         try:
             from . import asmextref
+            new = path or doc.FileName
+            asmextref.saved_as(_FILE.get(doc.Name, ""), new)
+            _FILE[doc.Name] = new
             asmextref.note_contexts(doc)      # Save As: the parts' in-context references name the new file
         except Exception as _fw_err:
             _fw_log("asmrefopts.py:finish save", _fw_err)
@@ -637,6 +654,7 @@ class _Watch:
     def slotDeletedDocument(self, doc):
         READ_ONLY.discard(doc.Name)
         BEFORE.pop(doc.Name, None)
+        _FILE.pop(doc.Name, None)
 
 
 LAST = []

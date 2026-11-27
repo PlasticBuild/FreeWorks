@@ -83,6 +83,10 @@ MEAN_CORRECTION = ("None", "Goodman", "Gerber", "Soderberg")
 LOADING = ("Fully Reversed (LR=-1)", "Zero Based (LR=0)", "Loading Ratio")
 
 NL = "FwNonlinear"
+SOFT_TYPES = ("static", "check", None, "", "frequency")
+INERTIAL = "FwInertialRelief"  # Static "Use inertial relief": the part, unheld, balanced by its own inertia
+SOFT = "FwSoftSpring"        # Static / Frequency "Use soft spring to stabilize the model": weak springs to ground
+INPLANE = "FwInplane"          # a Frequency study's "Use inplane effect": its loads stiffen or soften the part
 NL_MODELS = ("Linear Elastic Isotropic", "Plasticity - von Mises")
 NL_HARDENING = ("Isotropic", "Kinematic")
 NL_DEFAULTS = {"large": True, "end": 1.0, "increment": 0.05, "model": NL_MODELS[0], "tangent": 0.0,
@@ -374,7 +378,10 @@ def rigid_modes(a, text=None):
     listed = {int(m.group(1)) for m in re.finditer(r"^\s*(\d+)\s+\S+\s+\S+\s+\S+\s+\S+\s*$", head, re.M)}
     tail = tail.split("E F F E C T I V E", 1)[0]
     parts = [int(m.group(1)) for m in re.finditer(r"^\s*(\d+)(?:\s+[-+]?\d\S*){6}\s*$", tail, re.M)]
-    return [n for n in parts if n not in listed]
+    # rigid-body modes come first (eigenvalue 0): a mode missing above the listed ones is above the Upper bound
+    # frequency, not a rigid-body mode (those read as fake 0 Hz rows)
+    low = min(listed) if listed else None
+    return [n for n in parts if n not in listed and (low is None or n < low)]
 
 
 def mass_participation(a):
@@ -1405,12 +1412,18 @@ def set_properties(a, **v):
     s = addintabs._solver(a)
     if s is None:
         raise simpms.SetupError("The study has no solver.")
+    if "soft" in v and k in SOFT_TYPES:
+        _set(a, SOFT, bool(v["soft"]), "App::PropertyBool", "Options: Use soft spring to stabilize the model")
+    if "inertial" in v and k in SOFT_TYPES and k != "frequency":
+        _set(a, INERTIAL, bool(v["inertial"]), "App::PropertyBool", "Options: Use inertial relief")
     if k == "frequency":
         if int(v.get("count", 1)) < 1:
             raise simpms.SetupError("Ask for at least one frequency.")
         s.EigenmodesCount = int(v.get("count", 5))
         upper = v.get("upper")
         s.EigenmodeHighLimit = float(upper) if upper else 1e6
+        if "inplane" in v:
+            _set(a, INPLANE, bool(v["inplane"]), "App::PropertyBool", "Frequency Options: Use inplane effect")
     elif k == "buckling":
         if int(v.get("count", 1)) < 1:
             raise simpms.SetupError("Ask for at least one buckling mode.")
@@ -1453,13 +1466,16 @@ def properties(a):
             return default
     if k == "frequency":
         hi = num("EigenmodeHighLimit", 1e6)
-        return {"count": int(num("EigenmodesCount", 5)), "upper": hi if hi < 1e6 else None}
+        return {"count": int(num("EigenmodesCount", 5)), "upper": hi if hi < 1e6 else None,
+                "inplane": bool(getattr(a, INPLANE, False)), "soft": bool(getattr(a, SOFT, False))}
     if k == "buckling":
         return {"count": int(num("BucklingFactors", 1))}
     if k == "thermomech":
         return {"steady": bool(getattr(s, "ThermoMechSteadyState", True)),
                 "total": num("TimePeriod", num("TimeEnd", 100.0)),
                 "increment": num("TimeInitialIncrement", num("TimeInitialStep", 10.0))}
+    if k in SOFT_TYPES:
+        return {"soft": bool(getattr(a, SOFT, False)), "inertial": bool(getattr(a, INERTIAL, False))}
     return {}
 
 
@@ -2020,6 +2036,9 @@ if Gui is not None:
 
     def open_properties(a):
         k = study_type(a)
+        from . import simstudy
+        if k in ("frequency", "buckling") and hasattr(simstudy, "open_modal_properties"):
+            return simstudy.open_modal_properties(a)
         if k in ("frequency", "buckling", "thermomech", "fatigue", "nonlinear"):
             return _show(PropertiesPM(a))
         if k == "drop":
@@ -2031,6 +2050,8 @@ if Gui is not None:
             from . import simpressure
             return simpressure.open_setup(a)
         from . import simstudy
+        if k in ("static", "check", None, "") and hasattr(simstudy, "open_static_properties"):
+            return simstudy.open_static_properties(a)
         return _show(simstudy.PropsPanel(a))
 
     # ------------------------------------------------------------------- Thermal Loads

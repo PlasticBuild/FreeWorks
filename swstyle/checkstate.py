@@ -39,7 +39,13 @@ _LAZY = {"SWStyle_AutomaticSolve": ("toolsextras", "automatic_solve", None),
          "FreeWorks_PenTouch": ("pentools", "setting", "PenTouch"),
          "FreeWorks_PenAutoShape": ("pentools", "setting", "PenAutoShape"),
          "FreeWorks_PenAutoEntities": ("pentools", "setting", "PenAutoEntities"),
-         "FreeWorks_PenAutoSketchEntities": ("pentools", "setting", "PenAutoSketchEntities")}
+         "FreeWorks_PenAutoSketchEntities": ("pentools", "setting", "PenAutoSketchEntities"),
+         # viewrows-1126: View/display pkg153-157 toggles (menu bar rows, Hide/Show flyout)
+         "SWStyle_ViewDecals": ("decalpm", "decals_shown", None),
+         "SWStyle_ViewLiveSectionPlanes": ("liveplane", "planes_shown", None),
+         "SWStyle_ComponentColorHLR": ("hlv", "component_colour", None),
+         "SWStyle_OptimizeZoomPanRotate": ("dynlod", "optimized", None),
+         "SWStyle_RealViewPlusGraphics": ("viewsettings", "realview_plus_on", None)}
 
 
 def _lazy(name):

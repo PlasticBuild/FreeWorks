@@ -240,9 +240,27 @@ KEYS = (
     ("Sketcher_Dimension", ""),
     ("Assembly_CreateJointDistance", ""),
     ("Assembly_CreateAssembly", ""),
+
+    # (C, H, I, L, N, T, Q, F, G, R, S, W, X, Z, E, V: checked in every mode), so FreeCAD's key never ran its
+    # command, yet its menu row and tip still showed it. They are taken off; each command stays in its menu and
+    # toolbar, and Customize > Keyboard can give it a free key. Their own two-key sequences that start with one
+
+    ("Sketcher_ConstrainCoincidentUnified", ""), ("Sketcher_ConstrainHorizontal", ""),
+    ("Sketcher_ConstrainDistanceX", ""), ("Sketcher_ConstrainDistanceY", ""),
+    ("Sketcher_ConstrainPerpendicular", ""), ("Sketcher_ConstrainTangent", ""),
+    ("Sketcher_ViewSketch", ""), ("Sketcher_ViewSection", ""),
+    ("Assembly_CreateJointFixed", ""), ("Assembly_CreateJointRevolute", ""), ("Assembly_CreateJointCylindrical", ""),
+    ("Assembly_CreateJointSlider", ""), ("Assembly_CreateJointParallel", ""), ("Assembly_CreateJointAngle", ""),
+    ("Assembly_CreateJointRackPinion", ""), ("Assembly_CreateJointScrew", ""), ("Assembly_CreateJointGears", ""),
+    ("Assembly_CreateJointBelt", ""), ("Assembly_ToggleGrounded", ""), ("Assembly_CreateSimulation", ""),
+    ("Assembly_CreateView", ""), ("Assembly_InsertLink", ""), ("Assembly_SolveAssembly", ""),
+    ("FEM_Analysis", ""), ("FEM_SolverCalculiX", ""), ("FEM_SolverControl", ""), ("FEM_SolverRun", ""),
+    ("FEM_SolverElmer", ""), ("FEM_SolverMystran", ""), ("FEM_SolverZ88", ""),
+    ("FEM_ResultsPurge", ""), ("FEM_ResultShow", ""), ("FEM_PostFilterGlyph", ""),
     # Ctrl+Shift+Tab shows the hidden bodies in the 3D view (swkeys.HoverKeys)
     ("Std_ActivatePrevWindow", ""),
     ("SWStyle_BrowseOpenDocuments", "Ctrl+Tab"),
+    ("SWStyle_SaveAs", "Ctrl+Shift+S"),
     ("SWStyle_Save", "Ctrl+S"),                         # swsave.py: a new drawing's first Save is Save As
     ("Std_Save", ""),
     ("Std_ActivateNextWindow", ""),
@@ -446,6 +464,20 @@ class ShortcutBar(QtWidgets.QMenu):
         if self._search_first:
             QtCore.QTimer.singleShot(0, lambda: self.search.setFocus(Qt.PopupFocusReason))
 
+    def mousePressEvent(self, e):
+        # sbarmenu-1127: a popup gets no ContextMenu event, so the right press opens the menu here
+        if e.button() == Qt.RightButton:
+            e.accept()
+            self._customize_menu(None)
+            return
+        super().mousePressEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.RightButton:      # sbarmenu-1127: the right release must not close the bar
+            e.accept()
+            return
+        super().mouseReleaseEvent(e)
+
     def _customize_menu(self, pos):
         ""
         menu = QtWidgets.QMenu(self)
@@ -463,7 +495,9 @@ class ShortcutBar(QtWidgets.QMenu):
             except Exception as error:
                 App.Console.PrintLog("FreeCAD: Customize from the shortcut bar: %s\n" % error)
         act.triggered.connect(customize)
-        menu.exec_(self.sender().mapToGlobal(pos) if self.sender() is not None else QtGui.QCursor.pos())
+        menu.exec_(self.sender().mapToGlobal(pos) if pos is not None and self.sender() is not None
+                   else QtGui.QCursor.pos())       # sbarmenu-1127
+        menu.deleteLater()      # sbarmenu-1127-v2: one menu per right-click, freed after it closes
 
     def _entry(self, key):
         from . import contextbar
@@ -482,12 +516,22 @@ class ShortcutBar(QtWidgets.QMenu):
             return None
         binding = self.shell.binding(key)
         cmd = binding.cmd
+        run = lambda shell=self.shell, key=key: contextbar.run_key(shell, key)
         if cmd.natives:
             enabled = contextbar.active_native(cmd) is not None
+            if not enabled and App.ActiveDocument is not None:
+                # sbarlive-1126: no dead button on the bar. A command that cannot act yet, and that the ribbon lets
+                # you click (it opens the page that says what it needs, notready-1126), does the same here.
+                try:
+                    binding.resolve()
+                    binding.update_state()
+                    if binding.enabled:
+                        enabled, run = True, binding.run
+                except Exception as _fw_err:
+                    _fw_log("keys.py:sbarlive", _fw_err)
         else:
             enabled = bool(cmd.call and self.shell.special_enabled(cmd.call))
-        return contextbar.Entry(key, cmd.label, binding.icon(), contextbar._tip(cmd.label, cmd.tip or ""),
-                                lambda shell=self.shell, key=key: contextbar.run_key(shell, key)), enabled
+        return contextbar.Entry(key, cmd.label, binding.icon(), contextbar._tip(cmd.label, cmd.tip or ""), run), enabled
 
     def _cell(self, spec, parent):
         """(widget, main button, flyout keys) for one entry, or None when nothing backs it."""
@@ -844,6 +888,33 @@ def _view_direction():
         return None
 
 
+def _snap_axis(v, skip=None):
+    """The global axis (+-X, +-Y, +-Z) nearest v, leaving out skip's axis."""
+    best = None
+    for a in (App.Vector(1, 0, 0), App.Vector(0, 1, 0), App.Vector(0, 0, 1)):
+        if skip is not None and abs(a.dot(skip)) > 0.5:
+            continue
+        d = v.dot(a)
+        if best is None or abs(d) > abs(best[0]):
+            best = (d, a * (1 if d >= 0 else -1))
+    return best[1]
+
+
+def _nearest_axes_view():
+    """Turns the view to look along the global axis nearest its direction, with up along the global axis
+    nearest its up (Normal To with nothing picked). False when there is no 3D view."""
+    try:
+        view = Gui.ActiveDocument.ActiveView
+        rot = App.Rotation(*view.getCameraOrientation().Q)
+    except Exception:
+        return False
+    direction = rot.multVec(App.Vector(0, 0, -1))
+    up = rot.multVec(App.Vector(0, 1, 0))
+    d = _snap_axis(direction)
+    u = _snap_axis(up, skip=d)
+    return look_along(d, u)
+
+
 def look_along(direction, up):
     """Turns the camera about its focal point to look along direction with up pointing up."""
     from pivy import coin
@@ -915,6 +986,12 @@ class NormalToCommand(_Command):
                 return
             except Exception as _fw_err:
                 _fw_log("keys.py:841", _fw_err)
+        if first is None and not Gui.Selection.getSelectionEx():
+
+
+            if _nearest_axes_view():
+                QtCore.QTimer.singleShot(400, lambda: _remember_normal(key))
+                return
         # FreeCAD calls Align to Selection active with nothing picked, where it does nothing: inside
 
         names = ("Std_AlignToSelection", "Sketcher_ViewSketch")
@@ -1154,6 +1231,14 @@ def drop_group_copies(window=None):
     action. Returns the names it cleared."""
     window = window or Gui.getMainWindow()
     owner = {QtGui.QKeySequence(key).toString(): name for name, key in KEYS if key}
+    try:
+        from . import customizedlg      # Customize > Keyboard's keys win over the defaults (rcmenus 11-26)
+        for name, key in customizedlg.key_overrides().items():
+            owner = {k: n for k, n in owner.items() if n != name}
+            if key:
+                owner[QtGui.QKeySequence(key).toString()] = name
+    except Exception as _fw_err:
+        _fw_log("keys.py:drop-overrides", _fw_err)
     have = set(Gui.listCommands())
     cleared = []
     for action in window.findChildren(QtGui.QAction):

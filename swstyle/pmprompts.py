@@ -58,9 +58,9 @@ PAGES = {
     "Dome": "Pick the face to dome and set its height",
     "Hole Specification": "Set the hole type here, then place it on the Positions tab",
     # pkg244: more pages (Engine Cover 2026 PC shots: the status bar was empty on these)
-    "Appearance": "Pick the faces, features or bodies to colour, then set the colour",
+    "Appearance": "Pick the faces, features or bodies to color, then set the color",
     "Delete Face": "Pick the faces to delete, then choose Delete, Delete and Patch or Delete and Fill",
-    "Hole Position": "Click on the faces to place the hole centres",
+    "Hole Position": "Click on the faces to place the hole centers",
     "Thread": "Pick the round edge where the thread starts",
     "Split Line": "Pick what splits, then the faces to split",
     "Sweep": "Pick the sweep profile",
@@ -81,10 +81,13 @@ PAGES = {
     "Trim/Extend": "Pick the bodies to trim and the bodies to trim to",
     "End Cap": "Pick the end faces of the members to cap",
     "Gusset": "Pick the two faces the gusset joins",
+    "Sheet Metal Gusset": "Pick the faces on either side of a bend",      # pkg439
     "Surface Curvature Combs": "Pick one or more faces, then set the curvature comb options",
 }
 
 SKETCH_TOOLS = {
+    "Make Block": "Select the sketch entities for the block",
+    "Insert Block": "Pick a block, then click in the graphics area to place it",
     "Trim": "Click an entity to trim it, or drag across the entities to trim",
     "Extend Entities": "Click the entity to extend",
     "Offset Entities": "Pick the entities to offset and set the distance",
@@ -94,14 +97,48 @@ SKETCH_TOOLS = {
     "Circular Pattern": "Pick the entities to repeat and set the count",
     "Move": "Pick the entities, then the base point and where it goes",
     "Copy": "Pick the entities, then the base point and where the copy goes",
-    "Rotate": "Pick the entities, then the centre and the angle",
+    "Rotate": "Pick the entities, then the center and the angle",
     "Scale": "Pick the entities, then the base point and the factor",
     "Stretch": "Pick the entities, then the base point and where it goes",
-    "Hole Position": "Click on the faces to place the hole centres",
+    "Hole Position": "Click on the faces to place the hole centers",
+}
+# fix293: the drawing tools' pages (no Message group since pkg434) say how to draw, by the type picked on the page
+DRAW_TYPES = {
+    "Circle": "Click the center, then click to set the radius",
+    "Perimeter Circle": "Click three points the circle passes through",
+    "Centerpoint Arc": "Click the center, then where the arc starts and where it ends",
+    "Tangent Arc": "Click the end of a line or arc, then where the arc ends",
+    "3 Point Arc": "Click where the arc starts and ends, then a point on it",
+    "Corner Rectangle": "Click one corner, then the opposite corner",
+    "Center Rectangle": "Click the center, then a corner",
+    "3 Point Corner Rectangle": "Click two corners along one side, then a point on the opposite side",
+    "3 Point Center Rectangle": "Click the center, then the middle of one side, then a corner",
+    "Parallelogram": "Click two corners along one side, then a point on the opposite side",
+    "Straight Slot": "Click the start and end of the slot, then set its width",
+    "Centerpoint Straight Slot": "Click the center of the slot, then one end, then set its width",
+    "3 Point Arc Slot": "Click where the arc starts and ends, then a point on it, then set the width",
+    "Centerpoint Arc Slot": "Click the arc's center, then where it starts and ends, then set the width",
+    "Flat Ends Arc Slot": "Click the arc's center, then where it starts and ends, then set the width",
+    "Line": "Click where the line starts, then where it ends",
+    "Midpoint Line": "Click the middle of the line, then one of its ends",
+}
+DRAW_PAGES = {
+    "Insert Line": "Click where the line starts, then where it ends",
+    "Polygon": "Click the center, then click to set the size",
+    "Point": "Click where the point goes",
+    "Ellipse": "Click the center, then the end of one axis, then a point for the other",
+    "Partial Ellipse": "Click the center, the end of one axis, a point for the other, then where it starts and ends",
+    "Parabola": "Click the focus, then the vertex, then where the parabola starts and ends",
+    "Spline": "Click the points the spline passes through; double-click to finish",
+    "Style Spline": "Click the corners of the control polygon; double-click to finish",
 }
 SKETCH_IDLE = "Pick sketch entities to edit them, or choose a sketch tool"
 IDLE = "Pick a face, edge or feature, or choose a command"     # pkg248: nothing open (own words)
 OURS = (FILLET, SECTION, FILLET_EMPTY, SKETCH_IDLE, IDLE) + SWEEP + tuple(PAGES.values()) + tuple(SKETCH_TOOLS.values())
+# pkg450 (Assemblies 11-27): the assembly tool works on components, not bodies
+ASM_PAGES = {"Interference Detection": "Pick the components to check, then press Calculate"}
+OURS = OURS + tuple(ASM_PAGES.values())
+OURS = OURS + tuple(DRAW_TYPES.values()) + tuple(DRAW_PAGES.values())
 MEASURE_IN_SECTION = ("A graphics-only section does not cut the model, so these measurements are of the whole model; "
                       "make a real section cut to measure the cut faces and edges.")
 SWEEP_TITLES = ("Sweep", "Cut-Sweep", "Swept Boss/Base", "Swept Cut")
@@ -129,6 +166,29 @@ def _section_open():
         return False
 
 
+# pkg439: pages that show only their Message group until the first pick (Base Flange, Miter Flange, Jog, Sketched Bend)
+PICK_FIRST = {
+    "Base Flange": "Pick a plane or a flat face to sketch on, or an existing sketch",
+    "Miter Flange": "Pick a linear edge of the sheet",
+    "Jog": "Pick a face of the sheet to sketch the jog line on, or an existing sketch",
+    "Sketched Bend": "Pick a face of the sheet to sketch the bend line on, or an existing sketch",
+}
+
+
+def _only_message(view):
+    """True when the page's only shown group is its Message."""
+    titles = []
+    try:
+        for box in view.findChildren(QtWidgets.QWidget):
+            if box.metaObject().className() != "Gui::TaskView::TaskBox" or not box.isVisible():
+                continue
+            hdr = next((w for w in box.findChildren(QtWidgets.QToolButton)), None)
+            titles.append((hdr.text() if hdr is not None else "").replace("&", "").strip())
+    except RuntimeError:
+        return False
+    return titles == ["Message"]
+
+
 def _generic(title):
     return "Set the %s options, then click OK" % title if title else None
 
@@ -147,7 +207,16 @@ def _sketch_prompt():
             except Exception as _fw_err:
                 _fw_log("pmprompts.py:tool prompt", _fw_err)
             t = getattr(page, "TITLE", "")
-            return SKETCH_TOOLS.get(t) or _generic(t)
+            kind = getattr(page, "kind_type", None) or getattr(page, "kind", None)
+            try:
+                from .fwsketch import toolbase
+                running = toolbase.active()
+                if running is not None and running.title() in DRAW_TYPES:
+                    kind = running.title()
+            except Exception as _fw_err:
+                _fw_log("pmprompts.py:tool title", _fw_err)
+            return (SKETCH_TOOLS.get(t) or (DRAW_TYPES.get(kind) if isinstance(kind, str) else None)
+                    or DRAW_PAGES.get(t) or _generic(t))
         if contextbar.sketch_in_edit() is not None:
             return SKETCH_IDLE
     except Exception as _fw_err:
@@ -229,12 +298,34 @@ def prompt():
         if path is not None and not path.count():
             return SWEEP[1]
         return SWEEP[2]
+    if title in PICK_FIRST and views and _only_message(views[0]):      # pkg439: the page still waits for its first pick
+        return PICK_FIRST[title]
+    light = mw.findChild(QtWidgets.QWidget, "SWLightProperties")
+    if light is not None and light.isVisible():      # a light's page: "Point1" is a point light, not Point
+        return _generic(title)
 
+    if title in ASM_PAGES:
+        try:
+            from . import asmcore
+            if asmcore.is_assembly(App.ActiveDocument):
+                return ASM_PAGES[title]
+        except Exception as _fw_err:
+            _fw_log("pmprompts:asm", _fw_err)
     return PAGES.get(title) or PAGES.get((title or "").rstrip("0123456789")) or _generic(title)
 
 
 def _ours(text):
     return text in OURS or text == _state.get("last")
+
+
+def _stale_note(text):
+    """fix293: the note a tool left when it could not start in this sketch ("Plane: Open a 3D sketch first.")
+    stayed under the next sketch tool's page; once a sketch tool page is open, its prompt may write over it."""
+    try:
+        from . import toolfirst, sketchtoolpm
+        return text == toolfirst._said.get("text") and sketchtoolpm.current() is not None
+    except Exception:
+        return False
 
 
 def _tips():
@@ -284,7 +375,7 @@ def _tick():
             _fw_log("pmprompts.py:statusmsg", _fw_err)
         want = prompt()
         if want:
-            if now != want and (not now or _ours(now)):
+            if now != want and (not now or _ours(now) or _stale_note(now)):
                 bar.showMessage(want, 0)
                 _state["last"] = want
         elif now and _ours(now):

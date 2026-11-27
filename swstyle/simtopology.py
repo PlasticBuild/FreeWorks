@@ -586,7 +586,7 @@ def run(a, progress=None):
     if disp_goal:                                          # where the part moves most, before the first pass
         t0 = topo_input(base, ids, rho)
         if "*EL PRINT, ELSET=Eall\nELSE\n" not in t0:
-            raise RuntimeError("The CalculiX input has no element energy output: the study cannot be optimised.")
+            raise RuntimeError("The CalculiX input has no element energy output: the study cannot be optimized.")
         with open(path, "w") as f:
             f.write(t0.replace("*EL PRINT, ELSET=Eall\nELSE\n", "*NODE PRINT, NSET=Nall\nU\n"))
         u = displacements(_ccx(fea, work, stem, env, 0))

@@ -101,10 +101,15 @@ def relink(path, mapping):
         rel = m.group(2)
         if not rel:
             return m.group(0)
-        old = os.path.normpath(rel if os.path.isabs(rel) else os.path.join(old_dir, rel))
-        new = mapping.get(old)
+        if os.path.isabs(rel):
+            tries = [os.path.normpath(rel)]
+        else:   # saveCopy already rewrote it from the new file's folder; older ones are from the source folder
+            tries = [os.path.normpath(os.path.join(d, rel)) for d in (new_dir, old_dir)]
+        if any(os.path.normpath(str(v)) == tries[0] for k, v in mapping.items() if k != "__src_dir__"):
+            return m.group(0)   # already on a packed copy (relative to this file)
+        new = next((mapping[t] for t in tries if t in mapping), None)
         if new is None:
-            return m.group(0)
+            return m.group(0)   # not packed: left as it is (Pack and Go's dialog decides how it is written)
         value = os.path.relpath(new, new_dir).replace("\\", "/")
         if value != rel:
             changed.append((rel, value))

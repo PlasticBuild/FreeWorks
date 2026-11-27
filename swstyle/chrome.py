@@ -192,7 +192,9 @@ class TaskPaneTabs(QtWidgets.QWidget):
         if e.type() == QtCore.QEvent.ToolTip:
             i = self._index(QtCore.QPointF(e.pos()))
             if i >= 0:
-                QtWidgets.QToolTip.showText(e.globalPos(), self.ITEMS[i][1], self)
+
+                QtWidgets.QToolTip.showText(
+                    e.globalPos(), "%s\nClick to display this task pane tab." % self.ITEMS[i][1], self)
             return True
         return super().event(e)
 
@@ -852,7 +854,7 @@ class ConfirmationCorner(QtWidgets.QWidget):
                 from . import asmtools
                 asmtools.end_edit()
             except Exception as error:
-                App.Console.PrintWarning("FreeWorks: Edit Component: %s\n" % error)
+                App.Console.PrintWarning("FreeCAD: Edit Component: %s\n" % error)
         elif self.mode == "sketch":
             _end_sketch_tool()
             try:
@@ -925,7 +927,12 @@ class ViewOverlay(QtCore.QObject):
 
         # of the empty window; they sit on the empty document area (the pane opened at the screen's corner)
         blank = self.mdi if host is None and sheet is None and self.mdi is not None and alive(self.mdi) else None
+        # tilewin-1127: documents side by side (Window > Tile, Cascade): the Task Pane tabs stay at the window
+
+        # made that window wider than its tile, over its neighbour)
+        side = self.mdi if self._tiled() else None
         if host is self.host and alive(host) and (sheet is None or sheet is self.sheet) and \
+                side is getattr(self, "side", None) and \
                 (host is not None or sheet is not None or blank is getattr(self, "blank", None)):
             self._place()
             return
@@ -935,11 +942,18 @@ class ViewOverlay(QtCore.QObject):
             self.sheet.removeEventFilter(self)
         if getattr(self, "blank", None) is not None and alive(self.blank):
             self.blank.removeEventFilter(self)
+        if getattr(self, "side", None) is not None and alive(self.side):
+            self.side.removeEventFilter(self)
         self.host = host
         self.sheet = sheet
         self.blank = blank
+        self.side = side
         for w in (self.hud, self.tasks, self.corner):
             if not alive(w):
+                continue
+            if w is self.tasks and side is not None:
+                w.setParent(side)
+                w.show()
                 continue
             if w is self.tasks and host is None and (sheet or blank) is not None:
                 w.setParent(sheet or blank)
@@ -971,6 +985,19 @@ class ViewOverlay(QtCore.QObject):
             blank.installEventFilter(self)
             if alive(self.tasks):
                 self.tasks.place()
+        if side is not None:
+            side.installEventFilter(self)
+            if alive(self.tasks):
+                self.tasks.place()
+                self.tasks.raise_()
+
+    def _tiled(self):
+        try:
+            from . import activewin
+            return bool(self.mdi is not None and alive(self.mdi) and activewin.tiled(self.mdi))
+        except Exception as _fw_err:
+            _fw_log("chrome.py:tiled", _fw_err)
+            return False
 
     def _active_view_widget(self):
         if self.mdi is None or not alive(self.mdi):
@@ -1015,7 +1042,8 @@ class ViewOverlay(QtCore.QObject):
                 self.tasks.place()
             if alive(self.hud_sheet):
                 self.hud_sheet.place()
-        elif obj is getattr(self, "blank", None) and event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.Show):
+        elif obj in (getattr(self, "blank", None), getattr(self, "side", None)) and obj is not None and \
+                event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.Show):
             if alive(self.tasks):
                 self.tasks.place()
         return False
@@ -1817,6 +1845,15 @@ class StatusInfo(QtWidgets.QLabel):
                         text = readout + "    " + text
                     if _sketch_tool_running():
                         text += " (Locked Focus)"
+                elif _sketch3d_open() is not None:
+
+                    obj3, state3 = _sketch3d_open()
+                    text = "Editing " + obj3.Label
+                    if state3:
+                        text = state3 + "    " + text
+                    readout = hover_readout() or selection_readout()
+                    if readout:
+                        text = readout + "    " + text
                 else:
                     text = "Editing " + editing_what()
                     if _drawing_in_front():
@@ -1850,6 +1887,19 @@ class StatusInfo(QtWidgets.QLabel):
                 self.setContentsMargins(0, 0, gap, 0)
         except Exception as _fw_err:
             _fw_log("chrome.py:StatusInfo._hold_width", _fw_err)
+
+
+def _sketch3d_open():
+    """fix311: (the 3D sketch being edited, its state) or None."""
+    try:
+        from . import sketch3d
+        obj = sketch3d.editing()
+        if obj is None:
+            return None
+        ses = sketch3d.session()
+        return obj, getattr(ses, "state", "") or getattr(obj, "SketchState", "")
+    except Exception:
+        return None
 
 
 def editing_what():
@@ -1909,10 +1959,16 @@ class RebuildIndicator(QtWidgets.QToolButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("SWRebuildIndicator")
+        self.setFocusPolicy(Qt.ClickFocus)      # statusfocus-1127
         self.setAutoRaise(True)
         self.setToolButtonStyle(Qt.ToolButtonIconOnly)
         self.setIcon(icons.family("STANDARD_REBUILD"))
         self.setIconSize(QtCore.QSize(scaled(16), scaled(16)))
+        try:        # darkpack-1127: the traffic light follows a live Light/Dark switch (it was set once, at start)
+            from . import style as _style
+            _style.signals.theme_changed.connect(self._theme_icon)
+        except Exception as _fw_err:
+            __import__("FreeCAD").Console.PrintLog("FreeCAD rebuild icon: %s\n" % _fw_err)
         self.setToolTip("Rebuild (Ctrl+B): the model has changed since its last rebuild")
         self.clicked.connect(self._rebuild)
         self.needed = False
@@ -1927,6 +1983,12 @@ class RebuildIndicator(QtWidgets.QToolButton):
         except Exception as _fw_err:
             __import__("FreeCAD").Console.PrintLog("FreeCAD ticks: %s\n" % _fw_err)
         self.refresh()
+
+    def _theme_icon(self, *_args):
+        try:
+            self.setIcon(icons.family("STANDARD_REBUILD"))
+        except Exception:
+            pass        # the button is gone
 
     @staticmethod
     def rebuild_needed(doc=None):
@@ -1977,6 +2039,11 @@ def document_title():
                 text = "%s of %s" % (obj.Label, text)
         except Exception as _fw_err:
             _fw_log("chrome.py:document_title", _fw_err)
+        try:
+            from . import windowmenu
+            text += windowmenu.read_only_mark(doc)
+        except Exception as _fw_err:
+            _fw_log("chrome.py:document_title-ro", _fw_err)
         if gdoc is not None and getattr(gdoc, "Modified", False):
             text += " *"
         return text
@@ -2087,6 +2154,7 @@ class UnitsButton(QtWidgets.QToolButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("SWUnits")
+        self.setFocusPolicy(Qt.ClickFocus)      # unitsfocus-1127: Tab must not land here and stay
         self.setFont(ui_font())
         self.setAutoRaise(True)
         self.setToolButtonStyle(Qt.ToolButtonTextOnly)

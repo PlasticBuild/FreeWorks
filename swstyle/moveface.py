@@ -287,7 +287,13 @@ class MoveFacePanel:
         self.faces = QtWidgets.QListWidget()
         self.faces.setMaximumHeight(64)
         self.faces.setToolTip("Faces to move: pick them in the graphics area (pick again to remove)")
+        self.faces.setProperty("swpickbox", True)
         form.addRow(self.faces)
+
+        self.params = QtWidgets.QWidget()
+        self.params.setObjectName("SWMoveFaceParameters")
+        self.params.setWindowTitle("Parameters")
+        form = QtWidgets.QFormLayout(self.params)
         self.distance = self._spin(abs(float(obj.Distance)))
         form.addRow("Distance", self.distance)
         self.reverse = QtWidgets.QCheckBox("Reverse direction")
@@ -314,7 +320,7 @@ class MoveFacePanel:
         self.error.setWordWrap(True)
         self.error.setStyleSheet("color: #c00000;")
         form.addRow(self.error)
-        self.form = self.box
+        self.form = [self.box, self.params]
         for spin in (self.distance, self.dx, self.dy, self.dz, self.angle):
             spin.valueChanged.connect(self._changed)
         self.reverse.toggled.connect(self._changed)
@@ -401,7 +407,7 @@ class MoveFacePanel:
         if obj.Faces is not None:
             self.faces.addItems(list(obj.Faces[1]))
         offset, rotate = obj.Mode == "Offset", obj.Mode == "Rotate"
-        lay = self.box.layout()
+        lay = self.params.layout()
         for widget in (self.distance, lay.labelForField(self.distance)):
             widget.setVisible(offset)
         self.reverse.setVisible(offset or rotate)

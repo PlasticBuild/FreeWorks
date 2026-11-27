@@ -31,6 +31,8 @@ AMBIENT = "SWStyle_AmbientOcclusion"
 REALVIEW_LIGHTS = ("EnableFillLight", "EnableBacklight")
 _ao = {}               # id(view) -> _Occlusion
 PERSPECTIVE = "SWStyle_PerspectiveToggle"
+REALVIEW_PLUS = "SWStyle_RealViewPlusGraphics"
+_plus = {}             # id(view) -> (RealView, Shadows, Ambient Occlusion) as they were before RealView Plus
 SHADOW_COLOUR = (0.22, 0.22, 0.25)
 SHADOW_TRANSPARENCY = 0.7
 LIGHT = (0.3, -0.25)      # how far a flattened copy leans per unit of height (x, y)
@@ -533,6 +535,39 @@ def set_realview(on, view=None):
     realview.set_enabled(on)
 
 
+def realview_plus_on(view=None):
+    """RealView Plus Graphics: RealView with the floor shadow and Ambient Occlusion, all at once, in this view.
+    It reads as off again once RealView is turned off on its own."""
+    view = view or _view()
+    if view is None or id(view) not in _plus:
+        return False
+    if not realview_on(view):
+        _plus.pop(id(view), None)
+        return False
+    return True
+
+
+def set_realview_plus(on, view=None):
+    """On: RealView, Shadows In Shaded Mode and Ambient Occlusion on together (what was on before is kept).
+    Off: each goes back to how it was before."""
+    view = view or _view()
+    if view is None:
+        return
+    if on and not realview_plus_on(view):
+        _plus[id(view)] = (realview_on(view), shadows_on(view), ambient_on(view))
+        set_realview(True, view)
+        set_shadows(True, view)
+        set_ambient(True, view)
+    elif not on and id(view) in _plus:
+        rv, sh, ao = _plus.pop(id(view))
+        set_ambient(ao, view)
+        set_shadows(sh, view)
+        set_realview(rv, view)
+    for command, state in ((REALVIEW_PLUS, realview_plus_on(view)), (REALVIEW, realview_on(view)),
+                           (SHADOW, shadows_on(view)), (AMBIENT, ambient_on(view))):
+        _sync(command, state)
+
+
 def ambient_on(view=None):
     view = view or _view()
     return view is not None and id(view) in _ao
@@ -544,6 +579,7 @@ AO_DARK = 0.55         # darkest a fully closed-in spot goes (0 none, 1 black)
 AO_PART_SPAN = 4.0     # an assembly's rays reach as for a part this many times its middle part's size
 AO_POINTS = 8000       # most points baked: a bigger model is meshed more coarsely
 AO_SLICE = 0.04        # seconds of baking between pauses, so FreeCAD stays responsive on a big model
+AO_SPACING = 15.0      # a flat face is meshed with points at most this many mesh deviations apart
 
 
 class _Occlusion:
@@ -624,8 +660,8 @@ class _Occlusion:
         before = None
         parts = [part for o in solids for part in _parts(o.Shape)]
         while True:
-            pts, tris, nrm, spans = [], [], [], []
-            meshes = _Meshes(lambda local, d=deviation: _face_meshes(local, d))
+            pts, tris, nrm, spans, solid = [], [], [], [], []
+            meshes = _Meshes(lambda local, d=deviation: _face_meshes(local, d, d * AO_SPACING))
             if True:
                 for part in parts:
                     rot = part.Placement.Rotation
@@ -638,6 +674,7 @@ class _Occlusion:
                             w = rot.multVec(App.Vector(*v))
                             nrm.append([w.x, w.y, w.z])
                         tris.extend((base + i, base + j, base + k) for i, j, k in t)
+                        solid.extend((base + i, base + j, base + k) for i, j, k in getattr(t, "coarse", t))
             if len(pts) <= AO_POINTS or deviation > diag * 0.05 or (before and len(pts) > 0.8 * before):
                 break           # small enough, as coarse as it may get, or coarser no longer helps (many small faces)
             before = len(pts)
@@ -662,7 +699,7 @@ class _Occlusion:
         if len(pts) > AO_POINTS:
             stride = int(math.ceil(len(pts) / float(AO_POINTS)))
             sample, fill = _sample_faces(pts, spans, stride)
-        self.job = {"pts": pts, "tris": tris, "nrm": nrm, "occ": [], "rays": rays, "sample": sample, "fill": fill,
+        self.job = {"pts": pts, "tris": tris, "solid": solid, "nrm": nrm, "occ": [], "rays": rays, "sample": sample, "fill": fill,
                     "reach": reach, "lift": 1e-3 * diag}
         self._next_slice(0)
 
@@ -783,14 +820,47 @@ def _shape_key(obj):
     return (obj.Name, counts, area, str(shape.BoundBox), str(shape.Placement))
 
 
-def _face_meshes(shape, deviation):
-    """[(points, triangles, vertex normals)] for each face of a shape in its own axes (Ambient Occlusion)."""
+class _Tris(list):
+    """A split flat face's triangles, with the face's own (unsplit) triangles in .coarse."""
+
+
+def _split_flat(p, t, longest):
+    """A flat face's triangles cut in four, again and again, until no side is longer than longest (at most 5
+    times). A flat face meshes to its corners only, and the corners of a hollow lie on the walls around it: a
+    ray from there met nothing, so a stepped block or a pocket got no darkening at all."""
+    p = list(p)
+    for _round in range(5):
+        if all(max((p[i] - p[j]).Length, (p[j] - p[k]).Length, (p[k] - p[i]).Length) <= longest for i, j, k in t):
+            break
+        mid = {}
+        def half(a, b):
+            key = (a, b) if a < b else (b, a)
+            if key not in mid:
+                mid[key] = len(p)
+                p.append((p[a] + p[b]) * 0.5)
+            return mid[key]
+        out = []
+        for i, j, k in t:
+            a, b, c = half(i, j), half(j, k), half(k, i)
+            out += [(i, a, c), (a, j, b), (c, b, k), (a, b, c)]
+        t = out
+    return p, t
+
+
+def _face_meshes(shape, deviation, longest=None):
+    """[(points, triangles, vertex normals)] for each face of a shape in its own axes (Ambient Occlusion).
+    longest: a flat face gets points inside it too, at most this far apart (_split_flat)."""
     out = []
     for face in shape.Faces:
         try:
             p, t = face.tessellate(deviation)
         except Exception:
             continue
+        if longest and t and face.Surface.__class__.__name__ == "Plane":
+            coarse = t
+            p, t = _split_flat(p, t, longest)
+            t = _Tris(t)
+            t.coarse = coarse       # the face as meshed: what the rays test against (the old points keep their numbers)
         nrm = [[0.0, 0.0, 0.0] for _v in p]
         for i, j, k in t:
             n = (p[j] - p[i]).cross(p[k] - p[i])
@@ -858,7 +928,7 @@ class _RayMesh:
     def __init__(self, np, job):
         self.np = np
         pts = np.asarray(job["pts"], dtype=float).reshape(-1, 3)
-        tri = np.asarray(job["tris"], dtype=np.int64).reshape(-1, 3)
+        tri = np.asarray(job.get("solid") or job["tris"], dtype=np.int64).reshape(-1, 3)     # the unsplit faces stop rays
         self.p0 = pts[tri[:, 0]]
         self.e1 = pts[tri[:, 1]] - self.p0
         self.e2 = pts[tri[:, 2]] - self.p0
@@ -1008,6 +1078,10 @@ def register():
         realview.install()
     except Exception as _fw_err:
         _fw_log("viewsettings.py:realview", _fw_err)
+    if REALVIEW_PLUS not in Gui.listCommands():
+        Gui.addCommand(REALVIEW_PLUS, _Toggle(REALVIEW_PLUS, "RealView Plus Graphics",
+                                              "RealView with the floor shadow and Ambient Occlusion together",
+                                              "DrawStyleShaded", realview_plus_on, set_realview_plus))
     if AMBIENT not in Gui.listCommands():
         Gui.addCommand(AMBIENT, _Toggle(AMBIENT, "Ambient Occlusion",
                                         "Darkens the corners, hollows and holes of the model, as light from all around reaches them less",

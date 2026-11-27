@@ -512,11 +512,11 @@ def make_tool_page(session, tool):
             if line:
 
                 g = self.group("Orientation")
-                for text in ("As sketched", "Horizontal", "Vertical", "Angle"):
+                # fix311: no greyed rows (NO DEAD CONTROLS): Horizontal / Vertical / Angle are 2D only, so not shown
+                for text in ("As sketched",):
                     r = QtWidgets.QRadioButton(text, g.body)
                     r.setObjectName("SW3DLineOrientation" + text.replace(" ", ""))
-                    r.setChecked(text == "As sketched")
-                    r.setEnabled(text == "As sketched")
+                    r.setChecked(True)
                     g.content.addWidget(r)
             if self.tool.title() in DRAWING:
                 o = self.group("Options")
@@ -526,11 +526,7 @@ def make_tool_page(session, tool):
                 self.construction.toggled.connect(self._construction)
                 o.content.addWidget(self.construction)
                 if line:
-                    inf = QtWidgets.QCheckBox("Infinite length", o.body)
-                    inf.setObjectName("SW3DLineInfinite")
-                    inf.setEnabled(False)
-                    inf.setToolTip("Infinite lines are 2D sketch geometry")
-                    o.content.addWidget(inf)
+                    # fix311: no Infinite length row: 3D sketches have no infinite lines (it was a greyed row)
                     self.midpoint = QtWidgets.QCheckBox("Midpoint line", o.body)
                     self.midpoint.setObjectName("SW3DLineMidpoint")
                     self.midpoint.setChecked(bool(getattr(self.tool, "midpoint", False)))
@@ -1389,12 +1385,6 @@ def make_properties_page(session):
                 c.setChecked(s.ents[self.items[0][1]].construction)
                 c.toggled.connect(lambda on, e=self.items[0][1]: s.set_construction(e, on))
                 o.content.addWidget(c)
-                if s.ents[self.items[0][1]].kind == "L":
-                    inf = QtWidgets.QCheckBox("Infinite length", o.body)
-                    inf.setObjectName("SW3DLineInfinite")
-                    inf.setEnabled(False)
-                    inf.setToolTip("Infinite lines are 2D sketch geometry")
-                    o.content.addWidget(inf)
                 if s.ents[self.items[0][1]].kind == "S":
                     k = self.items[0][1]
                     comb = QtWidgets.QCheckBox("Show Curvature", o.body)

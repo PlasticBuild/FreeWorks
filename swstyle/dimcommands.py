@@ -1258,6 +1258,56 @@ class Instant2D(QtCore.QObject):
             return d * (1.0 / d.Length) if d.Length > 0 else None
         return None
 
+    def _handles(self, c):
+        ""
+
+        sk = self.sketch
+        V = App.Vector
+        if c.Type in RADIAL:
+            ctr = sk.getPoint(c.First, 3)
+            g = sk.Geometry[c.First]
+            r = getattr(g, "Radius", None)
+            if r is None:
+                return []
+            a = float(getattr(c, "LabelPosition", 0.0))
+            u = V(math.cos(a), math.sin(a), 0)
+            return [ctr + u * r] + ([ctr - u * r] if c.Type == "Diameter" else [])
+        if c.Type not in ("Distance", "DistanceX", "DistanceY"):
+            return []
+        if c.Second == -2000:
+            if c.FirstPos != 0:
+                return []
+            p1, p2 = sk.getPoint(c.First, 1), sk.getPoint(c.First, 2)
+        elif c.SecondPos == 0 and c.Type == "Distance":
+            a, b = sk.getPoint(c.Second, 1), sk.getPoint(c.Second, 2)
+            p1 = sk.getPoint(c.First, c.FirstPos)
+            t = b - a
+            p2 = a + t * ((p1 - a).dot(t) / t.dot(t))
+        else:
+            p1, p2 = sk.getPoint(c.First, c.FirstPos), sk.getPoint(c.Second, c.SecondPos)
+        if c.Type == "DistanceX":
+            p2 = V(p2.x, p1.y, 0)
+        elif c.Type == "DistanceY":
+            p2 = V(p1.x, p2.y, 0)
+        d = p2 - p1
+        if d.Length < 1e-12:
+            return []
+        d = d * (1.0 / d.Length)
+        n = V(-d.y, d.x, 0) * float(getattr(c, "LabelDistance", 0.0))
+        return [p1 + n, p2 + n]
+
+    def _on_handle(self, widget, pos, c):
+        try:
+            tips = self._handles(c)
+        except Exception as _fw_err:
+            _fw_log("dimcommands.py:handles", _fw_err)
+            return False
+        if not tips:
+            return False
+        here = self._sketch_point(widget, pos)
+        reach = 8.0 * self._pixel_size(widget, pos)
+        return any(math.hypot(here.x - q.x, here.y - q.y) <= reach for q in tips)
+
     # ------------------------------------------------------------------ events
     def eventFilter(self, obj, event):
         if not isinstance(event, QtCore.QEvent):
@@ -1300,6 +1350,8 @@ class Instant2D(QtCore.QObject):
             return False
         self.sketch, index, c = found
         pos = event.pos()
+        if not self._on_handle(widget, pos, c):
+            return False
         self.drag = {"index": index, "start": c.Value, "type": c.Type, "press": pos, "moved": False,
                      "from": self._sketch_point(widget, pos), "dir": self._direction(c), "last": c.Value,
                      "pixel": self._pixel_size(widget, pos), "widget": widget}

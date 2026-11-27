@@ -15,6 +15,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -628,7 +629,7 @@ class Panel:
                       if subs else link[0].Label)
 
     def addSelection(self, doc, name, sub, point):
-        QtCore.QTimer.singleShot(0, lambda: self._picked(doc, name, sub))
+        from . import safe_later as _sl; _sl.later(0, lambda: self._picked(doc, name, sub), self, "end")
 
     def _from_changed(self, *args):
         if self.from_mode.currentText() in ("Vertex", "Surface/Face/Plane"):
@@ -1070,7 +1071,7 @@ def _watch():
     """After the plane pick: the sketch opened there; when it closes, the Base Flange opens on it."""
     gdoc = Gui.ActiveDocument
     edit = gdoc.getInEdit() if gdoc is not None else None
-    sketch = edit.Object if edit is not None and edit.Object.TypeId == "Sketcher::SketchObject" else None
+    sketch = editobj.of(edit) if edit is not None and editobj.type_id(edit) == "Sketcher::SketchObject" else None
     if sketch is not None:
         _wait["sketch"] = (sketch.Document.Name, sketch.Name)
         _wait["idle"] = 0
@@ -1094,6 +1095,28 @@ def _watch():
             _wait.clear()
             return
     QtCore.QTimer.singleShot(250, _watch)
+
+
+def _take_sketches(picker, then):
+    ""
+
+    own = picker.picked
+
+    def picked():
+        try:
+            sel = Gui.Selection.getSelectionEx()
+            if sel and not picker.done:
+                entry = sel[-1]
+                subs = [s for s in entry.SubElementNames if s]
+                obj = entry.Object
+                if obj.TypeId == "Sketcher::SketchObject" and obj.Geometry and \
+                        not (subs and subs[-1].startswith("Face")):
+                    picker._finish(lambda: then(obj))
+                    return
+        except Exception as _fw_err:
+            _fw_log("smbaseflange.py:take-sketch", _fw_err)
+        own()
+    picker.picked = picked
 
 
 def _pick_plane(doc, then=None, title=TITLE, icon="SheetMetal_AddBase", message=PICK_MESSAGE):
@@ -1120,6 +1143,7 @@ def _pick_plane(doc, then=None, title=TITLE, icon="SheetMetal_AddBase", message=
     if not keep:
         Gui.Selection.clearSelection()
     picker = sketchstart.PlanePicker(body, title=title, icon=icon, message=message)
+    _take_sketches(picker, then or open_on)
     Gui.Control.showDialog(picker)
     if keep:
         QtCore.QTimer.singleShot(0, picker.picked)
@@ -1136,8 +1160,8 @@ def start():
         return
     gdoc = Gui.ActiveDocument
     edit = gdoc.getInEdit() if gdoc is not None else None
-    if edit is not None and edit.Object.TypeId == "Sketcher::SketchObject":
-        sketch = edit.Object
+    if edit is not None and editobj.type_id(edit) == "Sketcher::SketchObject":
+        sketch = editobj.of(edit)
         Gui.runCommand("Sketcher_LeaveSketch", 0)
         if sketch.Geometry:
             QtCore.QTimer.singleShot(0, lambda: open_on(sketch))
@@ -1169,7 +1193,7 @@ class Command:
             dialog = Gui.Control.activeDialog()
             gdoc = Gui.ActiveDocument
             edit = gdoc.getInEdit() if gdoc is not None else None
-            in_sketch = edit is not None and edit.Object.TypeId == "Sketcher::SketchObject"
+            in_sketch = edit is not None and editobj.type_id(edit) == "Sketcher::SketchObject"
             return not dialog or in_sketch
         except Exception:
             return True

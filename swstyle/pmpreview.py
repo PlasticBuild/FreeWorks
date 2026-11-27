@@ -10,6 +10,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -51,7 +52,7 @@ def _alive(w):
 def _edited():
     try:
         edit = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument is not None else None
-        return edit.Object if edit is not None else None
+        return editobj.of(edit) if edit is not None else None
     except Exception:
         return None
 

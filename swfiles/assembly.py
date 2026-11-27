@@ -42,7 +42,7 @@ def open_assembly(path, doc=None, read_tree_api=None):
             if asmrt.available():
                 return asmrt.open_assembly(path, doc, read_tree_api)
         except Exception as exc:
-            warn("assembly tree not read through SolidWorks (%s); opening its components only" % exc)
+            warn("assembly tree not read through the other CAD program (%s); opening its components only" % exc)
     return open_components(path, doc, read_tree_api)
 
 

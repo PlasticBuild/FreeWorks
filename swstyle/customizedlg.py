@@ -42,7 +42,7 @@ ICON_SIZES = ((0, "Small", 20), (1, "Medium", 24), (2, "Large", 32))
 TOOLTIP_STYLES = ("Large tooltips with images", "Large tooltips without images", "Small tooltips")
 MODES = (("part", "Part"), ("assembly", "Assembly"), ("drawing", "Drawing"), ("sketch", "Sketch"))
 MENU_TITLES = ("File", "Edit", "View", "Insert", "Tools", "Window", "Help")
-MENU_CATEGORIES = MENU_TITLES + ("Others", "Macros")
+MENU_CATEGORIES = ("File", "Edit", "View", "Insert", "Tools", "Simulation", "Window", "Help", "Others", "Search", "Macros")
 POSITIONS = ("Default", "At Beginning", "At End", "Hidden")
 
 POSITION_NAMES = (("Auto", "Default"), ("At Top", "At Beginning"), ("At Bottom", "At End"))
@@ -192,21 +192,32 @@ def tooltip_for(label, tip, extra=""):
 
 
 # ---- keyboard
+
+SEARCH_DEFAULTS = {"SWStyle_Rebuild": "r", "Std_Refresh": "r", "SWStyle_ZoomFit": "zf", "Std_ViewFitAll": "zf",
+                   "FreeWorks_Line": "l", "Sketcher_CreatePolyline": "l"}
+
+
 def search_key(native):
     """The Keyboard tab's Search Shortcut of a command: letters that, typed in the command search
     box, put that command at the top of the list."""
     try:
-        return _p().GetString("SearchKey." + native, "")
+        own = _p().GetString("SearchKey." + native, "")
+        if own or _p().GetBool("SearchKeyOff." + native, False):
+            return own
     except Exception:
         return ""
+    return SEARCH_DEFAULTS.get(native, "")
 
 
 def set_search_key(native, text):
     text = (text or "").strip()
     if text:
         _p().SetString("SearchKey." + native, text)
+        _p().RemBool("SearchKeyOff." + native)
     else:
         _p().RemString("SearchKey." + native)
+        if native in SEARCH_DEFAULTS:
+            _p().SetBool("SearchKeyOff." + native, True)      # kbpage-1126: a removed default stays removed
 
 
 def search_keys():
@@ -220,7 +231,21 @@ def search_keys():
                     out.setdefault(text, set()).add(name[len("SearchKey."):])
     except Exception as _fw_err:
         _fw_log("customizedlg.py:190", _fw_err)
+    for native in SEARCH_DEFAULTS:      # kbpage-1126: the defaults no one changed
+        text = search_key(native).strip().lower()
+        if text and not _p().GetString("SearchKey." + native, ""):
+            out.setdefault(text, set()).add(native)
     return out
+
+
+def _sw_key_names(text):
+    ""
+    parts = []
+    for k in (text or "").split(", "):
+        bits = k.split("+")
+        bits[-1] = {"Space": "SpaceBar", "Del": "Delete"}.get(bits[-1], bits[-1])
+        parts.append("+".join(bits))
+    return ", ".join(parts) if text else ""
 
 
 def key_overrides():
@@ -330,6 +355,12 @@ def _key_action(name):
 
 def apply_key(name, key, remember=True):
     """Gives the FreeCAD command its shortcut now and in FreeCAD's Shortcut preferences."""
+    if name in _filter_keys():
+        # filterkeys-1126: a key the key filters read (Enter, Tab, D, A...): kept here only, never on a QAction
+        _APPLIED.add(name)
+        if remember:
+            set_option("Key." + name, key or "")
+        return True
     actions = _actions(name)
     if remember and not _p().GetString("KeyOrig." + name, "") and not _p().GetBool("KeyOrigSet." + name, False):
         # the command's own shortcut, so Reset to Defaults can give it back (FreeCAD natives too)
@@ -385,7 +416,18 @@ def apply_qat(shell=None):
     return True
 
 
+def _filter_keys():
+    try:
+        from . import filterkeys
+        return filterkeys.DEFAULTS
+    except Exception:
+        return {}
+
+
 def current_key(name):
+    if name in _filter_keys():
+        from . import filterkeys        # filterkeys-1126
+        return filterkeys.shown(name)
     for a in _actions(name):
         return a.shortcut().toString(QtGui.QKeySequence.NativeText)
     if name not in _APPLIED:
@@ -608,6 +650,44 @@ def _menu_of():
     return out
 
 
+SEARCH_KEYS = (("FW_SearchHelp", "Help", "SWStyle_SearchHelp", "Searches the help (H)."),
+               ("FW_SearchCommands", "Commands", "SWStyle_SearchCommands", "Finds a command by name and runs it (W)."),
+               ("FW_SearchFiles", "Files and Models", "SWStyle_SearchFiles", "Finds files and models (I)."))
+
+
+def _sim_search_groups(groups):
+    ""
+    try:
+        from . import addintabs
+        sim = []
+        for row in addintabs.TABS.get("Simulation", ()):
+            if row and row[0] == "large":
+                sim += [row[1]] + list(row[2] or ())
+            elif row and row[0] == "stack":
+                for k, fly in row[1]:
+                    sim += [k] + list(fly or ())
+        sim = [k for k in dict.fromkeys(sim) if k in catalog.BY_KEY]
+        if sim:
+            groups["Simulation"] = [k for k in sim if k not in [x for t, ks in groups.items() if t not in ("Others", "Simulation") for x in ks]]
+            if "Others" in groups:
+                groups["Others"] = [k for k in groups["Others"] if k not in groups["Simulation"]]
+            if not groups["Simulation"]:
+                del groups["Simulation"]
+    except Exception as _fw_err:
+        _fw_log("customizedlg.py:sim-group", _fw_err)
+    have = set(Gui.listCommands())
+    search = []
+    for key, label, native, tip in SEARCH_KEYS:
+        if native not in have:
+            continue
+        if key not in catalog.BY_KEY:
+            catalog.BY_KEY[key] = catalog.c(key, label, (native,), None, tip)
+        search.append(key)
+    if search:
+        groups["Search"] = search
+    return groups
+
+
 def menu_categories(cats=None):
     ""
     cats = categories() if cats is None else cats
@@ -623,7 +703,9 @@ def menu_categories(cats=None):
             if key not in groups[group]:
                 groups[group].append(key)
     order = [t for t in MENU_ORDER if t in groups] + [t for t in groups if t not in MENU_ORDER and t not in ("Others", "Macros")]
-    order += [t for t in ("Others", "Macros") if t in groups]
+    _sim_search_groups(groups)
+    order = [t for t in order if t != "Simulation"]
+    order += [t for t in ("Simulation", "Others", "Search", "Macros") if t in groups]
     return [(t, groups[t]) for t in order]
 
 
@@ -922,7 +1004,7 @@ class CustomizeDialog(QtWidgets.QDialog):
 
     def showEvent(self, e):
         super().showEvent(e)
-        QtCore.QTimer.singleShot(0, self._shortcut_window)
+        from . import safe_later as _sl; _sl.later(0, self._shortcut_window, self, "sb_mode")
 
     def _stop_cm(self):
         win = getattr(self, "sb_window", None)
@@ -966,10 +1048,11 @@ class CustomizeDialog(QtWidgets.QDialog):
         for name, _keys in swtoolbars.TOOLBARS:
             item = QtWidgets.QListWidgetItem(name)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked if swtoolbars.is_shown(name) else Qt.Unchecked)
+            item.setCheckState(Qt.Checked if swtoolbars.listed_shown(name) else Qt.Unchecked)    # cmmenu-1126
             self.toolbar_list.addItem(item)
             # no greyed rows (NO DEAD CONTROLS): a toolbar with no buttons and no window is left off the list
-            item.setHidden(not swtoolbars.keys_of(name) and swtoolbars.find(name) is None)
+            item.setHidden(not swtoolbars.keys_of(name) and swtoolbars.find(name) is None
+                           and name not in swtoolbars.PANES)
         self.toolbar_list.itemChanged.connect(self._toolbar_ticked)
         left.addWidget(self.toolbar_list, 1)
         lay.addLayout(left, 1)
@@ -1077,7 +1160,7 @@ class CustomizeDialog(QtWidgets.QDialog):
 
     def _toolbar_ticked(self, item):
         from . import swtoolbars
-        swtoolbars.show(self.shell, item.text(), item.checkState() == Qt.Checked)
+        swtoolbars.listed_show(self.shell, item.text(), item.checkState() == Qt.Checked)     # cmmenu-1126
 
     def _relayout(self):
         top = getattr(self.shell, "topbar", None) if self.shell is not None else None
@@ -1511,8 +1594,10 @@ class CustomizeDialog(QtWidgets.QDialog):
         left.addWidget(QtWidgets.QLabel("Categories:"))
         self.menu_cats = QtWidgets.QListWidget(w)
         self.menu_cats.setObjectName("SWCustomizeMenuCategories")
+        have = {t for t, _k in menu_categories(getattr(self, "_cats", None))}
         for title in MENU_CATEGORIES:
-            self.menu_cats.addItem(title)
+            if title in MENU_TITLES or title in have:      # an empty category is left off (NO DEAD CONTROLS)
+                self.menu_cats.addItem(title)
         left.addWidget(self.menu_cats, 1)
         lay.addLayout(left, 1)
         mid = QtWidgets.QVBoxLayout()
@@ -1610,7 +1695,7 @@ class CustomizeDialog(QtWidgets.QDialog):
                         walk(sub, depth + 1)
         if not hasattr(self, "_menu_cmds_by_label"):
             self._menu_cmds_by_label = {}
-        if title in ("Others", "Macros"):       # extapps89: the commands no menu has (Add puts one on a menu)
+        if title in ("Others", "Macros", "Simulation", "Search"):       # extapps89: the commands no menu has (Add puts one on a menu)
             for t, keys in menu_categories(self._cats):
                 if t == title:
                     for key in keys:
@@ -1755,7 +1840,9 @@ class CustomizeDialog(QtWidgets.QDialog):
         top.addWidget(QtWidgets.QLabel("Show:"), 1, 0)
         self.key_show = QtWidgets.QComboBox(w)
         self.key_show.setObjectName("SWCustomizeKeyShow")
-        self.key_show.addItems(["All Commands", "Commands with shortcuts assigned", "Commands without shortcuts"])
+
+        self.key_show.addItems(["All Commands", "Commands with Keyboard Shortcuts", "Commands with Search Shortcuts",
+                                "Commands with Keyboard or Search Shortcuts"])
         top.addWidget(self.key_show, 1, 1)
         top.addWidget(QtWidgets.QLabel("Search for:"), 2, 0)
         self.key_search = QtWidgets.QLineEdit(w)
@@ -1864,6 +1951,15 @@ class CustomizeDialog(QtWidgets.QDialog):
                 seen.add(native)
                 rows.append(("Others", None, label, native))
 
+        try:
+            from . import filterkeys
+            for native, title, label, _k in filterkeys.COMMANDS:
+                if native not in seen and Gui.Command.get(native) is not None:
+                    seen.add(native)
+                    rows.append((title, None, label, native))
+        except Exception as _fw_err:
+            _fw_log("customizedlg.py:filterkeys", _fw_err)
+
         for label, native in (("Cut", "Std_Cut"), ("Copy", "Std_Copy"), ("Paste", "Std_Paste"), ("Delete", "Std_Delete")):
             try:
                 ok = native not in seen and Gui.Command.get(native) is not None
@@ -1885,14 +1981,14 @@ class CustomizeDialog(QtWidgets.QDialog):
             if cat != "All Commands" and title != cat:
                 continue
             short = current_key(native)
-            if show == 1 and not short or show == 2 and short:
-                continue
             found = search_key(native)
+            if show == 1 and not short or show == 2 and not found or show == 3 and not (short or found):
+                continue
             if text and text not in label.lower() and text not in short.lower() and text not in found.lower():
                 continue
             r = self.key_table.rowCount()
             self.key_table.insertRow(r)
-            for c, value in enumerate((title, label, short, found)):
+            for c, value in enumerate((title, label, _sw_key_names(short), found)):
                 item = QtWidgets.QTableWidgetItem(value)
                 item.setData(Qt.UserRole, native)
                 item.setData(Qt.UserRole + 1, key)
@@ -2019,6 +2115,9 @@ class CustomizeDialog(QtWidgets.QDialog):
         from . import keys
         g = _p()
         defaults = dict(keys.KEYS)
+        for name in g.GetBools():
+            if name.startswith("SearchKeyOff."):
+                g.RemBool(name)         # kbpage-1126: the default search shortcuts come back
         for name in g.GetStrings():
             if name.startswith("SearchKey."):
                 g.RemString(name)
@@ -2045,6 +2144,8 @@ class CustomizeDialog(QtWidgets.QDialog):
 
     def _copy(self, table):
         QtWidgets.QApplication.clipboard().setText(self._table_text(table))
+
+        QtWidgets.QMessageBox.information(self, "Customize", "The list is on the clipboard.")
 
     def _print(self, table):
         try:

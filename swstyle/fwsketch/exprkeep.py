@@ -115,6 +115,30 @@ def _clear(obj, index, size):
     obj.delGeometries([p])
 
 
+_FOLLOWER = re.compile(r"^\.Constraints\.(([A-Za-z_][A-Za-z0-9_]*)_t\d+)$")
+
+
+def _followers(obj, dangling=False):
+    """{follower name: its expression path} for hidden followers bound to <name> (with dangling: whose
+    <name> is gone). Offset Entities' own FollowerWatch handles its "Offset" ones."""
+    out = {}
+    try:
+        engine = obj.ExpressionEngine
+    except Exception:
+        return out
+    if not engine:
+        return out
+    names = {c.Name for c in obj.Constraints if c.Name} if dangling else None
+    for path, expr in engine:
+        m = _FOLLOWER.match(path)
+        if not m or m.group(2).startswith("Offset") or expr.strip() != ".Constraints." + m.group(2):
+            continue
+        if dangling and (m.group(2) in names or m.group(1) not in names):
+            continue
+        out[m.group(1)] = path
+    return out
+
+
 class Keeper:
     def __init__(self):
         self.before = {}        # sketch -> (signatures, {index: expr}) before the first change
@@ -125,7 +149,7 @@ class Keeper:
         if self.busy or prop != "Constraints" or not _is_sketch(obj) or obj in self.before:
             return
         keys = _constraint_keys(obj)
-        if keys:
+        if keys or _followers(obj):
             self.before[obj] = ([_sig(c) for c in obj.Constraints], keys)
 
     def slotChangedObject(self, obj, prop):
@@ -134,9 +158,49 @@ class Keeper:
         self.pending.add(obj)
         try:
             from PySide import QtCore
-            QtCore.QTimer.singleShot(0, lambda o=obj: self.settle(o))
+            QtCore.QTimer.singleShot(0, lambda o=obj: self._later(o))
         except Exception:
-            self.settle(obj)
+            self._later(obj)
+
+    def _later(self, obj):
+        """settle and drop_followers after the change; an error in one is logged, never left to the timer."""
+        for step in (self.settle, self.drop_followers):
+            try:
+                step(obj)
+            except Exception as _fw_err:
+                self.pending.discard(obj)
+                _fw_log("fwsketch/exprkeep.py:later", _fw_err)
+
+    def drop_followers(self, obj):
+        ""
+
+        try:
+            gone = _followers(obj, dangling=True)
+        except Exception:
+            return
+        if not gone:
+            return
+        doc = obj.Document
+        own = not doc.HasPendingTransaction
+        self.busy = True
+        try:
+            if own:
+                doc.openTransaction("Delete")
+            for path in gone.values():
+                try:
+                    obj.setExpression(path, None)
+                except Exception as _fw_err:
+                    _fw_log("fwsketch/exprkeep.py:followers", _fw_err)
+            idx = sorted((i for i, c in enumerate(obj.Constraints) if c.Name in gone), reverse=True)
+            if idx:
+                obj.delConstraints(idx)
+            doc.recompute()
+        except Exception as _fw_err:
+            _fw_log("fwsketch/exprkeep.py:drop followers", _fw_err)
+        finally:
+            if own:
+                doc.commitTransaction()
+            self.busy = False
 
     def slotDeletedObject(self, obj):
         self.before.pop(obj, None)

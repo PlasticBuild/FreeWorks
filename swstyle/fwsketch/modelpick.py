@@ -57,6 +57,40 @@ def sketch_preselected(sketch):
     return bool(preselected_subs(sketch))
 
 
+def _is_seam(edge, face):
+    try:
+        return bool(edge.isSeam(face))
+    except Exception:
+        return False
+
+
+def seam_vertex(obj, sub):
+    ""
+
+    if not sub.startswith("Vertex"):
+        return None
+    try:
+        import Part
+        shape = obj.Shape
+        v = shape.Vertexes[int(sub[6:]) - 1]
+        edges = shape.ancestorsOfType(v, Part.Edge)
+        closed = [e for e in edges if e.isClosed()]
+        if not closed:
+            return None
+        for e in edges:
+            if e.isClosed():
+                continue
+
+            if not any(_is_seam(e, f) for f in shape.ancestorsOfType(e, Part.Face)):
+                return None
+        for i, e in enumerate(shape.Edges):
+            if e.isSame(closed[0]):
+                return "Edge%d" % (i + 1)
+    except Exception:
+        return None
+    return None
+
+
 def element_under(view, sketch, pos=None):
     """(object, "EdgeN" / "VertexN") of the part under the pointer, or None. Anything of the
     edited sketch under the pointer comes first (FreeCAD's own pick), so does a part face."""
@@ -77,9 +111,11 @@ def element_under(view, sketch, pos=None):
         obj = doc.getObject(name)
         if obj is None or not hasattr(obj, "Shape"):
             continue
-        return obj, sub   # another sketch's edge counts too (Midpoint, Pierce on it)
+        return obj, seam_vertex(obj, sub) or sub   # another sketch's edge counts too (Midpoint, Pierce on it)
+    face_hit = None
     for hit in hits:
         if (hit.get("Component") or "").startswith("Face"):
+            face_hit = hit
             break         # on a face: its outline may be right there
     else:
         if hits:
@@ -92,6 +128,12 @@ def element_under(view, sketch, pos=None):
     if found is not None:
         src, face, side, _edge = found
         return src, "%s%d:%d" % (SILHOUETTE, face, side)
+    if face_hit is not None:
+
+        # Entities take it)
+        obj = doc.getObject(face_hit.get("Object") or "")
+        if obj is not None and hasattr(obj, "Shape") and getattr(obj, "Visibility", True):
+            return obj, face_hit.get("Component")
     return None
 
 
@@ -129,6 +171,12 @@ def element_points(obj, sub):
     if sub.startswith("Vertex"):
         p = shape.Point
         return [(p.x, p.y, p.z)], True
+    if sub.startswith("Face"):
+        try:
+            pts = shape.OuterWire.discretize(Deflection=0.05)       # fix308: the face lit by its outline
+            return [(p.x, p.y, p.z) for p in pts], False
+        except Exception:
+            return [], False
     try:
         pts = shape.discretize(Deflection=0.05) if shape.Length > 0 else []
     except Exception:

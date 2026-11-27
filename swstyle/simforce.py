@@ -238,7 +238,7 @@ if Gui is not None:
         def addSelection(self, doc, obj, sub, pnt):
             name = (sub or "").split(".")[-1]
             if name.startswith("Face"):
-                QtCore.QTimer.singleShot(0, lambda: self.pick(name))
+                from . import safe_later as _sl; _sl.later(0, lambda: self.pick(name), self, "picks")
 
         def _hook_plot(self):
             sp = _sp()
@@ -273,7 +273,7 @@ if Gui is not None:
             cb.setHandled()
             face = sp.face_at(self.forces.res, n)
             if face:
-                QtCore.QTimer.singleShot(0, lambda: self.pick(face))
+                from . import safe_later as _sl; _sl.later(0, lambda: self.pick(face), self, "picks")
 
         def pick(self, sub):
             if not sub or sub in self.subs or not self.forces.face_nodes(sub):

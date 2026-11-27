@@ -62,7 +62,8 @@ _busy = set()       # documents between their before-recompute and recomputed si
 
 def recomputing(doc):
     try:
-        return doc.Name in _busy or "Recomputing" in doc.State
+        # asmpkg364: FreeCAD's Document has a Recomputing flag, no State list (the test always raised)
+        return doc.Name in _busy or bool(getattr(doc, "Recomputing", False))
     except Exception:
         return False
 

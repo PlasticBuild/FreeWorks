@@ -181,14 +181,14 @@ class Panel:
             self.error.setVisible(True)
             return False
         invalid = "Invalid" in self.obj.State
-        self.error.setText(self.obj.getStatusString() if invalid else "")
+        self.error.setText(naming.status_text(self.obj, "The corner break") if invalid else "")
         self.error.setVisible(invalid)
         return not invalid
 
     # ---------------------------------------------------------------- selection
     def addSelection(self, doc, name, sub, point):
         if sub.startswith(("Edge", "Face")):
-            QtCore.QTimer.singleShot(0, lambda: self._picked(doc, name, sub))
+            from . import safe_later as _sl; _sl.later(0, lambda: self._picked(doc, name, sub), self, "picks")
 
     def _picked(self, doc_name, name, sub):
         try:

@@ -62,7 +62,8 @@ A2_SKIP = ("Hidden Tree Items", "Save Selection", "Add to New Folder")
 INNER_SKIP = ("Float", "Form New Subassembly", "Copy with Mates", "Make Independent", "Delete")
 
 # inside a subassembly has no Fix or Float (read 11-19 A2: Move with Triad, Temporary Fix/Group, ..., Delete), pkg255
-INNER_REACHED = ("Delete",)
+INNER_REACHED = ("Delete", "Form New Subassembly",
+                 "Make Independent")    # the part and its subassembly get their own copies (asmpkg357, read A3-3 pending)
 
 
 def inner_skip(comp):
@@ -563,9 +564,32 @@ def show_view_menu(pos, item):
     name = "AsmEdge" if leaf.startswith("Edge") else "AsmVertex" if leaf.startswith("Vertex") else "AsmFace"
 
     # (Component (Plate)), with Select Subassembly first for the subassembly itself (pkg213)
+    holder = flexible_holder(item, comp)
+    if holder is not None:
+        # a pick inside a flexible subassembly: the solver resolves it to the inner part, but the menu is
+        # the nested one (Select Subassembly first), as inside a rigid one (case 1616)
+        comp = holder
     target = inner_component(item, comp) or comp
     return rcmenus.show(rcmenus.Builder(name, _with_edit_assembly(face_items(item, target, sub=comp)),
                                         row=face_rows(target, leaf), chevron=True), pos)
+
+
+def flexible_holder(item, comp):
+    """The flexible subassembly a graphics pick goes through when the solver resolved the pick to
+    a part inside it (comp), else None."""
+    try:
+        from . import asmcore
+        if comp is None or asmcore.is_subassembly(comp) or item[2].count(".") < 2:
+            return None
+        asm = _asm()
+        if asm is None or item[0] != asm.Document.Name or item[1] != asm.Name:
+            return None
+        first = asm.Document.getObject(item[2].split(".")[0])
+        if first is None or first is comp or not asmcore.is_flexible(first):
+            return None
+        return first if first in asmcore.components(asm) else None
+    except Exception:
+        return None
 
 
 def inner_component(item, comp):
@@ -691,6 +715,16 @@ def bar_for(comp, leaf=None):
     out = []
     for line in lines:
         out += [e for e in line if getattr(e, "key", "") != "SelectOther"]
+    try:
+
+        # drop-down (the instance's configuration name; a pick shows another one for this instance only). This bar
+        # replaced asmmenu's row and left it out, so a click on a component's face offered no way to switch.
+        from . import asmmenu, swmenus
+        entry = asmmenu.config_entry(swmenus._shell(), comp)
+        if entry is not None and not any(getattr(e, "key", "") == "QuickConfigurations" for e in out):
+            out.insert(0, entry)
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: component bar configurations: %s\n" % error)
     return out
 
 

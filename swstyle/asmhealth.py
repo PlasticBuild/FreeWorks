@@ -647,8 +647,8 @@ def _patch_icons():
             if role == Qt.DisplayRole and not isinstance(error, ReferenceError):
                 App.Console.PrintWarning("FreeCAD: tree row: %r\n" % (error,))
             return None
-        if role not in (Qt.DecorationRole, Qt.ToolTipRole) or not index.isValid():
-            return value
+        if role not in (Qt.DecorationRole, Qt.ToolTipRole) or not index.isValid() or not getattr(self, "_fw_asm", True):
+            return value        # not an assembly tree (asmui sets _fw_asm per build): no mate marks
         try:
             doc = getattr(self, "doc", None)
             st = state(doc) if doc is not None and doc.Name in App.listDocuments() else None

@@ -41,7 +41,7 @@ BLANK_TITLE = "SWBlankTitle"
 # (icon family, tooltip, page id)
 TABS = (
     ("PART_TAB", "FeatureManager Design Tree", "Model"),
-    ("CMD_PROPERTIES", "PropertyManager (FreeCAD task panel)", "Tasks"),
+    ("CMD_PROPERTIES", "PropertyManager", "Tasks"),
     ("CONFIGURATION_TAB", "ConfigurationManager", "ConfigurationManager"),
     ("FLYOUT_DIMXPERT", "DimXpertManager", "DimXpertManager"),
     ("DISPLAY_MANAGER_TAB", "DisplayManager", "DisplayManager"),
@@ -91,8 +91,7 @@ class CustomizeTabsDialog(QtWidgets.QDialog):
             b.setEnabled(pid not in KEEP)
             try:
                 ic = icons.family(fam)
-                if not ic.isNull():
-                    b.setIcon(ic)
+                b.setIcon(ic if not ic.isNull() else glyph_icon(pid))      # fmhead-1127: a glyph without the pack
             except Exception as _fw_err:
                 _fw_log("leftpane.py:96", _fw_err)
             lay.addWidget(b)
@@ -228,7 +227,8 @@ class PaneHeader(QtWidgets.QWidget):
         menu = QtWidgets.QMenu(self)
         menu.setObjectName("SWPaneMoreMenu")
         for i in self.more_tabs():
-            act = menu.addAction(self.icons[i], TABS[i][1]) if not self.icons[i].isNull() else menu.addAction(TABS[i][1])
+            icon = self.icons[i] if not self.icons[i].isNull() else glyph_icon(TABS[i][2])     # fmhead-1127
+            act = menu.addAction(icon, TABS[i][1])
             act.setObjectName("SWPaneMore_%s" % TABS[i][2].replace(" ", ""))
             act.setCheckable(True)
             act.setChecked(i == self.current)
@@ -414,6 +414,8 @@ class PaneHeader(QtWidgets.QWidget):
             p.setClipRect(r.toRect())
             if not icon.isNull():
                 style.paint_icon(p, icon, rect)
+            else:
+                tab_glyph(p, TABS[i][2], rect, k)       # fmhead-1127: no icon pack, never a blank tab
             p.restore()
         if more is not None:
             p.setRenderHint(QtGui.QPainter.Antialiasing, True)
@@ -422,9 +424,83 @@ class PaneHeader(QtWidgets.QWidget):
             c = more.center()
             for j in (-1, 0, 1):
                 p.drawEllipse(QtCore.QPointF(c.x() + j * 6.0 * k, c.y()), 1.6 * k, 1.6 * k)
-        if not self.filter_icon.isNull() and self.filter_shown():
-            style.paint_icon(p, self.filter_icon, QtCore.QRect(scaled(4, k), scaled(self.TAB_TOP + self.TAB_H + 2, k), n, n))
+        if self.filter_shown():
+            frect = QtCore.QRect(scaled(4, k), scaled(self.TAB_TOP + self.TAB_H + 2, k), n, n)
+            if not self.filter_icon.isNull():
+                style.paint_icon(p, self.filter_icon, frect)
+            else:
+                tab_glyph(p, "Filter", frect, k)
         p.end()
+
+
+def tab_glyph(p, page, rect, k=1.0):
+    """fmhead-1127 (Menus): our own drawn glyph for a manager tab when no icon pack is installed (a stock
+    install without the pictures showed blank tabs). Simple line art in the theme's text colour; never raises."""
+    try:
+        p.save()
+        p.setRenderHint(QtGui.QPainter.Antialiasing, True)
+        pen = QtGui.QPen(T.text)
+        pen.setWidthF(max(1.0, 1.2 * k))
+        p.setPen(pen)
+        p.setBrush(Qt.NoBrush)
+        r = QtCore.QRectF(rect).adjusted(2 * k, 2 * k, -2 * k, -2 * k)
+        x, y, w, h = r.x(), r.y(), r.width(), r.height()
+        P = lambda fx, fy: QtCore.QPointF(x + fx * w, y + fy * h)
+        if page == "Model":                       # a tree: a stem with three branches and leaves
+            p.drawLine(P(0.2, 0.1), P(0.2, 0.85))
+            for fy in (0.25, 0.55, 0.85):
+                p.drawLine(P(0.2, fy), P(0.45, fy))
+                p.drawRect(QtCore.QRectF(P(0.5, fy - 0.1), P(0.95, fy + 0.1)))
+        elif page == "Tasks":                     # a page with rows and a tick box
+            p.drawRect(QtCore.QRectF(P(0.1, 0.05), P(0.9, 0.95)))
+            for fy in (0.3, 0.5, 0.7):
+                p.drawLine(P(0.3, fy), P(0.75, fy))
+        elif page == "ConfigurationManager":      # two parts, one behind the other
+            p.drawRect(QtCore.QRectF(P(0.05, 0.35), P(0.6, 0.95)))
+            p.drawPolyline(QtGui.QPolygonF([P(0.25, 0.35), P(0.25, 0.05), P(0.95, 0.05), P(0.95, 0.65), P(0.6, 0.65)]))
+        elif page == "DimXpertManager":           # a dimension: two extension lines and an arrow line
+            p.drawLine(P(0.1, 0.1), P(0.1, 0.9))
+            p.drawLine(P(0.9, 0.1), P(0.9, 0.9))
+            p.drawLine(P(0.1, 0.5), P(0.9, 0.5))
+            for a, b in ((P(0.1, 0.5), P(0.25, 0.38)), (P(0.1, 0.5), P(0.25, 0.62)),
+                         (P(0.9, 0.5), P(0.75, 0.38)), (P(0.9, 0.5), P(0.75, 0.62))):
+                p.drawLine(a, b)
+        elif page == "DisplayManager":            # a shaded ball
+            p.drawEllipse(QtCore.QRectF(P(0.1, 0.1), P(0.9, 0.9)))
+            p.drawArc(QtCore.QRectF(P(0.25, 0.22), P(0.6, 0.57)), 90 * 16, 90 * 16)
+        elif page == "Python console":            # a prompt
+            p.drawPolyline(QtGui.QPolygonF([P(0.1, 0.25), P(0.4, 0.5), P(0.1, 0.75)]))
+            p.drawLine(P(0.5, 0.8), P(0.9, 0.8))
+        elif page == "Report view":               # a message box
+            p.drawRect(QtCore.QRectF(P(0.05, 0.1), P(0.95, 0.75)))
+            p.drawPolyline(QtGui.QPolygonF([P(0.25, 0.75), P(0.2, 0.95), P(0.45, 0.75)]))
+            p.drawLine(P(0.25, 0.35), P(0.75, 0.35))
+            p.drawLine(P(0.25, 0.52), P(0.6, 0.52))
+        elif page == "PropertyView":              # a two-column table
+            p.drawRect(QtCore.QRectF(P(0.05, 0.1), P(0.95, 0.9)))
+            p.drawLine(P(0.45, 0.1), P(0.45, 0.9))
+            for fy in (0.37, 0.63):
+                p.drawLine(P(0.05, fy), P(0.95, fy))
+        elif page == "Filter":                    # a funnel
+            p.drawPolygon(QtGui.QPolygonF([P(0.1, 0.15), P(0.9, 0.15), P(0.58, 0.55), P(0.58, 0.9),
+                                           P(0.42, 0.8), P(0.42, 0.55)]))
+        else:                                     # any other page: a plain frame with a dot
+            p.drawRect(QtCore.QRectF(P(0.15, 0.15), P(0.85, 0.85)))
+            p.drawPoint(P(0.5, 0.5))
+    except Exception as _fw_err:
+        _fw_log("leftpane.py:glyph", _fw_err)
+    finally:
+        p.restore()
+
+
+def glyph_icon(page, size=20):
+    """The glyph as a QIcon (the "..." menu's rows and Customize's boxes when no icon pack is installed)."""
+    pm = QtGui.QPixmap(size, size)
+    pm.fill(Qt.transparent)
+    painter = QtGui.QPainter(pm)
+    tab_glyph(painter, page, QtCore.QRect(0, 0, size, size), size / 20.0)
+    painter.end()
+    return QtGui.QIcon(pm)
 
 
 def _dialog_open():
@@ -477,6 +553,57 @@ class PageStack(QtWidgets.QStackedWidget):
 
     def sizeHint(self):
         return self._hint(False)
+
+
+WIDTH_KEY = "ManagerPaneWidth"
+
+
+def start_width():
+    ""
+    try:
+        w = App.ParamGet("User parameter:BaseApp/Preferences/Mod/FreeWorks").GetInt(WIDTH_KEY, 0)
+    except Exception:
+        w = 0
+    return w if 150 <= w <= 1200 else PANE_WIDTH
+
+
+class _WidthMemory(QtCore.QObject):
+    """Notes the width of the pane when the user drags its edge (a resize with the mouse button down)
+    and keeps it in the user parameters once the button is let go."""
+
+    def __init__(self, dock):
+        super().__init__(dock)
+        self.dock = dock
+        self.pending = None
+        dock.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        try:
+            if event.type() == QtCore.QEvent.Resize and QtWidgets.QApplication.mouseButtons() & QtCore.Qt.LeftButton:
+                if self.pending is None:
+                    QtCore.QTimer.singleShot(150, self._settled)
+                self.pending = obj.width()
+        except Exception:
+            pass
+        return False
+
+    def _settled(self):
+        if QtWidgets.QApplication.mouseButtons() & QtCore.Qt.LeftButton:
+            QtCore.QTimer.singleShot(150, self._settled)     # still dragging
+            return
+        try:
+            if self.pending and alive(self.dock):
+                k = ui_scale() or 1.0
+                App.ParamGet("User parameter:BaseApp/Preferences/Mod/FreeWorks").SetInt(
+                    WIDTH_KEY, int(round(self.dock.width() / k)))
+        except Exception:
+            pass
+        self.pending = None
+
+
+def watch_width(dock):
+    if dock is not None and not getattr(dock, "_sw_width_memory", None):
+        dock._sw_width_memory = _WidthMemory(dock)
 
 
 class _DragWatch(QtCore.QObject):

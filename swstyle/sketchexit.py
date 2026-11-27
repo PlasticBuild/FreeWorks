@@ -22,7 +22,7 @@ def _fw_log(site, err):
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtWidgets
+from PySide import QtCore, QtWidgets
 
 # ExternalGeometry first: the relations may point at external geometry
 PROPERTIES = ("ExternalGeometry", "ExternalGeo", "Geometry", "Constraints")
@@ -82,6 +82,42 @@ class Snapshot:
             obj.restorePropertyContent(p, self.saved[p])
 
 
+REBUILD = "Sketch recompute"
+
+
+def _drop_idle_rebuild(snap, count):
+    ""
+
+
+    doc = snap.doc
+    try:
+        obj = snap.sketch()
+        if obj is None or sketch_in_edit() is not None or snap.changed():
+            return
+        names = list(doc.UndoNames)
+        if doc.UndoCount != count + 1 or not names or names[0] != REBUILD:
+            return
+        from .fwsketch import undoclose
+        busy = undoclose._busy[0]
+        undoclose._busy[0] = True         # its Undo follow-up would take the step under this one too
+        try:
+            doc.undo()
+            if list(doc.RedoNames)[:1] == [REBUILD]:
+                # the undone step waits on Redo ("Redo Sketch recompute"): a change taken back at once clears
+                # Redo, as the step itself did in stock FreeCAD; nothing is added to Undo
+                doc.openTransaction(REBUILD)
+                try:
+                    keep = obj.Label2
+                    obj.Label2 = keep + " "
+                    obj.Label2 = keep
+                finally:
+                    doc.abortTransaction()      # also when the sketch is gone or refuses the write
+        finally:
+            undoclose._busy[0] = busy
+    except Exception as _fw_err:
+        _fw_log("sketchexit.py: idle rebuild step", _fw_err)
+
+
 class Watcher:
     """A FreeCAD GUI document observer: saves a sketch's content as its editing starts."""
 
@@ -93,13 +129,20 @@ class Watcher:
         if not is_sketch(obj):
             return
         try:
+            self.undo_count = obj.Document.UndoCount      # fix296
+        except Exception:
+            self.undo_count = None
+        try:
             self.snapshot = Snapshot(obj)
         except Exception as error:
             self.snapshot = None
             App.Console.PrintWarning("FreeCAD: could not save %s for Discard: %s\n" % (obj.Name, error))
 
     def slotResetEdit(self, vp):
+        snap, count = self.snapshot, getattr(self, "undo_count", None)
         self.snapshot = None
+        if snap is not None and count is not None:
+            QtCore.QTimer.singleShot(0, lambda: _drop_idle_rebuild(snap, count))
 
     def ready(self):
         """The snapshot of the sketch being edited, or None (opened before the style was on)."""
@@ -126,10 +169,30 @@ def ask(parent, label):
     return box.clickedButton() is discard
 
 
+CREATED_BY = ("Sketch on Face", "Create a new sketch")      # fwsketch.sketchfirst's steps, as FreeCAD names them
+
+
 def _delete(doc, name):
     obj = doc.getObject(name)
     if obj is None:
         return
+    # fix292: an empty sketch whose own creation is the last undo step goes by undoing that step, so
+
+    try:
+        names = list(doc.UndoNames)
+    except Exception:
+        names = []
+    if names and names[0] in CREATED_BY:
+        try:
+            doc.undo()
+            if doc.getObject(name) is None:
+                return
+            doc.redo()               # that step was not this sketch's: put it back and delete as before
+        except Exception as _fw_err:
+            _fw_log("sketchexit.py: undo the new sketch", _fw_err)
+        obj = doc.getObject(name)
+        if obj is None:
+            return
     doc.openTransaction("Discard sketch")
     try:
         for parent in obj.InList:

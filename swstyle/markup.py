@@ -509,7 +509,7 @@ class _Mode:
     TEXT = {"draw": ("Draw", "Draws freehand marks over the model"), "erase": ("Erase", "Erases the mark you click"),
             "select": ("Select", "Picks the model while the markup stays open"),
             "touch": ("Touch", "Draws with a finger or pen on a touch screen"),
-            "note": ("Note", "Puts a note where you click"), "colour": ("Color", "The colour of the marks")}
+            "note": ("Note", "Puts a note where you click"), "colour": ("Color", "The color of the marks")}
 
     def __init__(self, mode):
         self.mode = mode

@@ -162,18 +162,134 @@ class SolidFirstPage:
             _fw_log("solidfirstlive.py:command", _fw_err)
             return None
 
-    def _start(self, command):
+    def _start(self, command, before=None):
         Gui.Control.closeDialog()
         from PySide import QtCore
-        QtCore.QTimer.singleShot(200, lambda: _run(command))
+
+        def go():
+            if before is not None:
+                before()
+            _run(command)
+        QtCore.QTimer.singleShot(200, go)
 
     def getStandardButtons(self):
         from PySide import QtWidgets
-        return int(QtWidgets.QDialogButtonBox.Cancel)
+        return QtWidgets.QDialogButtonBox.Cancel    # sketchfirst-1126: int() of the enum raised in Qt6
 
     def reject(self):
         Gui.Control.closeDialog()
         return True
+
+
+class SketchFirstPage(SolidFirstPage):
+    ""
+
+
+    def __init__(self, key):
+        from PySide import QtWidgets
+        self.native = key
+        label, icon = _label_key(key)
+        self.form = QtWidgets.QWidget()
+        self.form.setWindowTitle("Message")
+        self.form.setProperty("swstyle_pm_title", label)
+        if icon:
+            self.form.setProperty("swstyle_pm_icon", icon)
+        lay = QtWidgets.QVBoxLayout(self.form)
+        lay.setContentsMargins(4, 4, 4, 4)
+        text = QtWidgets.QLabel("%s works in a sketch. Open a sketch first (pick one in the FeatureManager design "
+                                "tree and use Edit Sketch, or start a new one), then use %s." % (label, label))
+        text.setObjectName("SWSketchFirstMessage")
+        text.setWordWrap(True)
+        lay.addWidget(text)
+        has_sketch = any(o.TypeId.startswith("Sketcher::") for o in (App.ActiveDocument.Objects
+                                                                     if App.ActiveDocument else ()))
+        for k, name in ((("EditSketch", "SWSketchFirstEdit"),) if has_sketch else ()) + (("Sketch", "SWSketchFirstSketch"),):
+            cmd = self._command(k)
+            if cmd is None:
+                continue
+            b = QtWidgets.QPushButton(_key_label(k))
+            b.setObjectName(name)
+            if k == "EditSketch":      # sketchfirst2-1126: Edit Sketch picks the part's last sketch itself
+                b.clicked.connect(lambda checked=False, c=cmd: self._start(c, pick_last_sketch))
+            else:
+                b.clicked.connect(lambda checked=False, c=cmd: self._start(c))
+            lay.addWidget(b)
+        lay.addStretch(1)
+
+
+def pick_last_sketch():
+    """Selects the last sketch of the active document (Edit Sketch needs one picked); False when there is none."""
+    doc = App.ActiveDocument
+    sketches = [o for o in (doc.Objects if doc is not None else []) if o.TypeId.startswith("Sketcher::")]
+    if not sketches:
+        return False
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, sketches[-1].Name)
+    return True
+
+
+def _label_key(key):
+    try:
+        from . import catalog
+        c = catalog.BY_KEY.get(key)
+        if c is not None:
+            return c.label, c.icon
+    except Exception as _fw_err:
+        _fw_log("solidfirstlive.py:labelkey", _fw_err)
+    return key, None
+
+
+def sketch_first(key):
+    """Show the open-a-sketch-first page for a sketch tool that was clicked with no sketch open (False if a PM is up)."""
+    try:
+        if Gui.Control.activeDialog():
+            return False
+    except Exception:
+        pass
+    Gui.Selection.clearSelection()
+    Gui.Control.showDialog(SketchFirstPage(key))
+    return True
+
+
+class BodyFirstPage(SolidFirstPage):
+    """bodyfirst-1126: Move/Copy Bodies, Combine, Mirror Body and Delete/Keep Body in a part with no Body (only Part-workbench
+    solids, or nothing): a Message page that says what to do, with the buttons that start a boss."""
+
+    def __init__(self, label):
+        from PySide import QtWidgets
+        self.native = label
+        self.form = QtWidgets.QWidget()
+        self.form.setWindowTitle("Message")
+        self.form.setProperty("swstyle_pm_title", label)
+        lay = QtWidgets.QVBoxLayout(self.form)
+        lay.setContentsMargins(4, 4, 4, 4)
+        text = QtWidgets.QLabel("%s works on the solid bodies made in this part, and it has none yet (a solid brought in "
+                                "from the Part workbench is not a body). Start a body with a boss, then use %s on it." %
+                                (label, label))
+        text.setObjectName("SWBodyFirstMessage")
+        text.setWordWrap(True)
+        lay.addWidget(text)
+        for key, name in (("BossExtrude", "SWSolidFirstExtrude"), ("BossRevolve", "SWSolidFirstRevolve")):
+            cmd = self._command(key)
+            if cmd is None:
+                continue
+            b = QtWidgets.QPushButton(_key_label(key))
+            b.setObjectName(name)
+            b.clicked.connect(lambda checked=False, c=cmd: self._start(c))
+            lay.addWidget(b)
+        lay.addStretch(1)
+
+
+def body_first(label):
+    """Shows the no-body page; False when a PropertyManager is already open."""
+    try:
+        if Gui.Control.activeDialog():
+            return False
+    except Exception:
+        pass
+    Gui.Selection.clearSelection()
+    Gui.Control.showDialog(BodyFirstPage(label))
+    return True
 
 
 def _key_label(key):

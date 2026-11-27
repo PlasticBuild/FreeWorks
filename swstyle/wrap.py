@@ -411,5 +411,19 @@ SPEC = sf.Spec(
     _compute, refine=False, first_pick="Sketch")          # Scribe keeps its split faces; the others refine themselves
 
 
+
+[f for f in SPEC.fields if f.name == "Sketch"][0].kinds = ("Sketcher::",)
+
+
+def _route(obj, name, holder, element):
+    """A face of the part clicked while Source Sketch is active goes to Face for Wrap Sketch."""
+    if name == "Sketch" and (element or "").startswith("Face") and             not getattr(holder, "TypeId", "").startswith("Sketcher::"):
+        return "Face"
+    return name
+
+
+SPEC.route = _route
+
+
 def register():
     sf.register(SPEC)

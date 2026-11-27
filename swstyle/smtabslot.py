@@ -694,7 +694,7 @@ class Panel:
         f.addRow("Spacing:", self.pitch)
         self.center = QtWidgets.QCheckBox("Center align")
         self.center.setObjectName("SWSMTabCenterAlign")
-        self.center.setToolTip("Centres the tabs on the edge (else they start at the start point)")
+        self.center.setToolTip("Centers the tabs on the edge (else they start at the start point)")
         f.addRow(self.center)
         self.skip = QtWidgets.QListWidget()
         self.skip.setObjectName("SWSMTabSkip")

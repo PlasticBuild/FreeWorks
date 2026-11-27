@@ -156,6 +156,13 @@ BOX_HOOKS = []        # callables(box) called when a Modify box opens, before ex
 
 def svg_icon(svg, size=16):
     from .. import hidpi as _hidpi   # hidpi-1119: drawn at the screen's scale
+    try:
+        from .. import style as _style
+        if _style.dark():       # Dark: the traffic-light housing, the frame and the blue arrows read on a dark button
+            for a, b in (("#3a3a3a", "#9a9a9a"), ("#555", "#b0b0b0"), ("#2b5fb4", "#6f9be0")):
+                svg = svg.replace(a, b)
+    except Exception as _fw_err:
+        _fw_log("modifybox.py:svg_icon dark", _fw_err)
     pm = _hidpi.canvas(size, size)
     pm.fill(QtCore.Qt.transparent)
     if QtSvg is not None:

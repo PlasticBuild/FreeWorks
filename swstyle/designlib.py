@@ -473,6 +473,7 @@ def insert(path, doc=None, pick=None, point=None, pm=True):
     if asm is not None:
         if ext == ".fcstd":
             src, _ = _source(path)
+            _front(doc)         # the part's file opens hidden and takes the active document: the assembly keeps it
             target = asmcore.part_object(src)
         else:
             import Part
@@ -1032,7 +1033,9 @@ def page(pane):
             here = os.path.normcase(os.path.abspath(folder))
             root = os.path.normcase(os.path.abspath(smformlib.folder()))
             if here == root or here.startswith(root + os.sep):     # extapps108: the category folders below it too
-                smformlib.ensure_files()
+                keep = App.ActiveDocument
+                if smformlib.ensure_files():
+                    _front(keep)        # building a tool closes its document: the part in front stays the active one
         except Exception as _fw_err:
             _fw_log("designlib.py:forming", _fw_err)
         found = files_in(folder)
@@ -1192,13 +1195,19 @@ def page(pane):
             folder = os.path.dirname(folder)
         if not (folder and os.path.isdir(folder)):
             folder = library_root()
-        path = add_selection(folder)
-        show_files()
-        if path:
-            select(path)
-        else:
+        if App.ActiveDocument is None and not Gui.Selection.getSelection():
             _tell("Add to Library", "Nothing was added: open a part or assembly, or pick its features, first.")
-        return path
+            return None
+
+        dlg = add_panel()
+        dlg.select(folder)
+
+        def _done(*_):
+            show_files()
+            if dlg.path:
+                select(dlg.path)
+        dlg.finished.connect(_done)
+        return dlg
 
     def do_location(path=None):
         if path is None:

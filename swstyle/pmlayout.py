@@ -91,7 +91,10 @@ BOXES = {
 
 CLOSED = {
     ("Linear Pattern", "Bodies"), ("Linear Pattern", "Instances to Skip"),
-    ("Linear Pattern", "Instances to Vary"), ("Linear Pattern", "Direction 2"),
+    ("Linear Pattern", "Instances to Vary"),
+
+    # read 16, pm-heights-1120/linearpattern-top.jpg: Symmetric, the box, Spacing and instances, 1 instance,
+    # Pattern seed only); Circular Pattern's Direction 2 is the one with a tick that starts folded
     # look audit AA1: the surface Extrude / Revolve fold Direction 2 and Selected Contours, as Boss-Extrude
     ("Surface-Extrude", "Direction 2"), ("Surface-Extrude", "Selected Contours"),
     ("Surface-Revolve", "Direction2"), ("Surface-Revolve", "Selected Contours"),
@@ -99,14 +102,14 @@ CLOSED = {
     ("Circular Pattern", "Instances to Vary"),
     ("Mirror", "Bodies to Mirror"),
 
-    # the pane without a scroll; a pick in them (or a ticked Thin Feature) opens the group again
-    ("Mirror", "Secondary Mirror Face/Plane"), ("Mirror", "Faces to Mirror"),
+    # without a scroll; a ticked Thin Feature opens the group again. Mirror's Secondary Mirror
+
     ("Boundary Boss/Base", "Thin Feature"), ("Boundary Boss/Base", "Curvature Display"),
     ("Boundary Cut", "Thin Feature"), ("Boundary Cut", "Curvature Display"),
     ("Sweep", "Guide Curves"), ("Loft", "Guide Curves"),
     # surfpm-1121: the surface Loft and Sweep start with these folded (Surfaces video)
     ("Surface-Loft", "Start/End Constraints"), ("Surface-Loft", "Centerline Parameters"),
-    ("Surface-Loft", "Curvature Display"), ("Surface-Sweep", "Guide Curves"), ("Surface-Sweep", "Options"),
+    ("Surface-Loft", "Curvature Display"), ("Surface-Loft", "Sketch Tools"), ("Surface-Sweep", "Guide Curves"), ("Surface-Sweep", "Options"),
     ("Surface-Sweep", "Start and End Tangency"), ("Surface-Sweep", "Curvature Display"),
     ("Section View", "Section 2"), ("Section View", "Section 3"),
     # insertcomp-1121: Thumbnail Preview starts folded (2025 video)
@@ -119,7 +122,6 @@ HEADER_CHECKS = {
     # features-416: Boundary's Thin Feature is ticked in its header, as Sweep and Loft
     ("Boundary Boss/Base", "Thin Feature"): ("inner", "SWStyle_BoundaryThin"),
     ("Boundary Cut", "Thin Feature"): ("inner", "SWStyle_BoundaryThin"),
-    ("Linear Pattern", "Direction 2"): ("inner", "SWPatternDir2On"),      # look audit Z3, as Circular Pattern
     # look audit AA1 / AA2: ticked in the title, not by a second box of the same name inside
     ("Surface-Extrude", "Direction 2"): ("inner", "SWSurfDirection2"),
     ("Surface-Revolve", "Direction2"): ("inner", "SWSurfDirection2"),
@@ -149,6 +151,9 @@ HEADER_CHECKS_ANY = {
     "Custom Bend Allowance": ("inner", "SWSMCustomAllowance"),
     "Custom Relief Type": ("inner", "SWSMCustomRelief"),
     "Corner Treatment": ("inner", "SWWECapCorner"),
+
+    # read 16, fillet-manual-dark.jpg; features-464)
+    "Partial Edge Parameters": ("inner", "SWFilletPartialOn"),
     # Simulation plot PMs (Stress, Displacement, Strain...): Deformed shape is ticked in its title
     "Deformed shape": ("inner", "SWSimPlotDeformed"),
 }
@@ -560,7 +565,10 @@ def _seed_folds(view, title):
         if key not in CLOSED or not group.property("expandable"):
             continue
         group.setProperty("swlayout_fold", True)
-        if propertymanager.FOLDS.get(key) is False and _group_open(group):
+        # a fold already running (the page memory folded it a moment ago) is not toggled again: a second
+        # showHide while the first still animates opened the group back up (features-464)
+        if propertymanager.FOLDS.get(key) is False and _group_open(group) and not propertymanager._settling(group):
+            propertymanager.settle_fold(group)
             _show_hide(group)
             propertymanager._FOLD_SEEN[id(group)] = (key, False)
 
@@ -743,7 +751,8 @@ GROUP_BOXES = {
     "SWStyle_SketchTools": "Sketch Tools", "SWStyle_CurvatureDisplay": "Curvature Display",   # features/91
 }
 GROUP_CLOSED = {"SWStyle_StartEndTangency", "SWStyle_StartEndConstraints", "SWStyle_GuideCurves",
-                "SWStyle_CenterlineParameters", "SWStyle_FeatureScope", "SWStyle_SketchTools", "SWStyle_CurvatureDisplay"}
+                "SWStyle_CenterlineParameters", "SWStyle_FeatureScope", "SWStyle_CurvatureDisplay"}
+
 THIN_CHECKS = {"SWStyle_ThinFeature": ("SWStyle_SweepThin", "SWStyle_LoftThin")}
 
 

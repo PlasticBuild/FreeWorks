@@ -89,8 +89,15 @@ def edited():
     if obj is None:
 
 
-        if _sketch3d_open() or _button(QtWidgets.QDialogButtonBox.AcceptRole) is None:
+
+        # ready yet: Extrude, Revolve, Rib, Base Flange ...): its Cancel is there, so it gets the menu,
+
+        # keep FreeCAD's own menu and their Finish / Close items
+        if _sketch3d_open():
             return None
+        if _button(QtWidgets.QDialogButtonBox.AcceptRole) is None:
+            if _button(QtWidgets.QDialogButtonBox.RejectRole) is None or not _own_page():
+                return None
         return PM
     t = getattr(obj, "TypeId", "")
     if t in SKIP or not (t.startswith("PartDesign::") or t.startswith("Part::")):
@@ -116,6 +123,18 @@ def _sketch3d_open():
         return bool(sketch3d.editing())
     except Exception:
         return False
+
+
+def _own_page():
+    ""
+    try:
+        window = Gui.getMainWindow()
+        for w in window.findChildren(QtWidgets.QWidget):
+            if w.property("swstyle_pm_title") and w.isVisible() and _class_chain(w):
+                return True
+    except Exception as _fw_err:
+        _fw_log("featuremenu.py:own-page", _fw_err)
+    return False
 
 
 def _class_chain(w):
@@ -281,6 +300,13 @@ def _selection_items():
     clear = clearable()
     if clear is not None:       # pkg260: nothing picked, nothing to clear: left out, not greyed (no dead controls)
         out.append(rcmenus.action("ClearSelections", rcmenus.T_CLEAR, clear))
+    try:
+        from . import selman
+        sm = selman.menu_action()   # None when no page takes model picks: left out, not greyed
+        if sm is not None:
+            out.append(sm)
+    except Exception as _fw_err:
+        _fw_log("featuremenu.py:selman", _fw_err)
     out.append(rcmenus.zoom_menu())
 
     # PM's graphics-area menu (pmconfirm.view_menu); Qt's Windows icons only when those cannot be had
@@ -297,7 +323,9 @@ def _selection_items():
         ok_icon = style.standardIcon(QtWidgets.QStyle.SP_DialogApplyButton)
     if cancel_icon is None or cancel_icon.isNull():
         cancel_icon = style.standardIcon(QtWidgets.QStyle.SP_DialogCancelButton)
-    out.append(rcmenus.action("OK", rcmenus.T_OK, ok, icon=ok_icon))
+    if page() is not None or _mate_panel() is not None or _button(QtWidgets.QDialogButtonBox.AcceptRole) is not None:
+        # pkg427: a page whose OK is not ready yet leaves OK out (not greyed: no dead controls, as pkg260)
+        out.append(rcmenus.action("OK", rcmenus.T_OK, ok, icon=ok_icon))
     out.append(rcmenus.action("Cancel", rcmenus.T_CANCEL, cancel, icon=cancel_icon))
     return out
 

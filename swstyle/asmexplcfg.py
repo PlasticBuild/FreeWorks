@@ -342,11 +342,11 @@ def install():
     if not getattr(cm, "_fw_expldelete", False):
         delete0 = cm.delete
 
-        def delete(t, name):
+        def delete(t, name, *args, **kwargs):     # ask= and the rest go through to configmanager.delete
             doc = t.sheet.Document
             asm = ac.assembly_of(doc)
             gone = [v for v in ax.views(asm) if getattr(v, CFG_PROP, "") == name] if asm is not None else []
-            done = delete0(t, name)
+            done = delete0(t, name, *args, **kwargs)
             if done and gone:
                 try:
                     _remove_views(doc, asm, gone)

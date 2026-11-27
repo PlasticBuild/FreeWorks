@@ -433,6 +433,277 @@ class PropsPanel:
         return True
 
 
+
+SOLVER_NAMES = {"spooles": "Direct sparse (SPOOLES)", "iterativescaling": "Iterative (scaling)",
+                "iterativecholesky": "Iterative (Cholesky)"}
+REMARK, REMARK_REPORT = "FwRemark", "FwRemarkInReport"
+
+
+def remark(a):
+    """The study's Remark tab: (text, include in report)."""
+    return str(getattr(a, REMARK, "") or ""), bool(getattr(a, REMARK_REPORT, False))
+
+
+def set_remark(a, text, in_report):
+    for name, kind in ((REMARK, "App::PropertyString"), (REMARK_REPORT, "App::PropertyBool")):
+        if name not in a.PropertiesList:
+            a.addProperty(kind, name, "FreeCAD", "Study Properties > Remark")
+            a.setPropertyStatus(name, "Hidden")
+    setattr(a, REMARK, text)
+    setattr(a, REMARK_REPORT, bool(in_report))
+
+
+if Gui is not None:
+    class StaticProperties(QtWidgets.QDialog):
+        ""
+
+
+
+        def __init__(self, a, parent=None):
+            super().__init__(parent or Gui.getMainWindow())
+            from . import addintabs
+            self.a = a
+            self.solver = addintabs._solver(a)
+            self.setObjectName("SWSimStudyProperties")
+            self.setWindowTitle("Static")
+            self.setWindowFlags(self.windowFlags() & ~QtCore.Qt.WindowContextHelpButtonHint)
+            lay = QtWidgets.QVBoxLayout(self)
+            self.tabs = QtWidgets.QTabWidget()
+            self.tabs.setObjectName("SWSimStudyPropertiesTabs")
+            lay.addWidget(self.tabs)
+            # Options
+            opt = QtWidgets.QWidget()
+            ol = QtWidgets.QVBoxLayout(opt)
+            sf = QtWidgets.QGroupBox("Solver")
+            sl = QtWidgets.QVBoxLayout(sf)
+            sel = QtWidgets.QGroupBox("Selection")
+            gl = QtWidgets.QGridLayout(sel)
+            self.auto = QtWidgets.QRadioButton("Automatic")
+            self.auto.setObjectName("SWSimPropSolverAuto")
+            self.manual = QtWidgets.QRadioButton("Manual")
+            self.manual.setObjectName("SWSimPropSolverManual")
+            self.choice = QtWidgets.QComboBox()
+            self.choice.setObjectName("SWSimPropSolverChoice")
+            kinds = []
+            cur = "default"
+            if self.solver is not None and "MatrixSolverType" in self.solver.PropertiesList:
+                have = list(self.solver.getEnumerationsOfProperty("MatrixSolverType"))
+                kinds = [k for k in SOLVER_NAMES if k in have]       # the ones every CalculiX build has
+                cur = str(self.solver.MatrixSolverType)
+            self.choice.addItems([SOLVER_NAMES[k] for k in kinds])
+            self.kinds = kinds
+            gl.addWidget(self.auto, 0, 0)
+            gl.addWidget(self.manual, 1, 0)
+            gl.addWidget(self.choice, 1, 1)
+            sl.addWidget(sel)
+            ol.addWidget(sf)
+            (self.manual if cur in kinds else self.auto).setChecked(True)
+            if cur in kinds:
+                self.choice.setCurrentIndex(kinds.index(cur))
+            self.manual.setVisible(bool(kinds))
+            self.manual.toggled.connect(self._solver_rows)
+            self.large = QtWidgets.QCheckBox("Large displacement")
+            self.large.setObjectName("SWSimPropLarge")
+            self.large.setVisible(self.solver is not None and "GeometricalNonlinearity" in self.solver.PropertiesList)
+            if self.large.isVisible() or self.solver is not None:
+                self.large.setChecked(str(getattr(self.solver, "GeometricalNonlinearity", "linear")) == "nonlinear")
+            ol.addWidget(self.large)
+
+            # fixtures leave free (loads in balance) still solves
+            from . import simtypes as _st
+            self.soft = QtWidgets.QCheckBox("Use soft spring to stabilize the model")
+            self.soft.setObjectName("SWSimPropSoft")
+            self.soft.setToolTip("Adds very weak springs to ground at every node, so a part that is not fully held "
+                                 "by its fixtures still solves. Use it when the loads are in balance.")
+            self.soft.setChecked(bool(getattr(a, _st.SOFT, False)))
+            ol.addWidget(self.soft)
+
+            # own inertia (the loads' resultant taken by an even acceleration of the whole part)
+            self.inertial = QtWidgets.QCheckBox("Use inertial relief")
+            self.inertial.setObjectName("SWSimPropInertial")
+            self.inertial.setToolTip("For a part with no fixtures: its own inertia balances the loads, as for a "
+                                     "part in flight or in free fall.")
+            self.inertial.setChecked(bool(getattr(a, _st.INERTIAL, False)))
+            ol.addWidget(self.inertial)
+            ol.addStretch(1)
+            self.tabs.addTab(opt, "Options")
+            # Remark
+            rem = QtWidgets.QWidget()
+            rl = QtWidgets.QVBoxLayout(rem)
+            text, in_report = remark(a)
+            self.in_report = QtWidgets.QCheckBox("Include in report")
+            self.in_report.setObjectName("SWSimPropRemarkReport")
+            self.in_report.setChecked(in_report)
+            cf = QtWidgets.QGroupBox("Comment")
+            cl = QtWidgets.QVBoxLayout(cf)
+            self.comment = QtWidgets.QPlainTextEdit(text)
+            self.comment.setObjectName("SWSimPropRemark")
+            cl.addWidget(self.comment)
+            rl.addWidget(self.in_report)
+            rl.addWidget(cf)
+            self.tabs.addTab(rem, "Remark")
+            bb = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel |
+                                            QtWidgets.QDialogButtonBox.Apply)
+            bb.setObjectName("SWSimStudyPropertiesButtons")
+            bb.accepted.connect(self.accept)
+            bb.rejected.connect(self.reject)
+            self.apply_btn = bb.button(QtWidgets.QDialogButtonBox.Apply)
+            self.apply_btn.clicked.connect(self.apply)
+            self.apply_btn.setEnabled(False)
+            for sig in (self.auto.toggled, self.manual.toggled, self.choice.currentIndexChanged, self.large.toggled,
+                        self.soft.toggled, self.inertial.toggled, self.in_report.toggled, self.comment.textChanged):
+                sig.connect(lambda *_x: self.apply_btn.setEnabled(True))
+            lay.addWidget(bb)
+            self._solver_rows()
+
+        def _solver_rows(self, *_x):
+            self.choice.setVisible(self.manual.isChecked())   # shown only for Manual (greyed is a dead control)
+
+        def values(self):
+            solver = self.kinds[self.choice.currentIndex()] if self.manual.isChecked() and self.kinds else "default"
+            return {"solver": solver, "large": self.large.isChecked(), "remark": self.comment.toPlainText(),
+                    "in_report": self.in_report.isChecked(), "soft": self.soft.isChecked(),
+                    "inertial": self.inertial.isChecked()}
+
+        def apply(self):
+            v = self.values()
+            doc = self.a.Document
+            doc.openTransaction("Study Properties")
+            try:
+                s = self.solver
+                if s is not None and "MatrixSolverType" in s.PropertiesList:
+                    s.MatrixSolverType = v["solver"]
+                if s is not None and "GeometricalNonlinearity" in s.PropertiesList:
+                    s.GeometricalNonlinearity = "nonlinear" if v["large"] else "linear"
+                from . import simtypes
+                if s is not None:
+                    simtypes.set_properties(self.a, soft=v["soft"], inertial=v["inertial"])
+                set_remark(self.a, v["remark"], v["in_report"])
+                doc.commitTransaction()
+            except Exception:
+                doc.abortTransaction()
+                raise
+            doc.recompute()
+            self.apply_btn.setEnabled(False)
+            return True
+
+        def accept(self):
+            try:
+                self.apply()
+            except Exception as error:
+                QtWidgets.QMessageBox.warning(self, self.windowTitle(), str(error))
+                return
+            super().accept()
+
+    class ModalProperties(StaticProperties):
+        ""
+
+
+
+        def __init__(self, a, parent=None):
+            super().__init__(a, parent)
+            from . import simtypes
+            self.kind = simtypes.study_type(a)
+            v = simtypes.properties(a)
+            self.setWindowTitle("Frequency" if self.kind == "frequency" else "Buckling")
+            self.large.setVisible(False)
+            self.inertial.setVisible(False)                 # a static option
+            opt = self.tabs.widget(0)
+            ol = opt.layout()
+            box = QtWidgets.QGroupBox("Options")
+            box.setObjectName("SWSimPropOptions")
+            gl = QtWidgets.QGridLayout(box)
+            self.count = QtWidgets.QSpinBox()
+            self.count.setObjectName("SWSimPropCount")
+            self.count.setRange(1, 200)
+            self.count.setValue(int(v.get("count") or (5 if self.kind == "frequency" else 1)))
+            gl.addWidget(QtWidgets.QLabel("Number of frequencies" if self.kind == "frequency" else "Number of buckling modes"), 0, 0)
+            gl.addWidget(self.count, 0, 1)
+            self.upper_on = self.upper = None
+            if self.kind == "frequency":
+                self.upper_on = QtWidgets.QCheckBox("Upper bound frequency")
+                self.upper_on.setObjectName("SWSimPropUpperOn")
+                self.upper = QtWidgets.QDoubleSpinBox()
+                self.upper.setObjectName("SWSimPropUpper")
+                self.upper.setRange(0.001, 1e9)
+                self.upper.setDecimals(3)
+                self.upper.setSuffix(" Hz")
+                self.upper.setValue(v.get("upper") or 1000.0)
+                self.upper_on.setChecked(v.get("upper") is not None)
+                self.upper.setVisible(self.upper_on.isChecked())   # shown only while ticked (greyed is a dead control)
+                self.upper_on.toggled.connect(self.upper.setVisible)
+                gl.addWidget(self.upper_on, 1, 0)
+                gl.addWidget(self.upper, 1, 1)
+
+                # part, solved as a static step then the frequencies about it
+                self.inplane = QtWidgets.QCheckBox("Use inplane effect")
+                self.inplane.setObjectName("SWSimPropInplane")
+                self.inplane.setToolTip("The study's loads change the frequencies: tension raises them, compression "
+                                        "lowers them. Without it the loads are not used.")
+                self.inplane.setChecked(bool(v.get("inplane")))
+                gl.addWidget(self.inplane, 2, 0, 1, 2)
+                gl.addWidget(self.soft, 3, 0, 1, 2)
+            else:
+                self.soft.setVisible(False)
+            ol.insertWidget(0, box)
+            sigs = [self.count.valueChanged]
+            if self.upper_on is not None:
+                sigs += [self.upper_on.toggled, self.upper.valueChanged, self.inplane.toggled]
+            for sig in sigs:
+                sig.connect(lambda *_x: self.apply_btn.setEnabled(True))
+
+        def values(self):
+            v = super().values()
+            v["count"] = self.count.value()
+            if self.kind == "frequency":
+                v["upper"] = self.upper.value() if self.upper_on.isChecked() else None
+                v["inplane"] = self.inplane.isChecked()
+            else:
+                v.pop("soft", None)
+            v.pop("inertial", None)
+            return v
+
+        def apply(self):
+            from . import simtypes
+            v = self.values()
+            doc = self.a.Document
+            doc.openTransaction("Study Properties")
+            try:
+                s = self.solver
+                if s is not None and "MatrixSolverType" in s.PropertiesList:
+                    s.MatrixSolverType = v["solver"]
+                kw = {"count": v["count"]}
+                if self.kind == "frequency":
+                    kw["upper"] = v["upper"]
+                    kw["inplane"] = v["inplane"]
+                    kw["soft"] = v["soft"]
+                simtypes.set_properties(self.a, **kw)
+                set_remark(self.a, v["remark"], v["in_report"])
+                doc.commitTransaction()
+            except Exception:
+                doc.abortTransaction()
+                raise
+            doc.recompute()
+            self.apply_btn.setEnabled(False)
+            return True
+
+    def open_modal_properties(a):
+        dlg = ModalProperties(a)
+        dlg.show()
+        dlg.raise_()
+        OPEN_DIALOGS[:] = [dlg]
+        return dlg
+
+    def open_static_properties(a):
+        dlg = StaticProperties(a)
+        dlg.show()
+        dlg.raise_()
+        OPEN_DIALOGS[:] = [dlg]
+        return dlg
+
+OPEN_DIALOGS = []
+
+
 def _props():
     a = _analysis()
     if a is None:

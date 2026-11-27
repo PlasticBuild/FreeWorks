@@ -42,7 +42,8 @@ except ImportError:  # pragma: no cover
     Gui = None
 
 SECTIONS = ("Description", "Assumptions", "Model Information", "Study Properties", "Units", "Material Properties",
-            "Loads and Fixtures", "Contact Information", "Mesh information", "Study Results", "Conclusion")
+            "Loads and Fixtures", "Connector Definitions", "Contact Information", "Mesh information", "Study Results",
+            "Conclusion")
 TEXT_SECTIONS = ("Description", "Assumptions", "Conclusion")
 HEADER = ("Designer", "Company", "URL", "Address", "Phone", "Fax")
 PARAMS = "User parameter:BaseApp/Preferences/Mod/FreeWorks/SimReport"
@@ -179,6 +180,15 @@ def _pm_value(k):
     return ""
 
 
+def _name(o):
+    """The row's name in its study (Fixed-1 in every study, as the study tree shows it)."""
+    try:
+        from . import simpms
+        return simpms.study_name(o)
+    except Exception:
+        return o.Label
+
+
 def _row_kind(o):
     t = o.TypeId
     k = _kept(o)
@@ -275,6 +285,69 @@ def _material_study(a):
     return a
 
 
+def _connectors(a):
+    ""
+    try:
+        from . import asmsim
+    except ImportError:
+        return []
+    out = []
+    for o in asmsim.connectors(a):
+        kind, v = getattr(o, asmsim.CONNECTOR, ""), asmsim.values_of(o)
+        n = sum(len(subs or ()) for _obj, subs in (getattr(o, "References", []) or []))
+        rows = [("Entities", "%d face(s)" % n), ("Type", kind)]
+        if kind == "Bolt":
+            e_mpa, nu = asmsim.bolt_material(v)
+            rows.append(("Nominal shank diameter", "%.4g mm" % float(v.get("diameter") or 0.0)))
+            if float(v.get("preload") or 0.0) > 0:
+                if v.get("preload_type") == "Torque":
+                    rows.append(("Preload (Torque)", "%.4g N.m" % (float(v["preload"]) / 1000.0)))
+                    rows.append(("Friction factor", "%.4g" % float(v.get("friction_factor") or 0.2)))
+                else:
+                    rows.append(("Preload (Axial)", "%.4g N" % float(v["preload"])))
+            rows.append(("Material", "Custom" if v.get("e_mpa") else (v.get("material") or "Alloy Steel")))
+            rows.append(("Young's modulus", "%.4g N/m^2" % (e_mpa * 1e6)))
+            rows.append(("Poisson's ratio", "%.4g" % nu))
+        elif kind == "Pin":
+            rows.append(("With retaining ring", "Yes" if v.get("ring") else "No"))
+            rows.append(("With key", "Yes" if v.get("key") else "No"))
+        elif kind == "Spring":
+            rows.append(("Axial stiffness", "%.4g N/mm" % float(v.get("axial") or 0.0)))
+            rows.append(("Tangential stiffness", "%.4g N/mm" % float(v.get("tangential") or 0.0)))
+        elif kind == "Bearing":
+            rows.append(("Stiffness", v.get("stiffness") or "Rigid"))
+            if v.get("stiffness") == "Flexible":
+                rows.append(("Lateral stiffness", "%.4g N/mm" % float(v.get("lateral") or 0.0)))
+                rows.append(("Axial stiffness", "%.4g N/mm" % float(v.get("axial") or 0.0)))
+            rows.append(("Self-aligning", "Yes" if v.get("align") else "No"))
+        if getattr(o, "Suppressed", False):
+            rows.append(("Suppressed", "Yes"))
+        out.append({"name": _name(o), "type": kind, "entities": _refs(o), "rows": rows})
+    return out
+
+
+AMP_TYPE = {"AMPRES": "Resultant Amplitude", "AMPX": "X Amplitude", "AMPY": "Y Amplitude", "AMPZ": "Z Amplitude"}
+
+
+def _amp_type(a, p):
+    ""
+
+    if p.get("quantity") != "Amplitude":
+        return None
+    try:
+        from . import simtypes
+        n = int(p.get("mode") or 1)
+        v = next((v for m, _r, v in simtypes.modes(a) if m == n), None)
+        what = AMP_TYPE.get(p.get("comp"), p.get("comp", ""))
+        if v is None:
+            return "%s: %s Plot for Mode Shape: %d" % (p.get("comp", ""), what, n)
+        val = ("Value = %.5g Hz" if simtypes.study_type(a) == "frequency" else "Load Factor = %.5g") % v
+        return "%s: %s Plot for Mode Shape: %d(%s)" % (p.get("comp", ""), what, n, val)
+    except Exception as _fw_err:
+        _fw_log("simreport.py:amptype", _fw_err)
+        return None
+
+
 def gather(a):
     """Everything the report shows, as plain data (the checks read it)."""
     from . import simtree, simplots
@@ -314,16 +387,17 @@ def gather(a):
     for o in a.Group:
         k = simtree.ftype(o)
         if _kept(o).get("kind") in PM_KINDS:       # Torque, Remote Load/Mass, ... ride on other FEM objects
-            loads.append({"name": o.Label, "type": _row_kind(o), "entities": _refs(o), "value": _value(o)})
+            loads.append({"name": _name(o), "type": _row_kind(o), "entities": _refs(o), "value": _value(o)})
         elif k in simtree.FIXTURES:
-            fixtures.append({"name": o.Label, "type": _row_kind(o), "entities": _refs(o), "value": _value(o)})
+            fixtures.append({"name": _name(o), "type": _row_kind(o), "entities": _refs(o), "value": _value(o)})
         elif k in simtree.LOADS or k in simtree.THERMAL:
             if simtree.hidden_initial(a, o):        # not a load the user gave (steady-state thermal)
                 continue
-            loads.append({"name": o.Label, "type": _row_kind(o), "entities": _refs(o), "value": _value(o)})
+            loads.append({"name": _name(o), "type": _row_kind(o), "entities": _refs(o), "value": _value(o)})
         elif k in simtree.CONNECTIONS:
-            contacts.append({"name": o.Label, "type": _row_kind(o), "entities": _refs(o)})
+            contacts.append({"name": _name(o), "type": _row_kind(o), "entities": _refs(o)})
     out["fixtures"], out["loads"], out["contacts"] = fixtures, loads, contacts
+    out["connectors"] = _connectors(a)
     mesh = None
     for m in simtree._meshes(src if simtree.kind(a) == "pressure" else a):
         try:
@@ -354,7 +428,7 @@ def gather(a):
                     continue
                 s = simplots.summary(a, p)
                 results.append({"name": p["name"], "title": simplots.title(p), "head": simplots.legend_head(p),
-                                "comp": p.get("comp", ""), "min": s["min"], "min_node": s["min_node"], "max": s["max"], "max_node": s["max_node"],
+                                "type": _amp_type(a, p), "comp": p.get("comp", ""), "min": s["min"], "min_node": s["min_node"], "max": s["max"], "max_node": s["max_node"],
                                 "yield": simplots.yield_strength(a, p) if p["quantity"] == "Stress" and p["comp"] == "VON" else None})
     except Exception as _fw_err:
         _fw_log("simreport.py:results", _fw_err)
@@ -406,6 +480,8 @@ def gather(a):
         if out["kind"] == "frequency" and results:
             out["modes"] = simtypes.frequencies(a)
             out["participation"] = simtypes.mass_participation(a)    # and Mass Participation (Normalized)
+        if out["kind"] == "buckling" and results:
+            out["factors"] = [(n, v) for n, _r, v in simtypes.modes(a)]
     except Exception as _fw_err:
         _fw_log("simreport.py:types", _fw_err)
     return out
@@ -587,6 +663,8 @@ def build_html(a, data, o, pics):
                 rows.append(("Number of frequencies", props.get("count", "")))
                 if props.get("upper"):
                     rows.append(("Upper bound frequency", "%.6g Hz" % props["upper"]))
+                rows.append(("Use inplane effect", "On" if props.get("inplane") else "Off"))
+                rows.append(("Soft Spring", "On" if props.get("soft") else "Off"))
             elif data.get("kind") == "thermomech":
                 steady = props.get("steady", True)
                 rows.append(("Solution type", "Steady state" if steady else "Transient"))
@@ -680,7 +758,17 @@ def build_html(a, data, o, pics):
             if data.get("kind") not in ("thermomech", "frequency", "buckling", "drop", "fatigue", "nonlinear", "topology",
                                          "pressure", "lineardynamic"):
                 rows.append(("Large displacement", "On" if sv.get("nonlinear") == "nonlinear" else "Off"))
+            if data.get("kind") in ("static", "check", None, ""):
+                rows.append(("Soft Spring", "On" if props.get("soft") else "Off"))
+                rows.append(("Inertial Relief", "On" if props.get("inertial") else "Off"))
             rows.append(("Result folder", os.path.dirname(a.Document.FileName) if a.Document.FileName else "(the part is not saved)"))
+            try:                                     # Study Properties > Remark, when "Include in report" is ticked
+                from . import simstudy
+                text, in_report = simstudy.remark(a)
+                if in_report and text.strip():
+                    rows.append(("Remark", text.strip()))
+            except Exception as _fw_err:
+                _fw_log("simreport.py:remark", _fw_err)
             parts.append(_t(rows))
         elif s == "Units":
             if ips:
@@ -717,6 +805,9 @@ def build_html(a, data, o, pics):
                 parts.append("<h3>%s</h3>" % ("Thermal Loads" if data.get("kind") == "thermomech" else "Loads") +
                              _t([(f["name"], f["type"], f["entities"], f["value"]) for f in data["loads"]],
                                 ("Load name", "Type", "Entities", "Value")))
+        elif s == "Connector Definitions":
+            for c in data.get("connectors") or []:
+                parts.append("<h3>%s</h3>" % e(c["name"]) + _t(c["rows"], ("Connector Details", "")))
         elif s == "Contact Information":
             parts.append(_t([(c["name"], c["type"], c["entities"]) for c in data["contacts"]], ("Contact", "Type", "Entities")))
         elif s == "Mesh information":
@@ -731,7 +822,7 @@ def build_html(a, data, o, pics):
             tv = data.get("topology") or {}
             if tv.get("passes"):
                 parts.append("<h3>Material Mass1 (-Material Mass-)</h3>")
-                parts.append(_t([("Passes", tv["passes"]), ("Mass kept by the optimisation", "%.1f %%" % (100.0 * tv["mass"])),
+                parts.append(_t([("Passes", tv["passes"]), ("Mass kept by the optimization", "%.1f %%" % (100.0 * tv["mass"])),
                                  ("Shown at relative mass density %.2f and above" % float(tv.get("threshold", 0.5)),
                                   "%.1f %% of the part" % (100.0 * (tv.get("shown") or 0.0))),
                                  (("Compliance (first pass, last pass)", "%.4g N.mm, %.4g N.mm" % (tv["first"], tv["last"]))
@@ -742,6 +833,7 @@ def build_html(a, data, o, pics):
                 unit = r["head"][r["head"].rfind("(") + 1:-1] if r["head"].endswith(")") and "(" in r["head"] else ""
                 words = r["title"][r["title"].find("(-") + 2:r["title"].rfind("-)")] if "(-" in r["title"] else r["head"]
                 kind = "%s: %s" % (r["comp"], words) if r.get("comp") else words
+                kind = r.get("type") or kind
                 parts.append(_t([(e(r["name"]), e(kind), "%.3e%s<br>Node: %s" % (r["min"], e(unit), r["min_node"]),
                                   "%.3e%s<br>Node: %s" % (r["max"], e(unit), r["max_node"]))], ("Name", "Type", "Min", "Max"), raw=True))
                 if pics.get(r["name"]):
@@ -757,6 +849,9 @@ def build_html(a, data, o, pics):
             if data.get("modes"):
                 parts.append("<h3>Mode List</h3>" + _t([(n, "%.6g" % rad, "%.6g" % hz, "%.6g" % per) for n, rad, hz, per in data["modes"]],
                                                        ("Frequency Number", "Rad/sec", "Hertz", "Seconds")))
+            if data.get("factors"):
+                parts.append("<h3>Mode List</h3>" + _t([(n, "%.6g" % v) for n, v in data["factors"]],
+                                                       ("Mode Number", "Load Factor")))
             mp = data.get("participation")
             if mp:
                 rows = [(n, "%.6g" % hz, "%.4g" % x, "%.4g" % y, "%.4g" % z) for n, hz, x, y, z in mp]
@@ -773,6 +868,8 @@ def _has(s, data, texts):
         return bool(texts.get(s, "").strip())
     if s == "Contact Information":
         return bool(data["contacts"])
+    if s == "Connector Definitions":
+        return bool(data.get("connectors"))
     if s == "Mesh information":
         return data["mesh"] is not None
     if s == "Study Results":

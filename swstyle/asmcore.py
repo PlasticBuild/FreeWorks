@@ -338,6 +338,24 @@ def _load_parts(asm):
                 App.openDocument(d.FileName)
         except Exception as error:
             App.Console.PrintLog("FreeCAD: %s not loaded fully: %s\n" % (d.Label, error))
+    if seen and App.GuiUp:
+        _front(asm.Document)
+
+
+def _front(doc):
+    ""
+
+    try:
+        import FreeCADGui
+        from PySide import QtWidgets
+        mdi = FreeCADGui.getMainWindow().findChild(QtWidgets.QMdiArea)
+        for sub in (mdi.subWindowList() if mdi is not None else []):
+            if sub.windowTitle().split(" : ")[0].rstrip("*") == doc.Label:
+                mdi.setActiveSubWindow(sub)
+                break
+        App.setActiveDocument(doc.Name)
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: %s not brought to the front: %s\n" % (doc.Label, error))
 
 
 def after_open(doc):
@@ -669,6 +687,97 @@ class temp_ground:
 
 
 REF_HOLD = "FwRefHold"
+TANGENT_FRAME = "FwTangentFrame"   # asmpkg350: a Tangent to an origin plane sets the round face's frame
+
+
+def _from_assembly(asm, ref):
+    try:
+        obj = ref[0]
+        if obj is not None and obj.TypeId in ("App::Plane", "App::Line", "App::Point") and not ref[1]:
+            # asmpkg350: the assembly's Top Plane object itself is named through its Origin, as a pick in
+            # the view names it: FreeCAD's solver takes a plane object as a part of its own (held apart from
+            # the Origin, it moved the plane, and later mates on the Origin's other planes failed)
+            org = next((p for p in obj.InList if p.isDerivedFrom("App::Origin")), None)
+            if org is not None:
+                return org, obj.Name + "."
+        if ref[0] is asm and isinstance(ref[1], str) and ref[1]:
+            got = reference(asm, asm, ref[1])
+            if got is not None:
+                return got[0], got[1]
+    except Exception as _fw_err:
+        _fw_log("asmcore.py:from-assembly", _fw_err)
+    return ref
+
+
+def _datum_plane(comp, sub):
+    """('plane', point, normal) in the assembly for an origin plane (Top/Front/Right, the assembly's or a
+    component's: FreeCAD's App::Plane has no shape, so a pick there gives no element), else None."""
+    try:
+        sub = sub if isinstance(sub, str) else ""
+        # placed as element() places a shape: the component's own placement in, the assembly's out (a
+        # component of a flexible subassembly: through the subassembly)
+        parent = _kid_parent(comp) if comp.TypeId == "App::Link" and sub else None
+        root, path = (parent, "%s.%s" % (comp.Name, sub)) if parent is not None else (comp, sub)
+        obj = root.getSubObject(path, 1) if path else comp
+        if obj is None or obj.TypeId != "App::Plane":
+            return None
+        g = App.Placement(root.getSubObject(path, 4)) if path else App.Placement(comp.Placement)
+        return ("plane", V(g.Base), g.Rotation.multVec(V(0, 0, 1)))
+    except Exception:
+        return None
+
+
+def _ref_geometry(comp, sub):
+    g = geometry(element(comp, sub))
+    return g if g is not None else _datum_plane(comp, sub)
+
+
+def _tangent_datum(joint):
+    ""
+
+
+
+
+    import UtilsAssembly
+    try:
+        refs = [(joint.Reference1, 1), (joint.Reference2, 2)]
+        plane = next(((r, i) for r, i in refs if _datum_plane(r[0], r[1][0]) is not None), None)
+        if plane is None:
+            return False
+        rnd, k = next((r, i) for r, i in refs if i != plane[1])
+        g = geometry(element(rnd[0], rnd[1][0]))
+        if g is None or g[0] != "axis" or len(g) < 4 or g[3] <= 0:
+            return False
+        _, p, n = _datum_plane(plane[0][0], plane[0][1][0])
+        a = V(g[2]).normalize()
+        d = n - a * n.dot(a)
+        if d.Length < 1e-9:             # the axis stands on the plane: lay it down the nearest way
+            d = a.cross(V(1, 0, 0)) if abs(a.x) < 0.9 else a.cross(V(0, 1, 0))
+        d.normalize()
+        if d.dot(n) < 0:
+            d = d * -1
+        own = UtilsAssembly.getJcsGlobalPlc(UtilsAssembly.findPlacement(rnd, True), rnd)   # without the offset
+        on = V(g[1]) + a * a.dot(own.Base - V(g[1]))     # the frame's point on the axis
+        side = -1.0 if n.dot(on - p) < 0 else 1.0
+        want = App.Placement(on - d * (side * g[3]), App.Rotation(V(0, 0, 1), d))
+        JO = _ja()
+        saved = getattr(JO, "solveIfAllowed", None)
+        if saved is not None:
+            JO.solveIfAllowed = lambda *a, **k: None    # an Offset change solves at once: the caller solves
+        try:
+            setattr(joint, "Offset%d" % k, own.inverse().multiply(want))
+            if TANGENT_FRAME not in joint.PropertiesList:
+                joint.addProperty("App::PropertyBool", TANGENT_FRAME, "FreeCAD", "Tangent to an origin plane: its own frame")
+                joint.setPropertyStatus(TANGENT_FRAME, "Hidden")
+            setattr(joint, TANGENT_FRAME, True)
+        finally:
+            if saved is not None:
+                JO.solveIfAllowed = saved
+        joint.Proxy.updateJCSPlacements(joint)
+        return True
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: tangent to an origin plane: %s\n" % error)
+        return False
 
 
 def hold_reference(asm, obj):
@@ -680,7 +789,12 @@ def hold_reference(asm, obj):
             return None
         if obj.TypeId in ("App::Link", "Assembly::AssemblyLink", "Assembly::AssemblyObject"):
             return None
-        if not (obj.isDerivedFrom("Part::Part2DObject") or obj.isDerivedFrom("Part::Feature")):
+        # asmpkg349: the assembly's own reference geometry too (its Top/Front/Right planes, axes and origin
+
+        # every day, and FreeCAD's solver moved the reference instead of the component (nothing happened)
+        if not (obj.isDerivedFrom("Part::Part2DObject") or obj.isDerivedFrom("Part::Feature")
+                or obj.isDerivedFrom("App::Origin") or obj.isDerivedFrom("App::DatumElement")
+                or obj.isDerivedFrom("Part::Datum") or obj.isDerivedFrom("App::OriginFeature")):
             return None
         joint = joint_group(asm).newObject("App::FeaturePython", REF_HOLD)
         _ja().GroundedJoint(joint, obj)
@@ -767,8 +881,24 @@ def element(comp, sub):
     except Exception:
         shape = None
     if shape is None or shape.isNull():
-        return None
+        return _datum_face(comp, sub)
     return shape
+
+
+def _datum_face(comp, sub):
+    ""
+
+
+    g = _datum_plane(comp, sub)
+    if g is None:
+        return None
+    try:
+        import Part
+        face = Part.makePlane(100, 100, V(-50, -50, 0))
+        face.Placement = App.Placement(g[1], App.Rotation(V(0, 0, 1), g[2]))
+        return face
+    except Exception:
+        return None
 
 
 _GEOM = {}      # (shape hash, orientation, type, placement) -> geometry(shape)
@@ -1077,6 +1207,9 @@ def add_mate(asm, kind, ref1, ref2, value=None, lock_rotation=False, flip=False,
         asmgen.hold(asm.Document)       # a batch of mates: the tree repaints once they stop
     except Exception as _fw_err:
         _fw_log("asmcore.py:961", _fw_err)
+    # asmpkg349: a pick named from the assembly itself ("Origin.XY_Plane.", "Plane1.") names the reference it
+    # is on, as a pick in the view does (FreeCAD's solver would take the whole assembly as the part to move)
+    ref1, ref2 = (_from_assembly(asm, r) for r in (ref1, ref2))
     for ref in (ref1, ref2):
         hold_reference(asm, ref[0])
     before = _save_placements(asm)
@@ -1109,6 +1242,8 @@ def add_mate(asm, kind, ref1, ref2, value=None, lock_rotation=False, flip=False,
             set_value(joint, kind, value)
         elif kind == "Rack Pinion":
             set_value(joint, kind, value)   # the rack first: needs the picks, set just above
+        elif kind == "Tangent":
+            _tangent_datum(joint)
     if kind == "Concentric" and lock_rotation:
         keep_turn(joint, before)
     if flip:
@@ -1126,6 +1261,8 @@ def add_mate(asm, kind, ref1, ref2, value=None, lock_rotation=False, flip=False,
         ok = solve(asm, before)
         if not ok and kind == "Perpendicular":
             ok = _square_from_parallel(asm, joint, before)
+        if kind == "Tangent" and not (ok and satisfied(joint)):
+            ok = _lay_tangent(asm, joint, before)
         if not ok and kind in ("Concentric", "Coincident"):
             ok = _presolved(asm, joint, before)
         if not ok and kind == "Concentric":
@@ -1137,6 +1274,8 @@ def add_mate(asm, kind, ref1, ref2, value=None, lock_rotation=False, flip=False,
                 # recompute), so the mate is kept out of the solve and checked after each one instead
                 _set_redundant(joint, True)
                 ok = True
+        if not ok and kind == "Coincident" and _line_plane(joint) is not None:
+            ok = _line_on_plane(asm, joint, before)
         if kind == "Coincident" and _point_plane(joint) is not None and not _point_plane_holds(joint):
             ok = _point_on_plane(asm, joint, before)
         if ok and kind == "Coincident" and _point_plane(joint) is not None:
@@ -1418,6 +1557,50 @@ def _point_plane_holds(joint, tol=1e-5):
     except Exception as _fw_err:
         _fw_log("asmcore.py:point plane", _fw_err)
         return True
+
+
+def _line_plane(joint):
+    """(asmpkg355) For a Coincident of a straight edge and a flat face: ((line comp, its point, its direction),
+    (plane comp, its point, its normal)) in assembly axes, else None."""
+    try:
+        got = {}
+        for i in (1, 2):
+            ref = getattr(joint, "Reference%d" % i)
+            g = geometry(element(ref[0], ref[1][0]))
+            if g is not None and g[0] in ("line", "plane"):
+                got[g[0]] = (ref[0], V(g[1]), V(g[2]).normalize())
+        if len(got) == 2:
+            return got["line"], got["plane"]
+    except Exception as _fw_err:
+        _fw_log("asmcore.py:line plane", _fw_err)
+    return None
+
+
+def _line_on_plane(asm, joint, before):
+    ""
+
+
+    try:
+        (c_ln, p_ln, d), (c_pl, p_pl, n) = _line_plane(joint)
+        fixed = set(grounded(asm))
+        def lay(v, against):
+            t = v - against * v.dot(against)
+            if t.Length < 1e-9:     # square on: any way along the face
+                t = against.cross(V(1, 0, 0) if abs(against.x) < 0.9 else V(0, 1, 0))
+            return t.normalize()
+        if c_ln not in fixed:
+            turn = App.Rotation(d, lay(d, n))
+            c_ln.Placement = App.Placement(V(), turn, p_ln).multiply(c_ln.Placement)
+        elif c_pl not in fixed:
+            turn = App.Rotation(n, lay(n, d))
+            c_pl.Placement = App.Placement(V(), turn, p_pl).multiply(c_pl.Placement)
+        else:
+            return False
+        joint.Proxy.updateJCSPlacements(joint)
+        return bool(solve(asm, before)) and satisfied(joint)
+    except Exception as _fw_err:
+        _fw_log("asmcore.py:line on plane", _fw_err)
+        return False
 
 
 def _point_on_plane(asm, joint, before):
@@ -1836,6 +2019,43 @@ def _square_from_parallel(asm, joint, before):
     return False
 
 
+def _lay_tangent(asm, joint, before):
+    ""
+
+
+
+    try:
+        refs = [joint.Reference1, joint.Reference2]
+        geo = [_ref_geometry(r[0], r[1][0]) for r in refs]
+        k = next(i for i, g in enumerate(geo) if g is not None and g[0] == "axis" and len(g) > 3 and g[3] > 0)
+        plane = geo[1 - k]
+        if plane is None or plane[0] != "plane":
+            return False
+        comp = _part_of(asm, refs[k])
+        if comp is None or comp in set(grounded(asm)) or not hasattr(comp, "Placement"):
+            return False
+        a, n = V(geo[k][2]).normalize(), V(plane[2]).normalize()
+        flat = a - n * a.dot(n)
+        if flat.Length < 1e-9:      # standing on it: lay it down towards where its frame points
+            flat = n.cross(V(1, 0, 0)) if abs(n.x) < 0.9 else n.cross(V(0, 1, 0))
+        flat.normalize()
+        try:
+            centre = comp.Shape.BoundBox.Center
+        except Exception:
+            centre = comp.Placement.Base
+        _restore_placements(asm, before)
+        comp.Placement = App.Placement(V(), App.Rotation(a, flat), centre).multiply(comp.Placement)
+        _tangent_datum(joint)       # an origin plane: the frame again from the laid-down pin
+        if solve(asm) and satisfied(joint):
+            return True
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: tangent lay down: %s\n" % error)
+    _restore_placements(asm, before)
+    _tangent_datum(joint)
+    solve(asm, before)
+    return False
+
+
 def _misaligned(asm, joint, before):
     """Allow creation of misaligned mates: a Concentric that over defines only because its axis is
     off another one is kept, the offset shown (at most the smaller radius). The components stay
@@ -2032,8 +2252,24 @@ def change_mate(asm, joint, kind, value=None, lock_rotation=False, editing=False
             keep_turn(joint, before)
     if kind == "Distance" and (mate_type(joint) != "Distance" or DIST_SIDE_PROP not in joint.PropertiesList):
         set_distance_side(joint, 1 if DIST_SIDE_PROP not in joint.PropertiesList and mate_type(joint) == "Distance" else None)
+    was_tangent = mate_type(joint) == "Tangent"
     setattr(joint, MATE_PROP, kind)
     setattr(joint, LOCK_PROP, bool(lock_rotation))
+    if kind == "Tangent":
+        _tangent_datum(joint)       # asmpkg350: a round face on an origin plane
+    elif was_tangent and any(_datum_plane(r[0], r[1][0]) is not None for r in (joint.Reference1, joint.Reference2)):
+        JO = _ja()
+        saved = getattr(JO, "solveIfAllowed", None)
+        if saved is not None:
+            JO.solveIfAllowed = lambda *a, **k: None    # solved below
+        try:
+            joint.Offset1 = joint.Offset2 = App.Placement()     # the Tangent's own frame off again
+            if getattr(joint, TANGENT_FRAME, False):
+                setattr(joint, TANGENT_FRAME, False)
+        finally:
+            if saved is not None:
+                JO.solveIfAllowed = saved
+        joint.Proxy.updateJCSPlacements(joint)
     base = joint.Label.split(" (")[0]
     old = "".join(ch for ch in base if not ch.isdigit())
     if old != NAMES.get(kind, kind):
@@ -2045,6 +2281,8 @@ def change_mate(asm, joint, kind, value=None, lock_rotation=False, editing=False
     ok = solve(asm, before)
     if not ok and kind in ("Perpendicular", "Parallel", "Coincident"):
         ok = _square_from_parallel(asm, joint, before)     # another type from where the old one put them
+    if kind == "Tangent" and not (ok and satisfied(joint)):
+        ok = _lay_tangent(asm, joint, before)
     if not ok and kind == "Concentric":
         ok = _misaligned(asm, joint, before)
     elif ok and not editing and kind not in MECHANICAL:
@@ -2423,6 +2661,119 @@ def mate_error(joint):
     return bool(getattr(joint, ERROR_PROP, False))
 
 
+def _mesh_turn(comp, axis, deg, centre):
+    comp.Placement = App.Placement(V(), App.Rotation(axis, deg), centre).multiply(comp.Placement)
+
+
+def follow_cross(asm, moved):
+    ""
+
+
+
+    out = []
+    if moved is None:
+        return out
+    held = grounded(asm)
+    for j in mates(asm):
+        if getattr(j, "Suppressed", False) or mate_type(j) != "Universal Joint":
+            continue
+        r1, r2 = getattr(j, "Reference1", None), getattr(j, "Reference2", None)
+        if not r1 or not r2 or moved not in (r1[0], r2[0]):
+            continue
+        ms, os_ = (1, 2) if moved is r1[0] else (2, 1)
+        other = (r2 if ms == 1 else r1)[0]
+        if other is moved or other in held:
+            continue
+        try:
+            ax = _axis_now(other, (r2 if ms == 1 else r1)[1][0])
+            if ax is None:
+                continue
+            centre, v = ax
+            arm_m = _frame(moved, j, ms).Rotation.multVec(V(0, 0, 1))
+            arm_o = _frame(other, j, os_).Rotation.multVec(V(0, 0, 1))
+            arm_o = arm_o - v * arm_o.dot(v)
+            if arm_o.Length < 1e-9:
+                continue
+            arm_o.normalize()
+            c, s_ = arm_o.dot(arm_m), v.cross(arm_o).dot(arm_m)
+            if abs(c) < 1e-9 or abs(c) < 1e-9 * abs(s_):
+                continue            # already square
+            phi = math.atan2(-c, s_)
+            if phi > math.pi / 2:
+                phi -= math.pi
+            elif phi < -math.pi / 2:
+                phi += math.pi
+            _mesh_turn(other, v, math.degrees(phi), centre)
+            out.append(other)
+        except Exception as _fw_err:
+            _fw_log("asmcore.py:follow_cross", _fw_err)
+    return out
+
+
+def follow_mesh(asm, moved, before):
+    ""
+
+
+
+
+    if moved is None or before is None:
+        return []
+    out = []
+    held = grounded(asm)
+    for j in mates(asm):
+        if getattr(j, "Suppressed", False) or mate_type(j) not in ("Gear", "Rack Pinion"):
+            continue
+        r1, r2 = getattr(j, "Reference1", None), getattr(j, "Reference2", None)
+        if not r1 or not r2 or moved not in (r1[0], r2[0]):
+            continue
+        other = r2[0] if moved is r1[0] else r1[0]
+        if other is moved or other in held or other in out:
+            continue
+        ms, os_ = ("1", "2") if moved is r1[0] else ("2", "1")
+        try:
+            fb = before.multiply(getattr(j, "Placement" + ms))
+            fn = moved.Placement.multiply(getattr(j, "Placement" + ms))
+            fo = other.Placement.multiply(getattr(j, "Placement" + os_))
+            if mate_type(j) == "Gear":
+                axis = fb.Rotation.multVec(V(0, 0, 1))
+                d = fn.Rotation.multiply(fb.Rotation.inverted())
+                if d.Angle < 1e-9 or abs(d.Axis.dot(axis)) < 0.99:
+                    continue
+                deg = math.degrees(d.Angle) * (1 if d.Axis.dot(axis) > 0 else -1)
+                rm = float(j.Distance if ms == "1" else j.Distance2)
+                ro = float(j.Distance2 if ms == "1" else j.Distance)
+                same = getattr(j, "JointType", "") == "Belt"        # Reverse: both turn the same way
+                _mesh_turn(other, axis, deg * rm / ro * (1 if same else -1), fo.Base)
+            else:
+                r = abs(float(j.Distance))
+                sign = -1.0 if float(j.Distance) < 0 else 1.0
+                if ms == "2":           # the pinion turned: the rack slides along with its pitch circle
+                    axis = fb.Rotation.multVec(V(0, 0, 1))
+                    d = fn.Rotation.multiply(fb.Rotation.inverted())
+                    if d.Angle < 1e-9 or abs(d.Axis.dot(axis)) < 0.99:
+                        continue
+                    ang = d.Angle * (1 if d.Axis.dot(axis) > 0 else -1)
+                    t = fo.Rotation.multVec(V(0, 0, 1))     # the rack slides along its edge (the mate frame's Z)
+                    if (axis.cross(fo.Base - fb.Base)).dot(t) < 0:
+                        t = -t
+                    other.Placement = App.Placement(other.Placement.Base + t * (r * ang * sign), other.Placement.Rotation)
+                else:                   # the rack slid: the pinion turns
+                    axis = fo.Rotation.multVec(V(0, 0, 1))
+                    t = fb.Rotation.multVec(V(0, 0, 1))     # the rack's edge
+                    if (axis.cross(fb.Base - fo.Base)).dot(t) < 0:
+                        t = -t
+                    if r < 1e-9:
+                        continue
+                    ang = (fn.Base - fb.Base).dot(t) / r * sign
+                    if abs(ang) < 1e-12:
+                        continue
+                    _mesh_turn(other, axis, math.degrees(ang), fo.Base)
+            out.append(other)
+        except Exception as _fw_err:
+            _fw_log("asmcore.py:follow_mesh", _fw_err)
+    return out
+
+
 def solve(asm, before=None):
     ""
 
@@ -2430,6 +2781,9 @@ def solve(asm, before=None):
     import UtilsAssembly
     if before is None:
         before = _save_placements(asm)
+    for joint in mates(asm):
+        if getattr(joint, MATE_PROP, "") == "Angle Range":
+            _angle_range_clamp(asm, joint)      # asmpkg351: turned past a Limit Angle: back to its end first
     try:
         from . import asmpersist
         asmpersist.install()
@@ -2444,6 +2798,8 @@ def solve(asm, before=None):
             _range_clamp(asm, joint)    # a free range: a move past its end stops there
         elif getattr(joint, MATE_PROP, "") == "Hinge":
             _hinge_clamp(asm, joint)    # a Hinge turned past its limit stops there
+        elif getattr(joint, TANGENT_FRAME, False) and getattr(joint, MATE_PROP, "") == "Tangent":
+            _tangent_datum(joint)       # from where the round part is now: it stays free to roll
     sync_symmetric(asm)
     from . import asmpath
     asmpath.sync(asm)
@@ -3041,7 +3397,12 @@ def limit_host(asm, kind, refs, skip=None):
             continue
         comps = {j.Reference1[0], j.Reference2[0]}
         if comps != {c1, c2}:
-            continue
+
+            # pin that is locked to the base (the Concentric is lever-pin, the range lever-base)
+            a1, a2 = _rigid_set(asm, c1), _rigid_set(asm, c2)
+            r1, r2 = j.Reference1[0], j.Reference2[0]
+            if a1 & a2 or not ((r1 in a1 and r2 in a2) or (r1 in a2 and r2 in a1)):
+                continue
         f1 = j.Reference1[0].Placement.multiply(j.Placement1)
         z = f1.Rotation.multVec(V(0, 0, 1))
         if kind == "Distance Range" and g1[2].cross(z).Length < 1e-6 and g1[2].cross(g2[2]).Length < 1e-6:
@@ -3051,12 +3412,40 @@ def limit_host(asm, kind, refs, skip=None):
     return None
 
 
+def _rigid_set(asm, comp):
+    """asmpkg351: the components held rigidly with comp: grounded ones together, and those joined by Lock
+    (FreeCAD's Fixed joint), through any number of them."""
+    fixed = set(grounded(asm))
+    links = []
+    for j in mates(asm):
+        if getattr(j, "JointType", "") == "Fixed" and not getattr(j, "Suppressed", False) \
+                and getattr(j, MATE_PROP, "") not in LIMITS:
+            try:
+                links.append((j.Reference1[0], j.Reference2[0]))
+            except Exception:
+                pass
+    out = {comp} | (fixed if comp in fixed else set())
+    grew = True
+    while grew:
+        grew = False
+        for a, b in links:
+            if (a in out) != (b in out):
+                out |= {a, b}
+                if (a in fixed) or (b in fixed):
+                    out |= fixed
+                grew = True
+    return out
+
+
 def _rate(kind, host, refs):
     """How the picked value changes per unit of the host's own value (+1 or -1), found by
     moving the host's second component a little along or about the host's axis."""
     f1 = host.Reference1[0].Placement.multiply(host.Placement1)
     z = f1.Rotation.multVec(V(0, 0, 1))
-    comp = host.Reference2[0]
+    comp, sign = host.Reference2[0], 1.0
+    picked = {refs[0][0], refs[1][0]}
+    if comp not in picked and host.Reference1[0] in picked:
+        comp, sign = host.Reference1[0], -1.0    # asmpkg351: the host's other end is a pin: move the picked one
     keep = App.Placement(comp.Placement)
     before = picked_value(kind, refs)
     step = 1e-3 if kind == "Distance Range" else 1e-2
@@ -3067,7 +3456,7 @@ def _rate(kind, host, refs):
         after = picked_value(kind, refs)
     finally:
         comp.Placement = keep
-    return 1.0 if after - before >= 0 else -1.0
+    return sign if after - before >= 0 else -sign
 
 
 def make_limit(asm, kind, refs, low, high, joint=None):
@@ -3279,8 +3668,9 @@ def limit_move(asm, joint, kind, target):
     f1 = host.Reference1[0].Placement.multiply(host.Placement1)
     z = f1.Rotation.multVec(V(0, 0, 1))
     comp = host.Reference2[0]
-    if comp in set(grounded(asm)):
-        comp, d = host.Reference1[0], -d
+    picked = {refs[0][0], refs[1][0]}
+    if comp in set(grounded(asm)) or (comp not in picked and host.Reference1[0] in picked):
+        comp, d = host.Reference1[0], -d    # asmpkg351: not a pin the host's other end is held to
     move = App.Placement(z * d, App.Rotation()) if kind == "Distance Range" else \
         App.Placement(V(), App.Rotation(z, d), f1.Base)
     comp.Placement = move.multiply(comp.Placement)
@@ -4143,6 +4533,34 @@ def _hinge_off_by(joint):
         return 0.0
     to_lo, to_hi = wrap(lo - own), wrap(hi - own)
     return abs(to_lo) if abs(to_lo) <= abs(to_hi) else abs(to_hi)
+
+
+def _angle_range_clamp(asm, joint):
+    ""
+
+
+    data = limit_values(joint)
+    if data is None or data[0] is None or getattr(joint, "Suppressed", False):
+        return False
+    host, low, high = data[0], min(data[1], data[2]), max(data[1], data[2])
+    refs = [(r[0], r[1][0]) for r in (joint.Reference1, joint.Reference2)]
+    now = picked_value("Angle Range", refs)
+    if now is None or low - 1e-6 <= now <= high + 1e-6:
+        return False
+    edge = min(1e-3, (high - low) / 4.0)       # just inside: FreeCAD's solver fails on a limit's very end
+    want = low + edge if abs(now - low) <= abs(now - high) else high - edge
+    d = (want - now) * _rate("Angle Range", host, refs)
+    f1 = host.Reference1[0].Placement.multiply(host.Placement1)
+    z = f1.Rotation.multVec(V(0, 0, 1))
+    comp = host.Reference2[0]
+    picked = {refs[0][0], refs[1][0]}
+    fixed = set(grounded(asm))
+    if comp in fixed or (comp not in picked and host.Reference1[0] in picked):
+        comp, d = host.Reference1[0], -d
+    if comp in fixed:
+        return False
+    comp.Placement = App.Placement(V(), App.Rotation(z, d), f1.Base).multiply(comp.Placement)
+    return True
 
 
 def _hinge_clamp(asm, joint):

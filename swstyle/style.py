@@ -541,6 +541,14 @@ def apply_settings():
             App.Console.PrintWarning("FreeCAD: %s/%s not set: %s\n" % (path, name, error))
 
 
+def _known_style(name):
+    """exitstyle-1127: True for a Qt style name QStyleFactory can make (any case)."""
+    try:
+        return bool(name) and str(name).lower() in [k.lower() for k in QtWidgets.QStyleFactory.keys()]
+    except Exception:
+        return True         # cannot tell: leave the entry as it was
+
+
 def restore_settings():
     store = paths.params()
     raw = store.GetString("Backup", "")
@@ -553,6 +561,12 @@ def restore_settings():
         return False
     for path, kind, name, exists, old in backup.get("settings", []):
         grp = App.ParamGet(path)
+        if path == MAINWINDOW and name == "QtStyle" and exists and not _known_style(old):
+            # exitstyle-1127: a QtStyle Qt has no style for ("FreeCAD" in Ati's profile) put back at close made
+            # FreeCAD switch its application style while closing: "Access violation" after "Destruct
+            # Gui::Application" at every close. FreeCAD draws such a name with Qt's plain QCommonStyle anyway, so
+            # the entry goes instead (FreeCAD's default style).
+            exists = False
         try:
             if exists:
                 getattr(grp, _SET[kind])(name, old)
@@ -1021,13 +1035,49 @@ SCENES = (
     ("Backdrop - Black with Fill Lights", (0x3A3A3CFF, 0x1C1C1EFF, 0x0E0E0FFF), True),
     ("Reflective Floor Black", (0x000000FF, 0x050505FF, 0x1A1A1AFF), True),
     ("Landscape 2 Image 4", (0x9DB9D6FF, 0xDCE3E6FF, 0x7D8A5CFF), True),
+
+    ("3 Point Beige", (0xF3EDE2FF, 0xE4D9C6FF, 0xFBF8F2FF), True),
+    ("3 Point Blue", (0xDCE6F2FF, 0xB9CDE5FF, 0xF5F8FCFF), True),
+    ("3 Point Green", (0xE2EEDFFF, 0xC6DDBFFF, 0xF6FAF4FF), True),
+    ("3 Point Orange", (0xF6E6D6FF, 0xEDC9A4FF, 0xFCF5EEFF), True),
+    ("Backdrop - Ambient White", (0xFFFFFFFF, 0xF4F4F4FF, 0xFFFFFFFF), True),
+    ("Backdrop - Lightbox Studio", (0xF7F7F7FF, 0xE8E8E8FF, 0xFDFDFDFF), True),
+    ("Backdrop - Studio Room", (0xD9D9D9FF, 0xBFBFBFFF, 0xA8A8A8FF), True),
+    ("Backdrop - Studio with Fill Lights", (0xC8C8C8FF, 0x9E9E9EFF, 0x7A7A7AFF), True),
+    ("Soft Box", (0xEDEDEDFF, 0xD2D2D2FF, 0xB5B5B5FF), True),
 )
 RADIAL_SCENES = (5,)                 # drawn as a radial gradient: light in the middle, dark around
 
 # Faded, Plain White, Backdrop - Grey with Overhead Light, Soft Spotlight, Rooftop, Courtyard Background,
 # Urban 5 Background. (The E1 2024 video's list had 5 more: its author's own favourites.)
 SCENE_MENU = (0, 1, 2, 5, 6, 7, 8)
-SCENE_EXTRAS = (12, 15, 16, 17, 18, 9, 10, 11, 13, 14, 3, 4)  # the other scenes (Task Pane Scenes, Manage Favorites)
+SCENE_EXTRAS = (12, 15, 16, 17, 18, 9, 10, 11, 13, 14, 3, 4, 19, 20, 21, 22, 23, 24, 25, 26, 27)
+
+DEFAULT_SCENE_THEMES = ("Light", "Medium Light", "Medium", "Dark")
+
+
+def scene_label(index):
+    ""
+    if 0 <= index < len(SCENES):
+        return SCENES[index][0]
+    try:
+        if current_theme() in DEFAULT_SCENE_THEMES:
+            return SCENES[0][0]
+    except Exception:
+        pass
+    return "Theme Background"
+
+
+def shown_scene():
+    """The scene the user sees: the theme's own counts as 3 Point Faded where it draws that (-1 otherwise)."""
+    i = current_scene()
+    if i < 0:
+        try:
+            if current_theme() in DEFAULT_SCENE_THEMES:
+                return 0
+        except Exception:
+            pass
+    return i  # the other scenes (Task Pane Scenes, Manage Favorites)
 
 
 def apply_scene(index):
@@ -1159,6 +1209,8 @@ QRadioButton::indicator {
 }
 QRadioButton::indicator:hover { border-color: #0078d7; }
 QRadioButton::indicator:checked { background: ${base}; border: 4px solid #0078d7; width: 7px; height: 7px; }
+QRadioButton::indicator:focus { border-color: #0078d7; background: ${menu_hover}; }
+QRadioButton::indicator:checked:hover, QRadioButton::indicator:checked:focus { border-color: #005499; }   /* statehover-1127 */
 QRadioButton::indicator:disabled { background: ${hover}; border-color: ${text_disabled}; }
 """
 
@@ -1186,6 +1238,9 @@ QDialog QRadioButton::indicator {
 }
 QDialog QRadioButton::indicator:hover { border-color: #0078d7; }
 QDialog QRadioButton::indicator:checked { background: ${base}; border: 4px solid #0078d7; width: 7px; height: 7px; }
+QDialog QCheckBox::indicator:focus, QDialog QRadioButton::indicator:focus { border-color: #0078d7; background: ${menu_hover}; }
+QDialog QCheckBox::indicator:checked:focus { background: #005499; border-color: #005499; }
+QDialog QRadioButton::indicator:checked:hover, QDialog QRadioButton::indicator:checked:focus { border-color: #005499; }
 QDialog QRadioButton::indicator:disabled { background: ${hover}; border-color: ${text_disabled}; }
 """
 
@@ -1219,7 +1274,10 @@ def _dialog_qss():
     except Exception as _fw_err:
         _fw_log("style.py:dialog-check", _fw_err)
         check = ""
-    return fill(DIALOG_QSS).replace("@CHECK@", check)
+    sheet = fill(DIALOG_QSS).replace("@CHECK@", check)
+    # look-audit TP-1 (BB22): the Task Pane's check boxes (View Palette, Custom Properties) as the
+    # PropertyManager's: a box with a border when off (it was nearly invisible on Dark), blue-filled when on
+    return sheet + sheet.replace("QDialog QCheckBox", "QFrame#SWTaskPane QCheckBox").split("QDialog QRadioButton")[0]
 
 
 def qss():
@@ -1282,6 +1340,12 @@ def readable_pixmap(icon, size, mode=QtGui.QIcon.Normal, state=QtGui.QIcon.Off, 
         pixmap = icon.pixmap(QtCore.QSize(size, size), mode, state)
     if not dark() or pixmap.isNull():
         return pixmap
+    try:
+        from . import icons as _icons       # darkpack-1127: the pack's dark artwork is drawn for dark panes already
+        if _icons.authored(icon):
+            return pixmap
+    except Exception as _fw_err:
+        _fw_log("style.py:authored", _fw_err)
     key = (pixmap.cacheKey(), size, round(float(dpr), 3), getattr(mode, "value", mode), getattr(state, "value", state), current_theme())
     done = _INK_CACHE.get(key)
     if done is None:

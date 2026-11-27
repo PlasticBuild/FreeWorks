@@ -324,6 +324,7 @@ class SensorPanel:
         self.per.setToolTip("Used when the part has no \"Cost per kg\" custom property")
         self.picks = QtWidgets.QListWidget()
         self.picks.setObjectName("SWSensorEntities")
+        self.picks.setProperty("swpickbox", True)
         self.picks.setFixedHeight(70)
         self.picks.setStyleSheet("QListWidget { background: #cce4f7; }")
         self.picks.setToolTip("Bodies (Mass Properties, Interference Detection) or entities (Measurement): "
@@ -504,7 +505,7 @@ class SensorPanel:
             return
         obj = self.doc.getObject(name)
         if obj is not None:
-            QtCore.QTimer.singleShot(0, lambda: self.picked(obj, sub))
+            from . import safe_later as _sl; _sl.later(0, lambda: self.picked(obj, sub), self, "type")
 
     def picked(self, obj, sub):
         if not self._alive():

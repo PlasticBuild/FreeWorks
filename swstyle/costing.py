@@ -76,8 +76,8 @@ DEFAULTS = {"method": "Machining", "material": "", "price": 0.0, "stock": "Block
 # the operations a template can speed up or slow down (a factor on their time)
 OPERATION_NAMES = (("load", "Load and unload"), ("remove", "Stock removal"), ("drill", "Drilling"),
                    ("finish", "Finish faces"), ("edges", "Fillets and chamfers"), ("cut", "Laser cutting"),
-                   ("pierce", "Pierce"), ("bend", "Bend"), ("tool", "Tooling"), ("pour", "Moulding and pouring"),
-                   ("fettle", "Fettling and cleaning"), ("cycle", "Moulding cycle"), ("print", "Printing"),
+                   ("pierce", "Pierce"), ("bend", "Bend"), ("tool", "Tooling"), ("pour", "Molding and pouring"),
+                   ("fettle", "Fettling and cleaning"), ("cycle", "Molding cycle"), ("print", "Printing"),
                    ("supports", "Support removal"))
 DEFAULT_TEMPLATE = {"name": "Default", "rate": 60.0, "setup": 80.0,
                     "factors": dict((k, 1.0) for k, _n in OPERATION_NAMES), "prices": {}, "custom": []}
@@ -338,14 +338,14 @@ def _operations(doc, obj, s):
         tool = 800.0 + bb.XLength * bb.YLength * bb.ZLength / 1000.0 * 1.5
         ops.append(("tool", "Pattern and core box (tooling)", 1, 0.0, tool / max(1, s["quantity"])))
         mass = shape.Volume * 1e-9 * density(doc, s["material"])
-        ops.append(("pour", "Moulding and pouring", 1, 1.0 + mass * 0.6, 0.0))
+        ops.append(("pour", "Molding and pouring", 1, 1.0 + mass * 0.6, 0.0))
         ops.append(("fettle", "Fettling and cleaning", 1, 1.5 + area * 0.01, 0.0))
     elif method == "Plastic":
         bb = shape.BoundBox
         tool = 4000.0 + bb.XLength * bb.YLength * bb.ZLength / 1000.0 * 6.0
-        ops.append(("tool", "Injection mould (tooling)", 1, 0.0, tool / max(1, s["quantity"])))
+        ops.append(("tool", "Injection mold (tooling)", 1, 0.0, tool / max(1, s["quantity"])))
         wall = max(0.5, min(_thickness(shape), 8.0))
-        ops.append(("cycle", "Moulding cycle", 1, (8.0 + 2.5 * wall * wall) / 60.0, 0.0))
+        ops.append(("cycle", "Molding cycle", 1, (8.0 + 2.5 * wall * wall) / 60.0, 0.0))
     else:
         ops.append(("print", "Printing (%.1f cm^3)" % vol, 1, vol / 12.0 * 60.0 / 1.0 if vol else 0.0, 0.0))
         ops.append(("supports", "Support removal", 1, 2.0 + area * 0.005, 0.0))

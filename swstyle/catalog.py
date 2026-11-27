@@ -9,7 +9,7 @@
 
 
 class Cmd:
-    __slots__ = ("key", "label", "natives", "icon", "tip", "call", "caption")
+    __slots__ = ("key", "label", "natives", "icon", "_tip", "call", "caption")
 
     def __init__(self, key, label, natives=(), icon=None, tip=None, call=None, caption=None):
         self.key = key
@@ -19,6 +19,30 @@ class Cmd:
         self.tip = tip
         self.call = call
         self.caption = caption or label
+
+    # tiptext-1127 (Menus): the wording table (tipwords.REWORDS) wins for its keys, also for buttons a tab adds after
+    # tipwords.apply() ran (Render Tools, Inspection, MBD, Evaluate); every other tip is the one the entry was made with.
+    @property
+    def tip(self):
+        words = _rewords().get(self.key)
+        return words if words else self._tip
+
+    @tip.setter
+    def tip(self, value):
+        self._tip = value
+
+
+_REWORDS = []
+
+
+def _rewords():
+    if not _REWORDS:
+        try:
+            from . import tipwords
+            _REWORDS.append(dict(tipwords.REWORDS))
+        except Exception:
+            _REWORDS.append({})
+    return _REWORDS[0]
 
 
 _ALL = []
@@ -59,7 +83,7 @@ c("Select", "Select", (), "STANDARD_SELECT", "Select (press Esc to clear the sel
 c("BoxSelect", "Box Selection", ("SWStyle_BoxSelection", "Std_BoxSelection"), "STANDARD_SELECT_OVER_GEOMETRY",
   "Drag in the graphics area to pick with a box: to the right picks what is wholly inside, to the left what it touches.")
 c("LassoSelect", "Lasso Selection", ("SWStyle_LassoSelection",), "LASSO_SELECTION",
-  "Drag in the graphics area to pick with a free loop: clockwise picks what is wholly inside, anticlockwise what it touches.")
+  "Drag in the graphics area to pick with a free loop: clockwise picks what is wholly inside, counterclockwise what it touches.")
 c("BoxElementSelect", "Box Element Selection", ("Std_BoxElementSelection",), "SELECTIONFILTER_FACES")
 c("MagnifiedSelection", "Magnified Selection", ("SWStyle_MagnifiedSelection",), None,
   "Shows a magnifying glass at the pointer (G) to pick small items without zooming the view.")
@@ -171,7 +195,8 @@ c("LiveSection", "Live Section Plane", ("SWStyle_LiveSectionPlane", "SWStyle_Sec
 c("ConvertToMesh", "Convert to Mesh Body", ("SWStyle_ConvertToMesh", "Mesh_FromPartShape", "MeshPart_Mesher"), None,
   "Makes a mesh body from a solid.")
 c("SegmentMesh", "Segment Mesh", ("SWStyle_SegmentMesh", "Mesh_Segmentation"), "FEATURES_SEGMENT_MESH", "Splits a mesh into regions.")
-c("ProjectedCurve", "Projected Curve", ("SWStyle_ProjectedCurve", "Part_ProjectionOnSurface"), None,
+
+c("ProjectedCurve", "Project Curve", ("SWStyle_ProjectedCurve", "Part_ProjectionOnSurface"), None,
   "Projects a sketch onto faces, or two sketches into one 3D curve.")
 c("HelixSpiral", "Helix and Spiral", ("SWStyle_HelixSpiral", "PartDesign_AdditiveHelix"), None,
   "Makes a helix or spiral on a sketch circle.", caption="Helix and\nSpiral")
@@ -232,9 +257,9 @@ c("StudWizard", "Stud Wizard", ("SWStyle_StudWizard",), "FEATURES_STUD_WIZARD", 
 c("Cavity", "Cavity", ("SWStyle_Cavity",), "FEATURES_CAVITY",
   "Cuts the shape of another body out of the part, scaled for shrinkage.")
 c("MoldFolders", "Insert Mold Folders", ("SWStyle_MoldFolders",), "MOLD_FOLDERS",
-  "Adds the Surface Bodies, Cavity, Core and Parting Surface Bodies folders a mould design keeps.")
+  "Adds the Surface Bodies, Cavity, Core and Parting Surface Bodies folders a mold design keeps.")
 c("PartingLine", "Parting Line", ("SWStyle_PartingLine",), "MOLD_PARTING_LINE",
-  "Finds the edges where a mould opens, from the draft against the direction of pull.")
+  "Finds the edges where a mold opens, from the draft against the direction of pull.")
 c("ShutOffSurfaces", "Shut-Off Surfaces", ("SWStyle_ShutOffSurfaces",), "MOLD_SHUT_OFF_SURFACES",
   "Patches the holes through the part so the core and cavity meet there.")
 c("PartingSurface", "Parting Surface", ("SWStyle_PartingSurface",), "MOLD_PARTING_SURFACE",
@@ -289,7 +314,7 @@ c("DrawModelItems", "Model Items", ("FreeWorks_DrawModelItems",), None,
   "Brings the model's sketch dimensions into the drawing views.", caption='Model\nItems')
 c("DrawHoleCallout", "Hole Callout", ("FreeWorks_DrawHoleCallout",), None,
   "A callout with a hole's diameter and depth: click the hole's edge, then where the note goes.")
-c("DrawCenterMark", "Center Mark", ("FreeWorks_DrawCenterMark",), None, "Marks the centre of circles and arcs.")
+c("DrawCenterMark", "Center Mark", ("FreeWorks_DrawCenterMark",), None, "Marks the center of circles and arcs.")
 c("DrawCenterline", "Centerline", ("FreeWorks_DrawCenterline",), None, "A centerline between two parallel edges.")
 c("DrawNote", "Note", ("FreeWorks_DrawNote",), None, "A text note on the sheet, with or without a leader.")
 c("DrawBalloon", "Balloon", ("FreeWorks_DrawBalloon",), None, "An item-number balloon on a component in a view.")
@@ -304,7 +329,7 @@ c("DrawTitleBlockTable", "Title Block Table", ("FreeWorks_DrawTitleBlockTable",)
 c("DrawHoleTable", "Hole Table", ("FreeWorks_DrawHoleTable",), None, "A table of the holes in a view: tag, X, Y, size.")
 c("DrawBOM", "Bill of Materials", ("FreeWorks_DrawBOM",), None, "A bill of materials of the assembly in a view.")
 c("DrawRevisionTable", "Revision Table", ("FreeWorks_DrawRevisionTable",), None, "A revision table on the sheet.")
-c("DrawWeldTable", "Weld Table", ("FreeWorks_DrawWeldTable",), None, "A table of the weld symbols on the sheet. Greyed until the sheet has a weld symbol.")
+c("DrawWeldTable", "Weld Table", ("FreeWorks_DrawWeldTable",), None, "A table of the weld symbols on the sheet: click a view whose model has welds.")
 c("DrawBendTable", "Bend Table", ("FreeWorks_DrawBendTable",), None, "A table of the bends in a flat pattern view.")
 c("DrawPunchTable", "Punch Table", ("FreeWorks_DrawPunchTable",), None, "A table of the forming tool punches in a flat pattern view.")
 c("DrawAddRevision", "Add Revision", ("FreeWorks_DrawAddRevision",), None, "Adds a row to the revision table.")
@@ -316,7 +341,7 @@ c("DrawRevisionCloud", "Revision Cloud", ("FreeWorks_DrawRevisionCloud",), None,
 c("DrawMultiJogLeader", "Multi-jog Leader", ("FreeWorks_DrawMultiJogLeader",), None, "A leader with bends, for a note or symbol.")
 c("DrawAreaHatch", "Area Hatch/Fill", ("FreeWorks_DrawAreaHatch",), None, "Hatches or fills a closed area of a view or sketch.")
 c("DrawLinearNotePattern", "Linear Note Pattern", ("FreeWorks_DrawLinearNotePattern",), None, "Copies a note in rows and columns.", caption='Linear Note\nPattern')
-c("DrawCircularNotePattern", "Circular Note Pattern", ("FreeWorks_DrawCircularNotePattern",), None, "Copies a note round a centre.")
+c("DrawCircularNotePattern", "Circular Note Pattern", ("FreeWorks_DrawCircularNotePattern",), None, "Copies a note round a center.")
 c("DrawMagneticLine", "Magnetic Line", ("FreeWorks_DrawMagneticLine",), None, "A line that balloons snap to and line up on.")
 c("DrawCaterpillar", "Caterpillar", ("FreeWorks_DrawCaterpillar",), None, "A caterpillar weld along an edge.")
 c("DrawEndTreatment", "End Treatment", ("FreeWorks_DrawEndTreatment",), None, "A weld end treatment on a structural member's end.")
@@ -332,8 +357,8 @@ c("DrawBreakAlignment", "Break Alignment", ("FreeWorks_DrawBreakAlignment",), No
 c("DrawDefaultAlignment", "Default Alignment", ("FreeWorks_DrawDefaultAlignment",), None, "Lines the view up with its parent again.")
 c("DrawAlignHorizontalOrigin", "Align Horizontal by Origin", ("FreeWorks_DrawAlignHorizontalOrigin",), None, "Lines the view up horizontally with the view you click, by origin.")
 c("DrawAlignVerticalOrigin", "Align Vertical by Origin", ("FreeWorks_DrawAlignVerticalOrigin",), None, "Lines the view up vertically with the view you click, by origin.")
-c("DrawAlignHorizontalCenter", "Align Horizontal by Center", ("FreeWorks_DrawAlignHorizontalCenter",), None, "Lines the view up horizontally with the view you click, by centre.")
-c("DrawAlignVerticalCenter", "Align Vertical by Center", ("FreeWorks_DrawAlignVerticalCenter",), None, "Lines the view up vertically with the view you click, by centre.")
+c("DrawAlignHorizontalCenter", "Align Horizontal by Center", ("FreeWorks_DrawAlignHorizontalCenter",), None, "Lines the view up horizontally with the view you click, by center.")
+c("DrawAlignVerticalCenter", "Align Vertical by Center", ("FreeWorks_DrawAlignVerticalCenter",), None, "Lines the view up vertically with the view you click, by center.")
 # drawings-land45 (drawdimtools.py): drawing dimension tools (the sketch ones above work in sketches only)
 c("DrawAutodimension", "Autodimension", ("FreeWorks_DrawAutodimension",), None, "Dimensions a view's entities at once, baseline, chain or ordinate.")
 c("DrawOrdinateDimension", "Ordinate Dimension", ("FreeWorks_DrawOrdinateDimension",), None, "Ordinate dimensions from a zero point on the view.")
@@ -357,7 +382,7 @@ c("DrawOpenModel", "Open Part", ("FreeWorks_DrawOpenModel",), None, "Opens the p
 c("DrawViewProperties", "View Properties", ("FreeWorks_DrawViewProperties",), None, "The view's name, scale, display style and configuration.")
 c("DrawAddSheet", "Sheet...", ("FreeWorks_DrawAddSheet",), None, "Adds a sheet to the drawing.")
 c("DrawMakeSectionLine", "Make Section Line", ("FreeWorks_DrawMakeSectionLine",), None,
-  "Makes a section line from a sketched line on a view. Greyed until a view has a sketched line.")
+  "Makes a section line from a sketched line on a view. Grayed until a view has a sketched line.")
 # Drawing sketch tools (drawings-land16): sketched on the sheet, not in a part sketch
 c("DrawSketchLine", "Line", ("FreeWorks_DrawSketchLine",), "SKETCH_LINE", "Sketches a line on the drawing sheet.")
 c("DrawSketchCenterline", "Centerline", ("FreeWorks_DrawSketchCenterline",), "SKETCH_CENTERLINE", "Sketches a centerline on the drawing sheet.")
@@ -391,7 +416,7 @@ c("DrawDisplayDeleteRelations", "Display/Delete Relations", ("FreeWorks_DrawDisp
 c("DrawAddRelation", "Add Relation", ("FreeWorks_DrawAddRelation",), "LAYOUT_ADD_RELATION", "Adds a relation between picked sketch entities.")
 c("DrawQuickSnaps", "Quick Snaps", ("FreeWorks_DrawQuickSnaps",), "FLYOUT_QUICK_SNAPS", "Sketch snap options on the sheet.", caption="Quick\nSnaps")
 c("DrawLayerProperties", "Layer Properties", ("FreeWorks_DrawLayerProperties",), "FONTTOOLBAR_LAYER_PROP",
-  "Layers box: each layer's colour, line style, thickness and on/off.")
+  "Layers box: each layer's color, line style, thickness and on/off.")
 c("DrawSheetProperties", "Sheet Properties", ("FreeWorks_DrawSheetProperties",), None,
   "The sheet's name, scale, projection type and sheet format.")
 c("DrawEditSheetFormat", "Edit Sheet Format", ("FreeWorks_DrawEditSheetFormat",), None,
@@ -418,8 +443,8 @@ c("DrawMarkupDraw", "Draw", ("FreeWorks_DrawMarkupDraw",), None, "Draws an ink m
 c("DrawMarkupNote", "Note", ("FreeWorks_DrawMarkupNote",), None, "Writes a markup note on the sheet.")
 c("DrawMarkupEraser", "Eraser", ("FreeWorks_DrawMarkupEraser",), None, "Rubs out ink markup.")
 c("DrawZoomToMarkup", "Zoom to Markup View", ("FreeWorks_DrawZoomToMarkup",), None, "Zooms to the markup's view.")
-c("DrawMarkupOptions", "Markup Options", ("FreeWorks_DrawMarkupOptions",), None, "The markup pen's colour and width.")
-c("DrawMarkupColor", "Color", ("FreeWorks_DrawMarkupColor",), None, "The markup pen's colour.")
+c("DrawMarkupOptions", "Markup Options", ("FreeWorks_DrawMarkupOptions",), None, "The markup pen's color and width.")
+c("DrawMarkupColor", "Color", ("FreeWorks_DrawMarkupColor",), None, "The markup pen's color.")
 c("DrawMarkupSelect", "Select", ("FreeWorks_DrawMarkupSelect",), None, "Selects ink markup to move or delete it.")
 c("DrawSaveSheetFormat", "Save Sheet Format...", ("FreeWorks_DrawSaveSheetFormat",), None,
   "Saves the sheet's format as a file to use on other drawings.")
@@ -469,7 +494,7 @@ c("PenAutoShape", "Auto Shape", ("FreeWorks_PenAutoShape",), "PEN_AUTO_SHAPE", "
 c("PenAutoSketchEntities", "Auto Sketch Entities", ("FreeWorks_PenAutoSketchEntities",), "PEN_AUTO_SKETCH_ENTITIES",
   "Each stroke becomes the sketch entity it looks like (line, arc, circle), else a spline.")
 c("PenAutoSpline", "Auto Spline", ("FreeWorks_PenAutoEntities",), "PEN_AUTO_SPLINE", "Each stroke becomes a spline as it is drawn.")
-c("InkColor", "Color", ("FreeWorks_InkColor",), "INK_COLOR", "The colour of the ink.")
+c("InkColor", "Color", ("FreeWorks_InkColor",), "INK_COLOR", "The color of the ink.")
 for _name in ("Black", "Blue", "Red", "Green", "Orange", "Purple"):          # each with its colour swatch (resources/ink)
     c("InkColor" + _name, _name, ("FreeWorks_InkColor" + _name,),
       __import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "resources", "ink",
@@ -523,7 +548,7 @@ c("Reload", "Reload", ("SWStyle_Reload", "Std_Revert"), None,
   "Reloads the document and the documents it references from disk, or makes them read-only.")
 c("EditMaterial", "Edit Material", ("SWStyle_EditMaterial", "Std_SetMaterial"), "TREE_MATERIAL_FOLDER", "Sets the part's material.")
 c("LineFormat", "Line Format", ("SWStyle_LineFormatToolbar", "Std_SetAppearance"), None,
-  "Shows or hides the Line Format toolbar: line colour, thickness and style.")
+  "Shows or hides the Line Format toolbar: line color, thickness and style.")
 c("LineColor", "Line Color", ("SWStyle_LineColor",), None,
   "Changes the color of the selected sketch or sketch entities.")
 c("LineThickness", "Line Thickness", ("SWStyle_LineThickness",), None,
@@ -564,7 +589,7 @@ c("SaveBodies", "Save Bodies", ("SWStyle_SaveBodies",), None, "Saves the part's 
 c("CreateAssembly", "Create Assembly", ("SWStyle_CreateAssembly",), "FEATURES_CREATE_ASSEMBLY",
   "Saves the part's bodies as parts and makes an assembly of them.")
 c("CenterOfMass", "Center of Mass", ("SWStyle_CenterOfMass",), None,
-  "Adds a point at the part's centre of mass that follows the part.")
+  "Adds a point at the part's center of mass that follows the part.")
 c("CompositeCurve", "Composite Curve", ("SWStyle_CompositeCurve",), None,
   "Joins the selected edges and sketch curves into one curve.")
 c("CurveThroughXYZPoints", "Curve Through XYZ Points", ("SWStyle_CurveThroughXYZPoints",), None,
@@ -573,7 +598,7 @@ c("CurveThroughReferencePoints", "Curve Through Reference Points", ("SWStyle_Cur
   "CURVES_REF_POINTS", "Makes a curve through the selected vertices and points.")
 c("Curves", "Curves", ("SWStyle_CompositeCurve",), None, "Curve commands.")
 c("Suppress", "Suppress", ("SWStyle_Suppress",), None,
-  "Removes the selected features and their children from the model; they stay in the tree, greyed.")
+  "Removes the selected features and their children from the model; they stay in the tree, grayed.")
 c("Unsuppress", "Unsuppress", ("SWStyle_Unsuppress",), None,
   "Puts suppressed features back into the model.")
 c("UnsuppressWithDependents", "Unsuppress with Dependents", ("SWStyle_UnsuppressWithDependents",),
@@ -581,7 +606,7 @@ c("UnsuppressWithDependents", "Unsuppress with Dependents", ("SWStyle_Unsuppress
 c("Thread", "Thread", ("SWStyle_Thread", "PartDesign_SubtractiveHelix"), None,
   "Cuts or adds a helical thread on a cylindrical edge.")
 c("CosmeticThread", "Cosmetic Thread", ("SWStyle_CosmeticThread", "PartDesign_Hole"), "FEATURES_COSMETIC_THREAD",
-  "Shows a thread on a round shaft or hole without modelling it.")
+  "Shows a thread on a round shaft or hole without modeling it.")
 c("MoveFace", "Move Face", ("SWStyle_MoveFace", "Part_Offset"), None,
   "Offsets, moves or rotates faces of the solid directly.")
 c("Body", "Insert Body", ("PartDesign_Body",), "ASSEM_SOLID_BODY_FOLDER",
@@ -603,8 +628,8 @@ c("ExitSketch", "Exit Sketch", ("Sketcher_LeaveSketch",), "EXIT_SKETCH_CANCEL",
 c("EditSketch", "Edit Sketch", ("Sketcher_EditSketch",), "SKETCH_MODIFY")
 c("SmartDimension", "Smart Dimension", ("FreeWorks_SmartDimension", "Sketcher_Dimension", "Sketcher_ConstrainDistance"), "LAYOUT_SMART_DIM",
   "Creates a dimension for one or more selected entities.", caption="Smart\nDimension")
-c("HorizontalDimension", "Horizontal Dimension", ("Sketcher_ConstrainDistanceX",), "DIMENSIONS_HORIZ", tip="Dimensions the horizontal distance between two points or along a line.")
-c("VerticalDimension", "Vertical Dimension", ("Sketcher_ConstrainDistanceY",), "DIMENSIONS_VERT", tip="Dimensions the vertical distance between two points or along a line.")
+c("HorizontalDimension", "Horizontal Dimension", ("FreeWorks_HorizontalDimension", "Sketcher_ConstrainDistanceX",), "DIMENSIONS_HORIZ", tip="Dimensions the horizontal distance between two points or along a line.")
+c("VerticalDimension", "Vertical Dimension", ("FreeWorks_VerticalDimension", "Sketcher_ConstrainDistanceY",), "DIMENSIONS_VERT", tip="Dimensions the vertical distance between two points or along a line.")
 c("AngularDimension", "Angular Dimension", ("Sketcher_ConstrainAngle",), "DIMENSIONS_ANGULAR", tip="Dimensions the angle between two lines or three points.")
 c("RadiusDimension", "Radius/Diameter Dimension", ("Sketcher_ConstrainRadiam", "Sketcher_ConstrainRadius"), "SKETCH_ADD_DIM", tip="Dimensions the radius of an arc or the diameter of a circle.")
 # dimensioning and sketch tools (relations thread, packages 13b and 14)
@@ -616,7 +641,7 @@ c("VerticalOrdinateDimension", "Vertical Ordinate Dimension", ("SWStyle_Vertical
 c("AngularRunningDimension", "Angular Running Dimension", ("SWStyle_AngularRunningDimension",), "DIMENSIONS_ANGULAR", tip="Dimensions a set of angles, all measured from the same zero line.")
 c("SymmetricLinearDiameterDimension", "Symmetric Linear Diameter Dimension",
   ("SWStyle_SymmetricLinearDiameterDimension",), "DIMENSIONS_SYMMETRIC_DIAMETER",
-  "Dimensions the diameter of a revolved profile, measured across its centreline.")
+  "Dimensions the diameter of a revolved profile, measured across its centerline.")
 c("ChamferDimension", "Chamfer Dimension", ("SWStyle_ChamferDimension",), "DIMENSIONS_CHAMFER")
 c("PathLengthDimension", "Path Length Dimension", ("SWStyle_PathLengthDimension", "Sketcher_ConstrainDistance"),
   "SKETCH_PATH_LENGTH_DIMENSION", "The total length of a chain of sketch entities, driving or driven.")
@@ -634,7 +659,7 @@ c("Instant2D", "Instant2D", ("SWStyle_Instant2D",), "SKETCH_INSTANT_2D", "When o
 c("SketchXpert", "SketchXpert", ("SWStyle_SketchXpert",), None,
   "Finds ways to fix an over-defined sketch, or deletes the clashing relations and dimensions.")
 c("EditPolygon", "Edit Polygon", ("SWStyle_EditPolygon",), "SKETCH_POLYGON",
-  "Changes a picked polygon's sides, size, centre and angle.")
+  "Changes a picked polygon's sides, size, center and angle.")
 c("ViewSketchRelations", "Sketch Relations", ("SWStyle_ViewSketchRelations",), "VIEW_SKETCH_RELATIONS",
   "Shows or hides the relation glyphs of the sketch being edited.")
 c("ViewSketchDimensions", "Sketch Dimensions", ("SWStyle_ViewSketchDimensions",), "VIEW_SKETCH_DIMENSIONS",
@@ -695,7 +720,7 @@ c("Slot", "Straight Slot", ("FreeWorks_StraightSlot", "Sketcher_CreateSlot",), "
 c("CenterpointSlot", "Centerpoint Straight Slot", ("FreeWorks_CenterpointStraightSlot", "SWStyle_CenterpointStraightSlot",), "SKETCH_CTRPT_STRAIGHT_SLOT",
   "Sketches a straight slot from its center point.")
 c("ThreePointArcSlot", "3 Point Arc Slot", ("FreeWorks_ThreePointArcSlot", "SWStyle_3PointArcSlot",), "SKETCH_3PT_ARC_SLOT",
-  "Sketches an arc slot through three points on its centre arc.")
+  "Sketches an arc slot through three points on its center arc.")
 c("ArcSlot", "Centerpoint Arc Slot", ("FreeWorks_CenterpointArcSlot", "Sketcher_CreateArcSlot",), "SKETCH_CTRPT_ARC_SLOT")
 c("Polygon", "Polygon", ("FreeWorks_Polygon", "Sketcher_CreateRegularPolygon", "Sketcher_CreateHexagon"), "SKETCH_POLYGON",
   "Sketches a polygon; choose the number of sides.")
@@ -883,23 +908,23 @@ c("DesignCheckFolder", "Check Folder", ("SWStyle_DesignCheckFolder",), None, "Ch
 c("Check", "Check", ("SWStyle_Check",), "TOOLS_CHECK",
   "Checks the selected bodies, or every visible body, for invalid geometry.")
 c("DraftAnalysis", "Draft Analysis", ("SWStyle_DraftAnalysis",), "I3DVIEW_DRAFT_ANALYSIS",
-  "Colours faces by their draft against a direction of pull.", caption="Draft\nAnalysis")
+  "Colors faces by their draft against a direction of pull.", caption="Draft\nAnalysis")
 c("UndercutAnalysis", "Undercut Analysis", ("SWStyle_UndercutAnalysis",), "I3DVIEW_UNDERCUT_ANALYSIS",
-  "Colours the faces a two-part mould pulling along a direction could not release.")
+  "Colors the faces a two-part mold pulling along a direction could not release.")
 c("ThicknessAnalysis", "Thickness Analysis", ("SWStyle_ThicknessAnalysis",), "I3DVIEW_THICKNESS_ANALYSIS",
-  "Colours the faces by the wall thickness under them, against a target thickness.")
+  "Colors the faces by the wall thickness under them, against a target thickness.")
 c("PartingLineAnalysis", "Parting Line Analysis", ("SWStyle_PartingLineAnalysis",), "MOLD_PARTING_LINE_ANALYSIS",
-  "Shows where a two-part mould pulling along a direction would split the part.")
+  "Shows where a two-part mold pulling along a direction would split the part.")
 c("Zebra", "Zebra Stripes", ("SWStyle_ZebraStripes",), "I3DVIEW_ZEBRA",
   "Shows stripes reflected in the faces to check that faces join smoothly.")
 c("Curvature", "Curvature", ("SWStyle_Curvature",), "I3DVIEW_CURVATURE",
-  "Colours faces by how tightly they curve: black flat, red tight; the pointer shows the radius.")
+  "Colors faces by how tightly they curve: black flat, red tight; the pointer shows the radius.")
 c("SurfaceCurvatureCombs", "Surface Curvature Combs", ("SWStyle_SurfaceCurvatureCombs",), "I3DVIEW_CURVATURE",
   "Shows curvature combs across the picked faces.")
 c("HideCurvatureCombs", "Hide Curvature Combs", ("SWStyle_HideCurvatureCombs",), "I3DVIEW_CURVATURE",
   "Takes all the surface curvature combs away.")
 c("SymmetryCheck", "Symmetry Check", ("SWStyle_SymmetryCheck",), "TOOLS_SYM_CHECK",
-  "Colours faces that are symmetric or asymmetric about a plane.")
+  "Colors faces that are symmetric or asymmetric about a plane.")
 
 # ---- Add-Ins tab (other FreeCAD workbenches) -------------------------------------------
 c("WB_PartDesign", "Part Design", (), "FEATURES_EXTRUDE_BOSS", call="wb:PartDesignWorkbench", caption="Part\nDesign")
@@ -1041,12 +1066,12 @@ c("ShadedEdges", "Shaded With Edges", (), "I3DVIEW_SHADED_EDGES",
   "Shaded faces with their edges drawn (FreeCAD's Flat lines).", call="draw_style:6")
 c("Shaded", "Shaded", (), "I3DVIEW_SHADED", "Shaded faces without edges.", call="draw_style:5")
 c("HiddenLinesRemoved", "Hidden Lines Removed", ("SWStyle_HiddenLinesRemoved",), "I3DVIEW_HLR",
-  "White faces and black edges, with the hidden ones left out.")
+  "Visible edges only, the hidden ones left out; the background shows through the faces.")
 c("HiddenLinesVisible", "Hidden Lines Visible", ("SWStyle_HiddenLinesVisible",), "I3DVIEW_HLV",
-  "Edges only: visible edges solid, hidden edges grey and dashed.")
+  "Edges only: visible edges solid, hidden edges gray and dashed.")
 c("Wireframe", "Wireframe", (), "I3DVIEW_WIREFRAME", "Every edge, the hidden ones too.", call="draw_style:2")
 c("Cartoon", "Cartoon", ("SWStyle_Cartoon",), None,
-  "Draws the model in flat bands of colour with thick black outlines.")
+  "Draws the model in flat bands of color with thick black outlines.")
 c("DraftQualityHLR", "Draft Quality HLR/HLV", ("SWStyle_DraftQualityHLR",), None,
   "Hidden Lines Visible draws its hidden edges from coarser curves: quicker, rougher.")
 # the drawing sheet's heads-up bar (HEADS_UP_SHEET below; drawings-land50 display commands)
@@ -1092,6 +1117,13 @@ c("ViewCameras", "Cameras", ("SWStyle_ViewCameras",), "VIEW_CAMERAS", "Shows or 
 c("ViewLights", "Lights", ("SWStyle_ViewLights",), "VIEW_LIGHTS", "Turns the added lights on and off.")
 c("ViewPartingLines", "Parting Lines", ("SWStyle_ViewPartingLines",), "VIEW_PARTING_LINES", "Shows or hides the parting lines.")
 c("ViewMarkups", "Markups", ("SWStyle_ViewMarkups",), "VIEW_MARKUPS", "Shows or hides the markups.")
+c("ViewDecals", "Decals", ("SWStyle_ViewDecals",), "DISPMGR_DECAL", "Shows or hides the decals.")
+c("ViewLiveSectionPlanes", "Live Section Planes", ("SWStyle_ViewLiveSectionPlanes",), "I3DVIEW_SECT_VIEW",
+  "Shows or hides the Live Section Planes and their cuts.")
+c("UseComponentColorHLR", "Use Component Color In HLR/HLV", ("SWStyle_ComponentColorHLR",), None,
+  "In Hidden Lines Removed and Visible, draws each component's edges in its own color.")
+c("OptimizeZoomPanRotate", "Optimize Zoom/Pan/Rotate", ("SWStyle_OptimizeZoomPanRotate",), None,
+  "While you zoom, pan or rotate an assembly, leaves out the components that are small on screen.")
 c("ViewBendLines", "Bend Lines", ("SWStyle_ViewBendLines",), "VIEW_BEND_LINES", "Shows or hides the sheet metal bend lines.")
 c("ViewWeldBead", "Weld Bead", ("SWStyle_ViewWeldBead",), "VIEW_WELD_BEAD", "Shows or hides the weld beads.")
 c("TangentEdgesVisible", "Tangent Edges Visible", ("SWStyle_TangentEdgesVisible",), None,
@@ -1120,6 +1152,8 @@ c("ViewSettings", "View Settings", (), "I3DVIEW_SETTINGS",
   "Shadows In Shaded Mode, Perspective and Cartoon.", call="menu")
 c("RealViewGraphics", "RealView Graphics", ("SWStyle_RealViewGraphics",), "I3DVIEW_REAL_VIEW_GRAPHICS",
   "Lights the model from the side and behind as well, for a fuller shaded look.")
+c("RealViewPlusGraphics", "RealView Plus Graphics", ("SWStyle_RealViewPlusGraphics",), "I3DVIEW_REAL_VIEW_GRAPHICS",
+  "RealView with the floor shadow and Ambient Occlusion together.")
 c("AmbientOcclusion", "Ambient Occlusion", ("SWStyle_AmbientOcclusion",), "I3DVIEW_SETTINGS",
   "Darkens the corners and hollows of the model.")
 c("ShadowsInShadedMode", "Shadows In Shaded Mode", ("SWStyle_ShadowsInShadedMode",), "I3DVIEW_SHADOWS_IN_SHADED",
@@ -1171,17 +1205,21 @@ c("RelParallel", "Make Parallel", ("Sketcher_ConstrainParallel",), tip="Adds a p
 c("RelPerpendicular", "Make Perpendicular", ("Sketcher_ConstrainPerpendicular",), tip="Adds a perpendicular relation to the selection(s).")
 c("RelTangent", "Make Tangent", ("Sketcher_ConstrainTangent",), tip="Adds a tangent relation to the selection(s).")
 c("RelConcentric", "Make Concentric", ("Sketcher_ConstrainCoincidentUnified", "Sketcher_ConstrainCoincident"), tip="Adds a concentric relation to the selection(s).")
+c("RelCoradial", "Make Coradial", ("Sketcher_ConstrainEqual",), tip="Adds a coradial relation to the selection(s).")  # coradial-1127
 c("RelEqual", "Make Equal", ("Sketcher_ConstrainEqual",), tip="Adds an equal relation to the selection(s).")
+c("RelEqualCurvature", "Make Equal Curvature", ("Sketcher_ConstrainTangent",), tip="Adds an equal curvature relation to the selection(s).")
 c("RelSymmetric", "Make Symmetric", ("Sketcher_ConstrainSymmetric",), tip="Adds a symmetric relation to the selection(s).")
 c("RelFix", "Fix", ("Sketcher_ConstrainBlock",))
 c("RelFixPoint", "Fix", ("Sketcher_ConstrainLock",))
 c("RelConstruction", "Construction Geometry", ("Sketcher_ToggleConstruction",), "SKETCH_CONSTRUCT_GEOM")
 
 # drawings-land85: drawing twins of the dimension tools
-for _key, _native in (('HorizontalDimension', 'FreeWorks_DrawHorizontalDimension'), ('VerticalDimension', 'FreeWorks_DrawVerticalDimension'), ('AngularDimension', 'FreeWorks_DrawAngularDimension'), ('RadiusDimension', 'FreeWorks_DrawRadiusDimension'), ('ChainDimension', 'FreeWorks_DrawChainDimension'), ('AngularRunningDimension', 'FreeWorks_DrawAngularRunning'), ('PathLengthDimension', 'TechDraw_ExtensionArcLengthAnnotation'), ('SymmetricLinearDiameterDimension', 'FreeWorks_DrawSymmetricDiameter')):
+for _key, _native in (('HorizontalDimension', 'FreeWorks_DrawHorizontalDimension'), ('VerticalDimension', 'FreeWorks_DrawVerticalDimension'), ('AngularDimension', 'FreeWorks_DrawAngularDimension'), ('RadiusDimension', 'FreeWorks_DrawRadiusDimension'), ('ChainDimension', 'FreeWorks_DrawChainDimension'), ('AngularRunningDimension', 'FreeWorks_DrawAngularRunning'), ('PathLengthDimension', 'FreeWorks_DrawPathLength'), ('SymmetricLinearDiameterDimension', 'FreeWorks_DrawSymmetricDiameter')):
     _base = next((x for x in _ALL if x.key == _key), None)
     if _base is not None and not any(x.key == "Draw" + _key for x in _ALL):
-        c("Draw" + _key, _base.label, (_native,) + tuple(_base.natives), _base.icon, _base.tip, caption=_base.caption)
+        # Path Length: the drawing's own command only; the sketch tool behind it opened a part sketch on a sheet
+        _more = () if _key == "PathLengthDimension" else tuple(_base.natives)
+        c("Draw" + _key, _base.label, (_native,) + _more, _base.icon, _base.tip, caption=_base.caption)
 
 
 BY_KEY = {cmd.key: cmd for cmd in _ALL}
@@ -1552,7 +1590,8 @@ HEADS_UP = (
                        "ViewOrigins", "ViewPartingLines",
                        "ViewPlanes", "ViewPoints", "ViewSketches", "ViewBendLines", "ViewSketchDimensions",
                        "ViewSketchPlanes", "ViewWeldBead", "ViewMarkups",
-                       "ViewGrid", "ViewSketchRelations", "ViewBodies", "ViewPrimaryPlanes")),
+                       "ViewDecals", "ViewGrid", "ViewSketchRelations", "ViewLiveSectionPlanes",
+                       "ViewBodies", "ViewPrimaryPlanes")),
     ("EditAppearance", None),
     ("ApplyScene", None),
     ("ViewSettings", ("RealViewGraphics", "ShadowsInShadedMode", "AmbientOcclusion", "Perspective", "Cartoon")),
@@ -1585,8 +1624,8 @@ CONTEXT = {
 }
 # Order of the relation buttons inside a sketch.
 RELATIONS = ("RelHorizontal", "RelVertical", "RelMerge", "RelOnEdge", "RelMidpoint", "RelCollinear",
-             "RelParallel", "RelPerpendicular", "RelTangent", "RelConcentric", "RelEqual", "RelSymmetric",
-             "RelFix", "RelFixPoint", "RelConstruction")
+             "RelParallel", "RelPerpendicular", "RelTangent", "RelConcentric", "RelCoradial", "RelEqual",
+             "RelEqualCurvature", "RelSymmetric", "RelFix", "RelFixPoint", "RelConstruction")
 
 # Every family the addon may draw; the icon copier extracts these plus the
 # FreeCAD icon-name overrides below.
@@ -1823,7 +1862,9 @@ _TIPS = {
     "RelPerpendicular": "Makes two lines meet at a right angle.",
     "RelTangent": "Makes a line or arc touch a curve smoothly.",
     "RelConcentric": "Gives arcs and circles the same center.",
+    "RelCoradial": "Gives arcs and circles the same center and radius.",
     "RelEqual": "Gives the picked entities the same length or radius.",
+    "RelEqualCurvature": "Makes a spline bend as much as the arc, line or spline it meets at its end.",
     "RelSymmetric": "Makes two entities mirror each other about a centerline.",
     "RelFix": "Holds the picked entity where it is.",
     "RelFixPoint": "Holds the picked point where it is.",

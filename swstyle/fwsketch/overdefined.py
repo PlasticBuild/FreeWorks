@@ -78,9 +78,48 @@ def clashing(sketch):
     conflicting = listed("ConflictingConstraints")
     malformed = listed("MalformedConstraints")
     unsolved = sorted(set(conflicting + malformed))
+    if not unsolved and not redundant:
+        unsolved = unsolvable(sketch)
     red = [unsolved[-1]] if unsolved else []
     yellow = sorted(set(redundant + conflicting + malformed) - set(red))
     return yellow, red
+
+
+def unsolvable(sketch, tries=24):
+    ""
+
+
+    try:
+        if "Invalid" not in sketch.State:
+            return []
+    except Exception:
+        return []
+    try:
+        import Sketcher
+        geos = list(sketch.Geometry)
+        cons = list(sketch.Constraints)
+    except Exception:
+        return []
+    own = [i for i, c in enumerate(cons)
+           if all(g == I.GEO_UNDEF or g >= -2 for g in (c.First, c.Second, c.Third))]
+    if len(own) != len(cons):
+        return []          # relations to model edges: the scratch solver has no external geometry
+
+    def solves(skip):
+        trial = Sketcher.Sketch()
+        for g in geos:
+            trial.addGeometry(g)
+        for i, c in enumerate(cons):
+            if i != skip:
+                trial.addConstraint(c)
+        return trial.solve() == 0
+    try:
+        for i in list(reversed(range(len(cons))))[:tries]:
+            if solves(i):
+                return [i]
+    except Exception as _fw_err:
+        _fw_log("fwsketch/overdefined.py:unsolvable", _fw_err)
+    return []
 
 
 def dangling(sketch):
@@ -155,6 +194,11 @@ class Overlay(ViewMath):
             brown_c = dangling(self.sketch)
         except Exception:
             brown_c = []
+        try:
+            from . import danglingdrag
+            danglingdrag.start().update(self.view, self.sketch)
+        except Exception as _fw_err:
+            _fw_log("fwsketch/overdefined.py:dangling dots", _fw_err)
         if not yellow_c and not red_c and not brown_c:
             self.state = ([], [])
             self.brown = []
@@ -184,6 +228,12 @@ class Overlay(ViewMath):
 
     def remove(self):
         self.repaint.stop()
+        try:        # fix317: the sketch left edit: no dangling dots
+            from . import danglingdrag
+            if danglingdrag.dragger() is not None:
+                danglingdrag.dragger().clear()
+        except Exception as _fw_err:
+            _fw_log("fwsketch/overdefined.py:dangling dots off", _fw_err)
         if self.scene is not None:
             self.scene.remove()
             self.scene = None

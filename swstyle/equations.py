@@ -457,6 +457,29 @@ def broken(obj):
     return ""
 
 
+def errors(doc):
+    ""
+
+
+    out = []
+    if doc is None:
+        return out
+    try:
+        for name, text in pending(doc).items():
+            out.append((name, "Not solved yet: %s" % text))
+        for name, _raw, got in variables(doc):
+            why = _var_error(got)
+            if why:
+                out.append((name, why))
+        for o, path, _expr in equations(doc):
+            why = broken(o)
+            if why:
+                out.append((sw_name(o, path), why))
+    except Exception as _fw_err:
+        _fw_log("equations.py:errors", _fw_err)
+    return out
+
+
 SAFE = "gv_"     # a name FreeCAD reads as a unit or function (W, m, s, sin) is kept as gv_<name>
 
 
@@ -585,6 +608,102 @@ FEATURE_DIMS = {"PartDesign::Pad": ("Length", "Length2"), "PartDesign::Pocket": 
                 "PartDesign::PolarPattern": ("Angle", "Occurrences"), "PartDesign::Draft": ("Angle",)}
 
 
+def shown_dim(obj, prop):
+    ""
+
+
+    p = prop.lstrip(".")
+    try:
+        if any(path.lstrip(".") == p for path, _e in getattr(obj, "ExpressionEngine", []) or []):
+            return True
+        t = obj.TypeId
+        if t in ("PartDesign::Pad", "PartDesign::Pocket"):
+            two = getattr(obj, "SideType", "") == "Two sides" or getattr(obj, "Type", "") == "TwoLengths"
+            if p == "Length":
+                return getattr(obj, "Type", "Length") in ("Length", "TwoLengths")
+            if p == "Length2":
+                return two
+        if t == "PartDesign::Chamfer" and p == "Size2":
+            return getattr(obj, "ChamferType", "") == "Two distances"
+        if t == "PartDesign::Hole" and p == "Depth":
+            return getattr(obj, "DepthType", "Dimension") == "Dimension"
+        if p == "Angle2" and "Direction2" in obj.PropertiesList:
+            # Parting Line draft: a second angle only with Direction 2 on, not Symmetrical (dimshown-fix02)
+            return bool(obj.Direction2) and not bool(getattr(obj, "Symmetric", False))
+        kind = getattr(obj, "SWStyleKind", "")
+        if kind:
+
+            # Angle is Silhouette's alone) is a dimension only then
+            from . import simplefeature
+            spec = simplefeature.SPECS.get(kind)
+            field = next((f for f in getattr(spec, "fields", ()) or () if f.name == p), None)
+            if field is not None and field.shown is not None:
+                return bool(field.shown(obj))
+    except Exception as _fw_err:
+        _fw_log("equations.py:shown_dim", _fw_err)
+    return True
+
+
+
+# offset distance or angle (D1@Plane1, refplane.plane_dims); an axis, point or coordinate system has none
+# (their Length is only the display size); a Helix/Spiral's values as its PropertyManager shows them
+
+# value properties (Sweep's circular profile diameter, thin thickness): the lengths and angles its
+# PropertyManager shows, in its order.
+HELIX_DIMS = {"Pitch and Revolution": ("Pitch", "Revolutions"), "Height and Revolution": ("Height", "Revolutions"),
+              "Height and Pitch": ("Height", "Pitch"), "Spiral": ("Pitch", "Revolutions")}
+NO_DIMS = ("PartDesign::Line", "PartDesign::Point", "PartDesign::CoordinateSystem")
+_VALUE_PROPS = ("Length", "Angle", "Radius", "Size", "Depth", "Height", "Offset", "Value",
+                "Length2", "Size2", "Angle2", "Radius2")
+
+
+def extra_dims(obj, make=True):
+    """[property] whose D1, D2... these are, or None for an object the usual rules cover."""
+    try:
+        t = obj.TypeId
+        if t == "PartDesign::Plane":
+            from . import refplane
+            return refplane.plane_dims(obj, make)
+        if t in NO_DIMS:
+            return []
+        proxy = getattr(obj, "Proxy", None)
+        helix = "refgeom2:Helix" in str(getattr(obj, "FreeWorksClass", "")) or (
+            type(proxy).__name__ == "Helix" and type(proxy).__module__.endswith("refgeom2"))
+        if helix and "DefinedBy" in obj.PropertiesList:
+            if getattr(obj, "VariablePitch", False):
+                return []                   # its values sit in the region table
+            out = list(HELIX_DIMS.get(obj.DefinedBy, ())) + ["StartAngle"]
+            if getattr(obj, "TaperHelix", False):
+                out.append("TaperAngle")
+            return [p for p in out if p in obj.PropertiesList]
+        kind = getattr(obj, "SWStyleKind", "")
+        if t.startswith("PartDesign::") and t not in FEATURE_DIMS and t != "PartDesign::Body" and \
+                any(p in obj.PropertiesList for p in _VALUE_PROPS):
+
+            # Line): D1 and D2 as Auto-create names them, so the Dimension View lists them too
+            first = next((p for p in _VALUE_PROPS[:8] if p in obj.PropertiesList), None)
+            if first is None:
+                return None
+            out = [first]
+            second = next((p for p in _VALUE_PROPS[8:] if p in obj.PropertiesList), None)
+            shown = globals().get("shown_dim")
+            if second is not None and (shown is None or shown(obj, second)):
+                out.append(second)
+            if shown is not None and not shown(obj, first):
+                out = []                    # the first is unused: D2 is not listed alone
+            return out
+        if kind and t.startswith("PartDesign::") and not any(p in obj.PropertiesList for p in _VALUE_PROPS):
+            from . import simplefeature
+            spec = simplefeature.SPECS.get(kind)
+            if spec is None:
+                return None
+            return [f.name for f in spec.fields if f.kind in ("length", "angle") and f.name in obj.PropertiesList
+                    and (f.shown is None or f.shown(obj))]
+    except Exception as _fw_err:
+        _fw_log("equations.py:extra_dims", _fw_err)
+    return None
+
+
 def dimension_path(doc, name):
     """(object, property path) for "D1@Sketch1", "Length@Pad", "Pad.Length" or "Sketch.Constraints.Width"."""
     name = name.strip().strip('"')
@@ -603,6 +722,9 @@ def dimension_path(doc, name):
                 return obj, ".Constraints.%s" % dim
             return None
         props = FEATURE_DIMS.get(obj.TypeId, ())
+        extra = extra_dims(obj)             # D1@Plane1, D1@Helix/Spiral1, D1@Sweep1 (refdims-fix01)
+        if extra is not None:
+            props = extra
         m = re.match(r"^D(\d+)$", dim)
         if m and 0 < int(m.group(1)) <= len(props):
             return obj, props[int(m.group(1)) - 1]
@@ -629,6 +751,12 @@ def sw_name(obj, path):
             for n, (i, cname) in enumerate(dims, 1):
                 if (m.group(1) and cname == m.group(1)) or (m.group(2) and i == int(m.group(2))):
                     return "%s@%s" % (_dim_name(n, cname), obj.Label)
+    extra = extra_dims(obj, False)
+    if extra:
+        if p in extra:
+            return "D%d@%s" % (extra.index(p) + 1, obj.Label)      # refdims-fix01
+        if p.startswith("SWPlaneD") and p[8:].isdigit():
+            return "D%s@%s" % (p[8:], obj.Label)
     props = FEATURE_DIMS.get(obj.TypeId, ())
     if p in props:
         return "D%d@%s" % (props.index(p) + 1, obj.Label)
@@ -845,6 +973,13 @@ def _split_word(text, word):
     return out
 
 
+def _cond(text):
+    """A condition that holds a ? b : c, kept whole as abs(...): FreeCAD writes (a ? b : c) ? d : e back without
+    the brackets and reads that again as a ? b : (c ? d : e), another value after the part is reopened
+    (eqlogic-fix01). abs() is true exactly where the condition was; to_sw shows it as typed again."""
+    return "abs(%s)" % text if "?" in text else text
+
+
 def _logic(text):
     ""
 
@@ -853,17 +988,17 @@ def _logic(text):
     if len(ors) > 1:
         out = "0"
         for part in reversed(ors):
-            out = "(%s ? 1 : %s)" % (_logic(part.strip()), out)
+            out = "(%s ? 1 : %s)" % (_cond(_logic(part.strip())), out)
         return out
     ands = _split_word(text, "and")
     if len(ands) > 1:
         out = "1"
         for part in reversed(ands):
-            out = "(%s ? %s : 0)" % (_logic(part.strip()), out)
+            out = "(%s ? %s : 0)" % (_cond(_logic(part.strip())), out)
         return out
     m = re.match(r"\s*not(?![\w.])\s*(.*)$", text, re.I | re.S)
     if m:
-        return "(%s ? 0 : 1)" % _logic(m.group(1))
+        return "(%s ? 0 : 1)" % _cond(_logic(m.group(1)))
     t = text.strip()
     if t.startswith("(") and t.endswith(")") and _closes(t, 0) == len(t) - 1:
         return "(%s)" % _logic(t[1:-1])
@@ -883,7 +1018,8 @@ def _sw_functions(text):
         args = _split_args(inner)
         if len(args) != 3:
             return text[:j + 1] + rest
-        return text[:s] + "(%s ? %s : %s)" % (_logic(args[0]), args[1], args[2]) + rest
+        cond = _cond(_logic(args[0]))
+        return text[:s] + "(%s ? %s : %s)" % (cond, args[1], args[2]) + rest
     form = SW_FUNCTIONS[name]
     return text[:s] + form.replace("%s", inner) + rest
 
@@ -1210,7 +1346,8 @@ def to_sw(doc, expr, units=None, owner=None):
     if owner is not None:
         out = re.sub(r'(?<![\w".>\]])(\.Constraints(?:\.\w+|\[\d+\]))', lambda m: '"%s"' % sw_name(owner, m.group(1)), out)
     # a variable named inside the Equations sheet (Gap = Wall / 1 in + 1): its number in the part's unit, shown bare
-    out = re.sub(r'\(\s*("[^"]+")\s*/\s*1\s*(?:%s|deg)\s*\)' % re.escape(sym), r"\1", out)
+    # (not a function's own brackets: sin("Ang" / 1 deg) is sin("Ang"), not sin"Ang", eqlogic-fix01)
+    out = re.sub(r'(?<![\w])\(\s*("[^"]+")\s*/\s*1\s*(?:%s|deg)\s*\)' % re.escape(sym), r"\1", out)
     out = re.sub(r'("[^"]+")\s*/\s*1\s*(?:%s|deg)\b' % re.escape(sym), r"\1", out)
     out = _lengths_out(_degrees_out(out))
     m = re.match(r"^\(?\s*(.+?)\s*\?\s*1\s*:\s*0\s*\)?$", out)
@@ -1218,6 +1355,7 @@ def to_sw(doc, expr, units=None, owner=None):
         out = 'iif(%s; "suppressed"; "unsuppressed")' % m.group(1)
     else:
         out = _ternary_out(out)
+        out = _logic_out(out)
     out = _quote_variables(doc, out)
     if (units or angle_units(doc)) == "Radians":
         out = _radians_out(out)
@@ -1269,7 +1407,64 @@ def _ternary_out(text):
     if c_at < 0:
         return text
     a, b, c = t[:q].strip(), rest[:c_at].strip(), rest[c_at + 1:].strip()
-    return "iif(%s; %s; %s)" % (a, _ternary_out(b), _ternary_out(c))
+    return "iif(%s; %s; %s)" % (_groups_out(a), _ternary_out(b), _ternary_out(c))
+
+
+def _iif_args(text):
+    """The three arguments when text is one whole iif(a; b; c) call, else None."""
+    t = text.strip()
+    m = re.match(r"^iif\s*\(", t)
+    if not m or _closes(t, m.end() - 1) != len(t) - 1:
+        return None
+    args = _split_args(t[m.end():-1])
+    return args if len(args) == 3 else None
+
+
+def _logic_words(text):
+    ""
+
+    args = _iif_args(text)
+    if args is None:
+        return text
+    a, b, c = args
+    m = re.match(r"^abs\s*\(", a)
+    if m and _closes(a, m.end() - 1) == len(a) - 1 and _iif_args(a[m.end():-1]) is not None:
+        a = a[m.end():-1]                    # a condition _cond kept whole
+
+    def grouped(t, inside):
+        w = _logic_words(t)
+        return "(%s)" % w if inside == "and" and _split_word(w, "or")[1:] or \
+            inside == "not" and (_split_word(w, "or")[1:] or _split_word(w, "and")[1:]) else w
+    if b == "1" and c == "0":
+        return _logic_words(a) if _iif_args(a) is not None else a
+    if b == "0" and c == "1":
+        return "not " + grouped(a, "not")
+    if c == "0" and (b == "1" or _iif_args(b) is not None):
+        return "%s and %s" % (grouped(a, "and"), grouped(b, "and"))
+    if b == "1" and _iif_args(c) is not None:
+        return "%s or %s" % (_logic_words(a), _logic_words(c))
+    return text
+
+
+def _logic_out(text):
+    """iif(abs(<an and/or/not>); x; y), as to_freecad keeps such a condition, -> iif(a and b; x; y)."""
+    out, k = [], 0
+    while True:
+        m = re.compile(r"\biif\s*\(\s*abs\s*\(").search(text, k)
+        if not m:
+            out.append(text[k:])
+            break
+        open_at = m.end() - 1
+        close = _closes(text, open_at)
+        inner = text[open_at + 1:close] if close > 0 else ""
+        if close < 0 or _iif_args(inner) is None:
+            out.append(text[k:m.end()])
+            k = m.end()
+            continue
+        start = text.index("(", m.start())
+        out.append(text[k:start + 1] + _logic_words(_logic_out(inner)))
+        k = close + 1
+    return "".join(out)
 
 
 def _groups_out(text):
@@ -1290,6 +1485,9 @@ def _groups_out(text):
             grouping = not (k > 0 and (text[k - 1].isalnum() or text[k - 1] == "_"))
             if depth == 0 and grouping and _top_level(inner, "?") != -1:
                 out.append(_ternary_out(inner))
+            elif depth == 0 and _top_level(inner, "?") != -1 and _top_level(inner, ";") == -1 and \
+                    _top_level(inner, ",") == -1:
+                out.append("(" + _ternary_out(inner) + ")")      # abs(a ? b : c) -> abs(iif(a; b; c))
             elif depth == 0:
                 out.append("(" + _groups_out(inner) + ")")
             else:
@@ -1553,12 +1751,17 @@ def dimensions(doc):
     ""
     out = []
     for o in doc.Objects:
+        extra = extra_dims(o, False)
+        if extra is not None:
+            for n, p in enumerate(extra, 1):
+                out.append(("D%d@%s" % (n, o.Label), o, p, evaluate(o, p)))
+            continue
         if o.isDerivedFrom("Sketcher::SketchObject"):
             for n, (i, cname) in enumerate(_sketch_dims(o), 1):
                 path = (".Constraints.%s" % cname) if cname else (".Constraints[%d]" % i)
                 out.append(("%s@%s" % (_dim_name(n, cname), o.Label), o, path, evaluate(o, path)))
         for n, p in enumerate(FEATURE_DIMS.get(o.TypeId, ()), 1):
-            if p in o.PropertiesList:
+            if p in o.PropertiesList and shown_dim(o, p):
                 out.append(("D%d@%s" % (n, o.Label), o, p, evaluate(o, p)))
     return out
 
@@ -1888,6 +2091,10 @@ if Gui is not None:
         def __init__(self, doc=None, parent=None):
             super().__init__(parent or Gui.getMainWindow())
             self.doc = doc or App.ActiveDocument
+            # a linked file edited since it was last read comes in as the box opens, as the docstring says
+            # (eqerr-fix01: it was read only when the part opened)
+            if self.doc is not None:
+                reread_linked(self.doc)
             self.setObjectName("SWEquations")
             self.setWindowTitle("Equations, Global Variables, and Dimensions")
             self.resize(780, 460)
@@ -2372,7 +2579,7 @@ if Gui is not None:
                     self.tree.viewport().unsetCursor()
                     if dragging:
                         k, _y = self._drop_at(event.position().toPoint())
-                        QtCore.QTimer.singleShot(0, lambda: self._move_row(name, k))
+                        from . import safe_later as _sl; _sl.later(0, lambda: self._move_row(name, k), self, "tree")
                         return True
             except Exception as _fw_err:
                 _fw_log("equations.py:drag", _fw_err)
@@ -2486,7 +2693,7 @@ if Gui is not None:
                 self._rebuild()
             except Exception as error:
                 self.status.setText(str(error))
-            QtCore.QTimer.singleShot(0, self.refresh)
+            from . import safe_later as _sl; _sl.later(0, self.refresh, self, "tree")
 
         def _menu(self, pos):
             item = self.tree.itemAt(pos)
@@ -2590,7 +2797,7 @@ if Gui is not None:
 
         def _link_toggled(self, on):
             if on and not self.link_path.text().strip():
-                QtCore.QTimer.singleShot(0, lambda: self._browse_link() or self.link.setChecked(False))
+                from . import safe_later as _sl; _sl.later(0, lambda: self._browse_link() or self.link.setChecked(False), self, "link")
 
         @_step
         def _angle_changed(self, units):

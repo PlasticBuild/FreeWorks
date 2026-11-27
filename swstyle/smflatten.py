@@ -269,6 +269,17 @@ class _custom_k:
         return False
 
 
+def _rehide(doc_name, name):
+    """restorefix-1126: a file reopens a hidden Flat-Pattern shown; it is hidden again unless it is flattened."""
+    doc = App.listDocuments().get(doc_name)
+    fp = doc.getObject(name) if doc is not None else None
+    vo = getattr(fp, "ViewObject", None) if fp is not None else None
+    if vo is not None and not getattr(fp, "SWFlattened", False) and vo.Visibility:
+        was = Gui.getDocument(doc_name).Modified
+        vo.Visibility = False
+        Gui.getDocument(doc_name).Modified = was
+
+
 class FlatPattern:
     """The Flat-Pattern feature (Part::FeaturePython outside the body, which it follows)."""
 
@@ -290,6 +301,12 @@ class FlatPattern:
 
     def loads(self, state):
         return None
+
+    def onDocumentRestored(self, obj):
+        if App.GuiUp and not obj.SWFlattened:
+            from PySide import QtCore
+            docname, name = obj.Document.Name, obj.Name
+            QtCore.QTimer.singleShot(0, lambda: QtCore.QTimer.singleShot(0, lambda: _rehide(docname, name)))
 
     def execute(self, obj):
         body = obj.Body
@@ -341,7 +358,7 @@ class FlatPattern:
         if App.GuiUp:
             from PySide import QtCore
             name, docname = obj.Name, obj.Document.Name
-            QtCore.QTimer.singleShot(0, lambda: smflatdisplay.apply(App.getDocument(docname).getObject(name)))
+            QtCore.QTimer.singleShot(0, lambda: smflatdisplay.apply(next((d.getObject(name) for d in [App.listDocuments().get(docname)] if d is not None), None)))
         try:
             from . import smcutlist
             smcutlist.later(obj.Document.Name)

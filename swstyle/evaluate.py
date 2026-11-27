@@ -819,7 +819,7 @@ class DraftAnalysisWindow(ReportWindow):
 
 
 @command("SWStyle_DraftAnalysis", "Draft Analysis",
-         "Colours faces by their draft against a direction of pull.")
+         "Colors faces by their draft against a direction of pull.")
 def draft_analysis():
     return _show(DraftAnalysisWindow)
 
@@ -884,7 +884,7 @@ class GeometryAnalysisWindow(ReportWindow):
         objs = picked_or_visible()
         found = geometry_problems(objs, self.length.value(), self.angle.value())
         self.set_rows([((kind, obj.Label, ent, val), [pick]) for kind, ent, val, pick, obj in found])
-        self.summary.setText("%d bodies analysed. %s" % (len(objs), "No problem geometry found." if not found
+        self.summary.setText("%d bodies analyzed. %s" % (len(objs), "No problem geometry found." if not found
                                                          else "%d item%s found; click one to select it." % (len(found), "" if len(found) == 1 else "s")))
 
 
@@ -1290,7 +1290,7 @@ class SymmetryWindow(ReportWindow):
 
 
 @command("SWStyle_SymmetryCheck", "Symmetry Check",
-         "Colours faces that are symmetric or asymmetric about a plane.")
+         "Colors faces that are symmetric or asymmetric about a plane.")
 def symmetry_check():
     return _show(SymmetryWindow)
 

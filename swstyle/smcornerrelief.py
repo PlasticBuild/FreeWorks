@@ -342,7 +342,7 @@ class SWCornerRelief:
         add("App::PropertyEnumeration", "Scope", GROUP, "2 Bend Corner or 3 Bend Corner")
         add("App::PropertyVectorList", "Corners", GROUP, "The corner point of each corner")
         add("App::PropertyEnumeration", "ReliefType", GROUP, "Relief type")
-        add("App::PropertyBool", "CenteredOnBendLines", GROUP, "Centre the relief on the bends' centre lines")
+        add("App::PropertyBool", "CenteredOnBendLines", GROUP, "Center the relief on the bends' center lines")
         add("App::PropertyBool", "RelativeToThickness", GROUP, "The size is a ratio of the thickness")
         add("App::PropertyFloat", "Ratio", GROUP, "Size / thickness")
         add("App::PropertyLength", "Size", GROUP, "Side length or diameter")

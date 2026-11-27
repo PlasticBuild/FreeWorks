@@ -119,6 +119,54 @@ def strip(doc):
             obj.purgeTouched()
         held.append((obj, proxy if app else None, vproxy if view else None))
     _held[doc.Name] = held
+    _note_hidden(doc)
+
+
+HIDDEN_KEY = "FreeWorksHidden"
+
+
+def _note_hidden(doc):
+    ""
+
+    try:
+        hidden = [o.Name for o in doc.Objects
+                  if getattr(o, "ViewObject", None) is not None and (APP_PROP in o.PropertiesList or VIEW_PROP in o.PropertiesList)
+                  and not o.ViewObject.Visibility]
+        meta = dict(doc.Meta or {})
+        want = json.dumps(hidden) if hidden else None
+        if meta.get(HIDDEN_KEY) != want:
+            if want is None:
+                meta.pop(HIDDEN_KEY, None)
+            else:
+                meta[HIDDEN_KEY] = want
+            doc.Meta = meta
+    except Exception as _fw_err:
+        _fw_log("cleanfiles.py:hidden", _fw_err)
+
+
+def _hidden_of(doc):
+    try:
+        return json.loads((doc.Meta or {}).get(HIDDEN_KEY, "[]"))
+    except Exception:
+        return []
+
+
+def _rehide(doc):
+    names = _hidden_of(doc)
+    if not names:
+        return
+    try:
+        gdoc = Gui.getDocument(doc.Name)
+        was = gdoc.Modified
+        for name in names:
+            obj = doc.getObject(name)
+            vo = getattr(obj, "ViewObject", None) if obj is not None else None
+            if vo is not None and vo.Visibility:
+                vo.Visibility = False
+        if gdoc.Modified != was:
+            gdoc.Modified = was
+    except Exception as _fw_err:
+        _fw_log("cleanfiles.py:rehide", _fw_err)
 
 
 def put_back(doc):
@@ -154,7 +202,7 @@ def restore(doc):
             obj.purgeTouched()
         if VIEW_PROP in props and obj.getPropertyByName(VIEW_PROP):
             views.append(obj)
-    if views and App.GuiUp:
+    if (views or _hidden_of(doc)) and App.GuiUp:
         from PySide import QtCore
         names = (doc.Name, [o.Name for o in views])     # now: the document can be gone when the timer fires
         QtCore.QTimer.singleShot(0, lambda: _restore_views(*names))
@@ -178,11 +226,16 @@ def _restore_views(doc_name, names):
         try:
             proxy = _instance(obj.getPropertyByName(VIEW_PROP))
             if proxy is not None:
+                try:
+                    proxy.Object = obj      # claimChildren / getIcon read it before attach() runs (restorefix-1126)
+                except Exception:
+                    pass
                 vobj.Proxy = proxy
                 _attach(vobj, proxy)
         except Exception as error:
             App.Console.PrintWarning("FreeCAD: %s's view could not get its class back (%s)\n" % (obj.Label, error))
     _reclaim(doc_name, names)
+    _rehide(doc)
 
 
 def _attach(vobj, proxy):

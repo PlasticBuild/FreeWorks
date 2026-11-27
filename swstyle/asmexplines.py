@@ -567,7 +567,7 @@ class RouteLinePanel:
 
     def addSelection(self, doc, obj, sub, pnt):
         point = V(*pnt) if pnt else None
-        QtCore.QTimer.singleShot(0, lambda: selguard.quiet(lambda: self.pick(self.doc.getObject(obj), sub, point)))
+        from . import safe_later as _sl; _sl.later(0, lambda: selguard.quiet(lambda: self.pick(self.doc.getObject(obj), sub, point)), self, "items")
 
     def removeSelection(self, *a):
         pass

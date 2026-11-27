@@ -29,7 +29,7 @@ TYPES = {
     "SWStyle_CenterpointStraightSlot": ("Slot", "Centerpoint Straight Slot",
                                         "Sketches a straight slot from its center point."),
     "SWStyle_3PointArcSlot": ("Slot", "3 Point Arc Slot",
-                              "Sketches an arc slot through three points on its centre arc."),
+                              "Sketches an arc slot through three points on its center arc."),
 }
 
 

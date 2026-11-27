@@ -369,6 +369,12 @@ class OrientationPanel(QtWidgets.QWidget):
         if event.type() == QtCore.QEvent.MouseButtonRelease and event.button() == Qt.LeftButton \
                 and obj.rect().contains(event.position().toPoint()) \
                 and (obj.arrow_rect().isNull() or not obj.arrow_rect().contains(event.position().toPoint())):
+            hook = getattr(self, "before_pick", None)
+            if hook is not None:
+                try:
+                    hook()      # before the button runs its command (this filter sees the release first)
+                except Exception as _fw_err:
+                    _fw_log("orientation.py:before-pick", _fw_err)
             QtCore.QTimer.singleShot(0, self.picked.emit)
         return False
 
@@ -458,6 +464,7 @@ class OrientationBox(QtWidgets.QWidget):
         self.panel = OrientationPanel(shell, self)
         self.panel.setObjectName("SWOrientationPanel")
         self.panel.picked.connect(self.after_pick)
+        self.panel.before_pick = self._before_pick
         self.panel._also = [self.previous, self.up_axis]
         self.views = list(self.panel.views.values())
         self.viewports = self.panel.viewports
@@ -630,6 +637,17 @@ class OrientationBox(QtWidgets.QWidget):
         if reason in ("pick", "click", "escape") and not self.pinned:
             self.hide_box(reason)
 
+    def _before_pick(self):
+        """usage run vd184 (11-27): the View Selector zooms the view out while it shows and puts the zoom
+        back as it goes. Gone after the pick, that put-back stopped the picked view's move before its first
+        frame (the view stayed where it was). Unpinned, the selector goes first, so the move starts from the
+        view as it was before the box and Previous View remembers that view, not the zoomed-out one."""
+        if self.pinned:
+            return
+        selector = getattr(self.shell, "view_selector", None)
+        if selector is not None and getattr(selector, "visible", False):
+            selector.hide("pick")
+
     def after_pick(self):
         ""
         if self.pinned:
@@ -706,6 +724,60 @@ def glyph_more(painter, rect):
     draw_arrow_right(painter, rect.center().x(), rect.center().y(), T.arrow, 6)
 
 
+class _SelectorView(object):
+    """The View Selector command's binding as the flyout's toggle shows it: pressed while the View
+    Selector is on (the setting the Space box's toggle switches), not only while the box is up."""
+
+    def __init__(self, binding):
+        self._b = binding
+
+    def __getattr__(self, name):
+        return getattr(self._b, name)
+
+    @property
+    def checked(self):
+        return viewselector.enabled()
+
+
+class SelectorToggle(CommandButton):
+    ""
+
+
+
+    def __init__(self, shell, parent=None):
+        super().__init__(shell, "ViewSelector", None, "qat", parent)
+        self.binding = _SelectorView(self.binding)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() != Qt.LeftButton:
+            return super().mouseReleaseEvent(event)
+        self._pressed = None
+        if self.rect().contains(event.position().toPoint()):
+            set_selector(self.shell, not viewselector.enabled())
+        self.update()
+
+
+def set_selector(shell, on):
+    """View Selector on or off: the setting, the box in the 3D view and the Orientation box's toggle."""
+    viewselector.set_enabled(on)
+    vs = getattr(shell, "view_selector", None)
+    try:
+        if vs is not None:
+            if on:
+                vs.show()
+            else:
+                vs.hide("off")
+    except Exception as _fw_err:
+        _fw_log("orientation.py:selector", _fw_err)
+    box = getattr(shell, "orientation", None)
+    sel = getattr(box, "selector", None) if box is not None else None
+    if sel is not None and alive(sel) and sel.isChecked() != bool(on):
+        sel.blockSignals(True)
+        sel.setChecked(bool(on))
+        sel.blockSignals(False)
+        sel.update()
+
+
 class FlyoutPanel(QtWidgets.QWidget):
     ""
 
@@ -723,7 +795,7 @@ class FlyoutPanel(QtWidgets.QWidget):
         self.top = []
         self.panel._also = self.top
         for key in ("NewView", "ViewSelector"):
-            b = CommandButton(shell, key, None, "qat", self)
+            b = SelectorToggle(shell, self) if key == "ViewSelector" else CommandButton(shell, key, None, "qat", self)
             b.resize(BUTTON, BUTTON)
             b.setObjectName("SWFlyout" + key)
             b.installEventFilter(self.panel)

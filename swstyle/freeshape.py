@@ -70,7 +70,7 @@ def _place(obj, shape):
 def _common(cage_label, extra):
     return [Field("Plane", "enum", "Plane", "Front", values=PLANES, box=cage_label,
                   tip="The plane the cage is drawn on"),
-            Field("Center", "vector", "Center", V(0, 0, 0), box=cage_label, tip="Where the cage's centre is")] + \
+            Field("Center", "vector", "Center", V(0, 0, 0), box=cage_label, tip="Where the cage's center is")] + \
         extra + [Field("Smoothing", "int", "Smoothing level", 2, low=0, high=3, box="Smoothing",
                        tip="0 keeps the cage sharp; 1 to 3 round it more, as subdivision levels")]
 

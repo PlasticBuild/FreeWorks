@@ -322,18 +322,21 @@ class RepairCommand:
                            "and redundant relations."}
 
     def IsActive(self):
-        if _in_edit() is not None:
-            return True
-        try:
-            return bool(Gui.Command.get(NATIVE).isActive())
-        except Exception:
-            return False
+        # sketchfirst-1126: live with a document; with no sketch open it shows the "open a sketch first" page
+        return _in_edit() is not None or App.ActiveDocument is not None
 
     def Activated(self):
         if _in_edit() is not None:
             repair_in_edit()
-        else:
-            Gui.runCommand(NATIVE, 0)
+            return
+        try:
+            if Gui.Command.get(NATIVE).isActive():
+                Gui.runCommand(NATIVE, 0)    # a sketch is selected: the native command validates it
+                return
+        except Exception:
+            pass
+        from . import solidfirstlive
+        solidfirstlive.sketch_first("RepairSketch")
 
 
 def register():

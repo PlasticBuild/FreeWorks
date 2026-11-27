@@ -109,6 +109,28 @@ def items(doc):
         if o.TypeId in ("Part::DatumPlane", "PartDesign::Plane"):
             continue
         out.append((o.Label, o, s))
+    return _outermost(out)
+
+
+def _outermost(rows):
+    """fh244: a part's Body and its tip feature are both shown and both solid: the viewer drew the solid twice.
+    A row inside another row (its Body, its Part container) is left out."""
+    names = {o.Name for _n, o, _s in rows}
+    out = []
+    for row in rows:
+        up, inside = row[1], False
+        for _guard in range(32):
+            try:
+                up = up.getParentGeoFeatureGroup()
+            except Exception:
+                up = None
+            if up is None:
+                break
+            if up.Name in names:
+                inside = True
+                break
+        if not inside:
+            out.append(row)
     return out
 
 

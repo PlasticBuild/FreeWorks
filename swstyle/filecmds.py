@@ -70,13 +70,35 @@ def _doc_page_settings(doc=None):
         if not text:
             return None
         landscape, paper, fit, scale, color, margins = text.split("|")
-        return {"landscape": landscape == "True", "paper": paper, "fit": fit == "True", "scale": int(scale),
+        # fh229: accept() writes the ticks with %d ("1"/"0"); "True" is read too (older files)
+        return {"landscape": landscape in ("1", "True"), "paper": paper, "fit": fit in ("1", "True"), "scale": int(scale),
                 "color": color, "margins": [float(m) for m in margins.split(",")]}
     except Exception:
         return None
 
 
-def page_settings():
+PRINTER_MARGINS = [0.25, 0.25, 0.25, 0.25]     # fh229: Use printer's margins (in)
+
+
+def page_settings(own_margins=False):
+    """Page Setup's values; margins are the printer's while Margins > Use printer's margins is ticked
+    (own_margins=True gives the typed ones, for the Margins box)."""
+    s = _page_values()
+    if not own_margins and printer_margins():
+        s["margins"] = list(PRINTER_MARGINS)
+    return s
+
+
+def printer_margins():
+    """Use printer's margins: on until margins are typed (margins typed in Page Setup before fh229 stay used)."""
+    g = _page()
+    typed = any(g.GetFloat(k, -1.0) >= 0 for k in ("MarginTop", "MarginBottom", "MarginLeft", "MarginRight"))
+    own = _doc_page_settings()
+    typed = typed or (own is not None and own["margins"] != PRINTER_MARGINS)
+    return g.GetBool("PrinterMargins", not typed)
+
+
+def _page_values():
     own = _doc_page_settings()
     if own is not None:
         return own
@@ -123,13 +145,13 @@ class PageSetupDialog(QtWidgets.QDialog):
         super().__init__(parent or Gui.getMainWindow())
         self.setObjectName("SWStyle_PageSetup")
         self.setWindowTitle("Page Setup")
-        s = page_settings()
+        s = page_settings(own_margins=True)
         lay = QtWidgets.QVBoxLayout(self)
 
         # document's own; the document's are kept in the document
         self.use_system = QtWidgets.QRadioButton("Use system settings")
         self.use_system.setObjectName("SWStyle_PageSetupSystem")
-        self.use_document = QtWidgets.QRadioButton("Use this document settings")
+        self.use_document = QtWidgets.QRadioButton("Use this document's settings")
         self.use_document.setObjectName("SWStyle_PageSetupDocument")
         (self.use_document if _doc_has_page_setup() else self.use_system).setChecked(True)
         lay.addWidget(self.use_system)
@@ -179,19 +201,8 @@ class PageSetupDialog(QtWidgets.QDialog):
             self.colours.append(b)
         lay.addWidget(colour)
 
-        margins = QtWidgets.QGroupBox("Margins (in)")
-        ml = QtWidgets.QGridLayout(margins)
-        self.margins = []
-        for i, (name, value) in enumerate(zip(("Top:", "Bottom:", "Left:", "Right:"), s["margins"])):
-            box = QtWidgets.QDoubleSpinBox()
-            box.setRange(0.0, 5.0)
-            box.setDecimals(2)
-            box.setSingleStep(0.05)
-            box.setValue(value)
-            ml.addWidget(QtWidgets.QLabel(name), i // 2, (i % 2) * 2)
-            ml.addWidget(box, i // 2, (i % 2) * 2 + 1)
-            self.margins.append(box)
-        lay.addWidget(margins)
+
+        self.margin_values = list(s["margins"])
 
         bb = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
                                         | QtWidgets.QDialogButtonBox.Help)
@@ -218,17 +229,68 @@ class PageSetupDialog(QtWidgets.QDialog):
                 meta["SWPageSetup"] = "%d|%s|%d|%d|%s|%s" % (
                     self.landscape.isChecked(), self.paper.currentText(), self.fit.isChecked(), self.scale.value(),
                     next((b.text() for b in self.colours if b.isChecked()), "Automatic"),
-                    ",".join("%.2f" % b.value() for b in self.margins))
-            else:
-                meta.pop("SWPageSetup", None)
+                    ",".join("%.2f" % v for v in self.margin_values))
+                doc.Meta = meta
+                super().accept()        # fh229: this document's settings leave the system settings as they are
+                return
+            meta.pop("SWPageSetup", None)
             doc.Meta = meta
         g.SetBool("Landscape", self.landscape.isChecked())
         g.SetString("Paper", self.paper.currentText())
         g.SetBool("ScaleToFit", self.fit.isChecked())
         g.SetInt("Scale", self.scale.value())
         g.SetString("Color", next((b.text() for b in self.colours if b.isChecked()), "Automatic"))
-        for key, box in zip(("MarginTop", "MarginBottom", "MarginLeft", "MarginRight"), self.margins):
-            g.SetFloat(key, box.value())
+        super().accept()
+
+
+class MarginsDialog(QtWidgets.QDialog):
+    ""
+
+    def __init__(self, parent=None):
+        super().__init__(parent or Gui.getMainWindow())
+        self.setObjectName("SWStyle_PrintMarginsBox")
+        self.setWindowTitle("Margins")
+        lay = QtWidgets.QVBoxLayout(self)
+        g = _page()
+        self.use_printer = QtWidgets.QCheckBox("Use printer's margins")
+        self.use_printer.setObjectName("SWStyle_MarginsUsePrinter")
+        self.use_printer.setChecked(printer_margins())
+        lay.addWidget(self.use_printer)
+        form = QtWidgets.QFormLayout()
+        self.boxes = []
+        for name, value in zip(("Top:", "Bottom:", "Left:", "Right:"), page_settings(own_margins=True)["margins"]):
+            box = QtWidgets.QDoubleSpinBox()
+            box.setObjectName("SWStyle_Margins" + name[:-1])
+            box.setRange(0.0, 5.0)
+            box.setDecimals(2)
+            box.setSingleStep(0.05)
+            box.setSuffix(" in")
+            box.setValue(value)
+            # typing a margin takes the tick off, so no field is greyed (NO DEAD CONTROLS)
+            box.valueChanged.connect(lambda _v: self.use_printer.setChecked(False))
+            form.addRow(name, box)
+            self.boxes.append(box)
+        lay.addLayout(form)
+        bb = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addWidget(bb)
+
+    def accept(self):
+        g = _page()
+        g.SetBool("PrinterMargins", self.use_printer.isChecked())
+        values = [b.value() for b in self.boxes]
+        doc = App.ActiveDocument
+        own = _doc_page_settings(doc)
+        if own is not None:
+            meta = dict(doc.Meta)
+            parts = meta["SWPageSetup"].split("|")
+            parts[5] = ",".join("%.2f" % v for v in values)
+            meta["SWPageSetup"] = "|".join(parts)
+            doc.Meta = meta
+        else:
+            for key, v in zip(("MarginTop", "MarginBottom", "MarginLeft", "MarginRight"), values):
+                g.SetFloat(key, v)
         super().accept()
 
 
@@ -321,12 +383,10 @@ def print_pdf(target):
     writer.setResolution(300)
     painter = QtGui.QPainter(writer)
     try:
+        # fh229: the same page as Print Preview and the printers (header, footer, Selection..., Scale...)
         area = painter.viewport()
-        x, y, w, h = _layout(area.width(), area.height(), 300, 300)
-        k = min(1.0, 3000.0 / max(w, h, 1))
-        image = view_image(max(int(w * k), 1), max(int(h * k), 1))
-        iw, ih = _fit(w, h, image.width(), image.height(), 1.0)
-        painter.drawImage(QtCore.QRect(x + (w - iw) // 2, y + (h - ih) // 2, iw, ih), image)
+        sheet = compose_page(area.width(), area.height(), 300, 300)
+        painter.drawImage(QtCore.QRect(0, 0, area.width(), area.height()), sheet)
     finally:
         painter.end()
     return os.path.isfile(target)
@@ -341,7 +401,13 @@ def view_image(width, height):
     try:
         from . import printextras
         background = "Current" if printextras.print_background() else "White"
-        view.saveImage(path, int(width), int(height), background)
+
+        # the page printed the dark scene. Without Print background it is taken out while the picture is made
+        taken = [] if background == "Current" else _take_scene(view)
+        try:
+            view.saveImage(path, int(width), int(height), background)
+        finally:
+            _put_scene(view, taken)
         image = QtGui.QImage(path)
     finally:
         try:
@@ -351,6 +417,34 @@ def view_image(width, height):
     if page_settings()["color"] == "Black and white":
         image = image.convertToFormat(QtGui.QImage.Format_Grayscale8)
     return image.convertToFormat(QtGui.QImage.Format_RGB32)
+
+
+def _take_scene(view):
+    """fh202: the scene background nodes (scenebg) out of the view's scene: [(index, node)] to put back."""
+    out = []
+    try:
+        from . import scenebg
+        names = (scenebg.NAME, scenebg.PHOTO_NAME)
+        root = view.getSceneGraph()
+        for i in range(root.getNumChildren() - 1, -1, -1):
+            node = root.getChild(i)
+            if node.getName().getString() in names:
+                node.ref()
+                root.removeChild(i)
+                out.append((i, node))
+    except Exception as _fw_err:
+        _fw_log("filecmds.py:take_scene", _fw_err)
+    return out[::-1]
+
+
+def _put_scene(view, taken):
+    try:
+        root = view.getSceneGraph()
+        for i, node in taken:
+            root.insertChild(node, min(i, root.getNumChildren()))
+            node.unref()
+    except Exception as _fw_err:
+        _fw_log("filecmds.py:put_scene", _fw_err)
 
 
 def _fit(area_w, area_h, image_w, image_h, scale):
@@ -506,7 +600,7 @@ class PrintDialog(QtWidgets.QDialog):
         for text, name, slot in (("Properties...", "SWStyle_PrintProperties", self._properties),
                                  ("Page Setup...", "SWStyle_PrintPageSetup", lambda: PageSetupDialog(self).exec()),
                                  ("Header/Footer...", "SWStyle_PrintHeaderFooter", lambda: printextras.HeaderFooterDialog(self).exec()),
-                                 ("Margins...", "SWStyle_PrintMargins", lambda: PageSetupDialog(self).exec())):
+                                 ("Margins...", "SWStyle_PrintMargins", lambda: MarginsDialog(self).exec())):
             b = QtWidgets.QPushButton(text)
             b.setObjectName(name)
             b.clicked.connect(slot)
@@ -651,6 +745,8 @@ class PrintPreviewDialog(QtWidgets.QDialog):
         self.setObjectName("SWStyle_PrintPreview")
         self.setWindowTitle("Print Preview")
         self.resize(900, 760)
+
+        self.setWindowState(self.windowState() | Qt.WindowMaximized)
         lay = QtWidgets.QVBoxLayout(self)
         bar = QtWidgets.QHBoxLayout()
         self.zoom = 1.0
@@ -670,7 +766,11 @@ class PrintPreviewDialog(QtWidgets.QDialog):
         self.scroll.setAlignment(Qt.AlignCenter)
         self.scroll.setWidget(self.page)
         lay.addWidget(self.scroll, 1)
-        QtCore.QTimer.singleShot(0, self.draw)
+        from . import safe_later as _sl; _sl.later(0, self.draw, self, "page")
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        QtCore.QTimer.singleShot(0, self.draw)      # PP-1: still fitted after the window opens or is resized
 
     def zoom_in(self):
         self.zoom = min(4.0, self.zoom * 1.5)
@@ -699,7 +799,12 @@ class PrintPreviewDialog(QtWidgets.QDialog):
 
     def draw(self):
         area = self.scroll.viewport().size() if hasattr(self, "scroll") else self.page.size()
-        dpi = max(20, int(min(area.width() / 17.0, area.height() / 17.0) * 0.95 * getattr(self, "zoom", 1.0)))
+        # PP-1: the page fitted to the window (it was sized for a 17 in page, so a Letter page took half the width)
+        s = page_settings()
+        w_in, h_in = PAPER_IN.get(s["paper"], PAPER_IN["Letter"])
+        if s["landscape"]:
+            w_in, h_in = h_in, w_in
+        dpi = max(20, int(min(area.width() / w_in, area.height() / h_in) * 0.95 * getattr(self, "zoom", 1.0)))
         try:
             self.page.setPixmap(QtGui.QPixmap.fromImage(self.page_image(dpi)))
         except Exception as error:
@@ -714,6 +819,126 @@ class PrintPreviewDialog(QtWidgets.QDialog):
         QtCore.QTimer.singleShot(0, lambda: PrintDialog().exec())
 
 
+def _drawing_page():
+    """fh235: the sheet shown in the active window, else None (a 3D view prints the model, even in a file with sheets)."""
+    try:
+        if Gui.ActiveDocument is None or hasattr(Gui.ActiveDocument.ActiveView, "saveImage"):
+            return None
+        from . import drawings
+        return drawings.active_page()
+    except Exception:
+        return None
+
+
+class DrawingPreviewDialog(QtWidgets.QDialog):
+    ""
+
+
+
+
+    def __init__(self, doc, parent=None):
+        super().__init__(parent or Gui.getMainWindow())
+        from . import drawprint
+        self.doc, self.dp = doc, drawprint
+        self.setObjectName("SWStyle_PrintPreview")
+        self.setWindowTitle("Print Preview")
+        self.resize(900, 760)
+        self.setWindowState(self.windowState() | Qt.WindowMaximized)
+        lay = QtWidgets.QVBoxLayout(self)
+        bar = QtWidgets.QHBoxLayout()
+        QtPrintSupport = drawprint.print_support()
+        self.printer = QtPrintSupport.QPrinter(QtPrintSupport.QPrinter.HighResolution)
+        self.view = QtPrintSupport.QPrintPreviewWidget(self.printer, self)
+        self.view.setObjectName("SWStyle_PreviewSheets")
+        # fh258: drawing the sheets lets events through (line weights, title block fields): a Close, Esc or Next
+        # Page clicked meanwhile closed the window under the drawing and FreeCAD ended. They wait for it now.
+        self._painting = False
+        self._close_after = None
+        self.view.paintRequested.connect(self._paint)
+        sheets = len(drawprint.pages(doc))
+        self.buttons = {}
+        for text, slot, many in (("Print...", self._print, False), ("Page Setup...", self._setup, False),
+                                 ("Next Page", self.next_page, True), ("Prev Page", self.prev_page, True),
+                                 ("Two Page", self.two_page, True), ("Zoom In", self.zoom_in, False),
+                                 ("Zoom Out", self.zoom_out, False), ("Close", self.reject, False),
+                                 ("Help", self._help, False)):
+            b = QtWidgets.QPushButton(text)
+            b.setObjectName("SWStyle_PreviewButton_" + text.replace(" ", "").replace(".", ""))
+            b.clicked.connect(slot)
+            b.setVisible(sheets > 1 or not many)        # one sheet: no page buttons (none greyed)
+            bar.addWidget(b)
+            self.buttons[text] = b
+        bar.addStretch(1)
+        lay.addLayout(bar)
+        lay.addWidget(self.view, 1)
+        self.view.setViewMode(QtPrintSupport.QPrintPreviewWidget.SinglePageView)
+        self.view.fitInView()
+
+    def _paint(self, printer):
+        self._painting = True
+        try:
+            self.dp.print_pages(printer, self.doc, "All")
+        finally:
+            self._painting = False
+            if self._close_after is not None:
+                result, self._close_after = self._close_after, None
+                QtCore.QTimer.singleShot(0, lambda: self.done(result))
+
+    def done(self, result):
+        if self._painting:              # fh258: closed once the sheets are drawn
+            self._close_after = result
+            return
+        super().done(result)
+
+    def next_page(self):
+        if self._painting:
+            return
+        self.view.setCurrentPage(min(self.view.pageCount(), self.view.currentPage() + 1))
+
+    def prev_page(self):
+        if self._painting:
+            return
+        self.view.setCurrentPage(max(1, self.view.currentPage() - 1))
+
+    def two_page(self):
+        if self._painting:
+            return
+        QtPrintSupport = self.dp.print_support()
+        two = self.view.viewMode() != QtPrintSupport.QPrintPreviewWidget.FacingPagesView
+        self.view.setViewMode(QtPrintSupport.QPrintPreviewWidget.FacingPagesView if two
+                              else QtPrintSupport.QPrintPreviewWidget.SinglePageView)
+        self.buttons["Two Page"].setText("One Page" if two else "Two Page")
+        self.view.fitInView()
+
+    def zoom_in(self):
+        if not self._painting:
+            self.view.zoomIn(1.5)
+
+    def zoom_out(self):
+        if not self._painting:
+            self.view.zoomOut(1.5)
+
+    def _help(self):
+        try:
+            from . import helpmenu
+            from . import helpguide
+            if helpguide.show_topic("print preview") is None:
+                helpmenu.show("home", search="print preview")
+        except Exception as _fw_err:
+            _fw_log("filecmds.py:drawpreview_help", _fw_err)
+
+    def _setup(self):
+        if self._painting:
+            return
+        if self.dp.PageSetupDialog(self.doc, self).exec_():
+            self.view.updatePreview()
+
+    def _print(self):
+        self.reject()
+        doc = self.doc
+        QtCore.QTimer.singleShot(0, lambda: self.dp.PrintDialog(doc).exec_())
+
+
 # ------------------------------------------------------------------ references, Pack and Go, Send To
 def references(doc=None):
     """The document and every document it references, the document first (paths may be empty
@@ -726,6 +951,30 @@ def references(doc=None):
     except Exception:
         docs = [doc]
     out = [doc] + [d for d in docs if d is not doc]
+    return out
+
+
+def derived_files(docs):
+    ""
+
+    out = []
+    try:
+        from . import insertpart
+    except Exception as _fw_err:
+        _fw_log("filecmds.py:derived", _fw_err)
+        return out
+    for d in docs:
+        for obj in getattr(d, "Objects", []):
+            try:
+                if insertpart._linked(obj):
+                    path = obj.File.strip()
+                    if not os.path.isabs(path) and d.FileName:
+                        path = os.path.join(os.path.dirname(d.FileName), path)
+                    path = os.path.normpath(path)
+                    if (d, path) not in out:
+                        out.append((d, path))
+            except Exception as _fw_err:
+                _fw_log("filecmds.py:derived-obj", _fw_err)
     return out
 
 
@@ -829,6 +1078,18 @@ class FindReferencesDialog(QtWidgets.QDialog):
             path = d.FileName
             made[d.Name] = QtWidgets.QTreeWidgetItem(self.table, [os.path.basename(path) if path else d.Label + " (not saved)",
                                                                   os.path.dirname(path) if path else ""])
+        seen = {os.path.normcase(os.path.normpath(d.FileName)) for d in docs if d.FileName}
+        gone = []
+        for d, path in derived_files(docs):
+            if os.path.normcase(path) in seen:
+                continue
+            seen.add(os.path.normcase(path))
+            if not os.path.isfile(path):
+                gone.append(path)
+                continue
+            item = QtWidgets.QTreeWidgetItem([os.path.basename(path), os.path.dirname(path)])
+            up = made.get(d.Name) if nested else None
+            (up.addChild(item) if up is not None else self.table.addTopLevelItem(item))
         for name, item in made.items():
             up = made.get(parents.get(name))
             if up is not None and up is not item:
@@ -840,7 +1101,10 @@ class FindReferencesDialog(QtWidgets.QDialog):
             for obj, path in self.broken_references():
                 item = QtWidgets.QTreeWidgetItem(self.table, [(os.path.basename(path) or obj.Label) + "  (broken)",
                                                               os.path.dirname(path) if path else "not found"])
-                item.setForeground(0, QtGui.QColor(200, 0, 0))
+                item.setForeground(0, QtGui.QColor(_broken_red()))
+            for path in gone:
+                item = QtWidgets.QTreeWidgetItem(self.table, [os.path.basename(path) + "  (broken)", os.path.dirname(path)])
+                item.setForeground(0, QtGui.QColor(_broken_red()))
         self.table.resizeColumnToContents(0)
 
     def print_list(self):
@@ -866,12 +1130,81 @@ class FindReferencesDialog(QtWidgets.QDialog):
             (document.print_ if hasattr(document, "print_") else document.print)(printer)
 
     def copy_files(self):
+        ""
+
+        docs = references()
+        changed = [d for d in docs if d.FileName and _modified(d)]
+        if changed:
+            answer = QtWidgets.QMessageBox.question(
+                self, "Copy Files",
+                "Copy Files copies the saved files. %s ha%s unsaved changes.\n\nSave before copying?"
+                % (", ".join(os.path.basename(d.FileName) for d in changed), "s" if len(changed) == 1 else "ve"),
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Cancel)
+            if answer == QtWidgets.QMessageBox.Cancel:
+                return
+            if answer == QtWidgets.QMessageBox.Yes:
+                for d in changed:
+                    try:
+                        d.save()
+                    except Exception as _fw_err:
+                        _fw_log("filecmds.py:copy save", _fw_err)
         folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Copy Files")
         if not folder:
             return
-        for d in references():
-            if d.FileName and os.path.isfile(d.FileName):
-                shutil.copy2(d.FileName, os.path.join(folder, os.path.basename(d.FileName)))
+        files, names = [], set()
+        for f in [d.FileName for d in docs if d.FileName] + [p for _d, p in derived_files(docs)]:
+            if not os.path.isfile(f) or os.path.normcase(os.path.normpath(f)) in [os.path.normcase(x) for x in files]:
+                continue
+            files.append(os.path.normpath(f))
+        plan, written, skipped = [], [], []
+        for f in files:
+            name = os.path.basename(f)
+            if os.path.normcase(name) in names:
+                skipped.append(f)       # another listed file has the name: one folder holds one of them
+                continue
+            names.add(os.path.normcase(name))
+            plan.append((None, f, name, folder))
+            written.append(os.path.join(folder, name))
+        there = [w for w, (_d, f, _n, _fo) in zip(written, plan)
+                 if os.path.exists(w) and os.path.normcase(os.path.abspath(w)) != os.path.normcase(f)]
+        if [w for w, (_d, f, _n, _fo) in zip(written, plan) if os.path.normcase(os.path.abspath(w)) == os.path.normcase(f)]:
+            QtWidgets.QMessageBox.warning(self, "Copy Files", "The files are already in this folder. Pick another folder.")
+            return
+        if there:
+            answer = QtWidgets.QMessageBox.question(
+                self, "Copy Files", "%d of the files already exist in %s. Replace them?" % (len(there), folder),
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+            if answer != QtWidgets.QMessageBox.Yes:
+                return
+        for (_d, f, _n, _fo), w in zip(plan, written):
+            shutil.copy2(f, w)
+        try:
+            _pack_relink(plan, written)     # fh208's: each copy links the copies
+        except Exception as _fw_err:
+            _fw_log("filecmds.py:copy relink", _fw_err)
+        if skipped:
+            QtWidgets.QMessageBox.warning(
+                self, "Copy Files", "These files were not copied: a listed file of the same name is in the folder.\n\n"
+                + "\n".join(skipped))
+
+
+def _modified(doc):
+    try:
+        g = Gui.getDocument(doc.Name)
+        return bool(g is not None and g.Modified)
+    except Exception:
+        return False
+
+
+def _broken_red():
+    ""
+    try:
+        from . import style
+        if style.dark():
+            return "#ff9a9a"
+    except Exception as _fw_err:
+        _fw_log("filecmds.py:broken red", _fw_err)
+    return "#c80000"
 
 
 def _is_drawing_doc(doc):
@@ -926,6 +1259,21 @@ def _pack_file_info(doc, path):
     except Exception as _fw_err:
         _fw_log("filecmds.py:791", _fw_err)
     return [size, kind, when]
+
+
+class _NeitherTicked:
+    """fh198: Pack and Go keeps the full folder paths when neither Flatten box is ticked."""
+
+    def __init__(self, *boxes):
+        self.boxes = boxes
+
+    def isChecked(self):
+        return not any(b.isChecked() for b in self.boxes)
+
+    def setChecked(self, on):
+        if on:
+            for b in self.boxes:
+                b.setChecked(False)
 
 
 class PackAndGoDialog(QtWidgets.QDialog):
@@ -1003,32 +1351,30 @@ class PackAndGoDialog(QtWidgets.QDialog):
             dl.addWidget(radio, row, 0)
             dl.addWidget(edit, row, 1)
             dl.addWidget(browse, row, 2)
-        self.flatten = QtWidgets.QRadioButton("Flatten to single folder")
-        self.flatten.setObjectName("SWStyle_PackFlatten")
-        self.minimal = QtWidgets.QRadioButton("Flatten to minimal folders")
+
+        self.minimal = QtWidgets.QCheckBox("Flatten to simplest folder structure")
         self.minimal.setObjectName("SWStyle_PackMinimal")
-        self.keep_paths = QtWidgets.QRadioButton("Keep full folder paths")
-        self.keep_paths.setObjectName("SWStyle_PackKeepPaths")
+        self.flatten = QtWidgets.QCheckBox("Flatten to single folder")
+        self.flatten.setObjectName("SWStyle_PackFlatten")
         self.flatten.setChecked(True)
-        fgroup = QtWidgets.QButtonGroup(self)
-        for b in (self.flatten, self.minimal, self.keep_paths):
-            fgroup.addButton(b)
-        dl.addWidget(self.flatten, 2, 0)
-        dl.addWidget(self.minimal, 2, 1)
-        dl.addWidget(self.keep_paths, 2, 2)
-        self.email = QtWidgets.QCheckBox("Email after packaging")
+        self.keep_paths = _NeitherTicked(self.minimal, self.flatten)
+        for one, other in ((self.minimal, self.flatten), (self.flatten, self.minimal)):
+            one.toggled.connect(lambda on, o=other: on and o.setChecked(False))
+        dl.addWidget(self.minimal, 2, 0, 1, 2)
+        dl.addWidget(self.flatten, 3, 0, 1, 2)
+        self.email = QtWidgets.QCheckBox("E-mail after packaging")
         self.email.setObjectName("SWStyle_PackEmail")
-        dl.addWidget(self.email, 5, 0, 1, 3)
+        dl.addWidget(self.email, 6, 0, 1, 3)
         self.prefix_on, self.prefix = QtWidgets.QCheckBox("Add prefix:"), QtWidgets.QLineEdit()
         self.suffix_on, self.suffix = QtWidgets.QCheckBox("Add suffix:"), QtWidgets.QLineEdit()
-        dl.addWidget(self.prefix_on, 3, 0)
-        dl.addWidget(self.prefix, 3, 1)
-        dl.addWidget(self.suffix_on, 4, 0)
-        dl.addWidget(self.suffix, 4, 1)
+        dl.addWidget(self.prefix_on, 4, 0)
+        dl.addWidget(self.prefix, 4, 1)
+        dl.addWidget(self.suffix_on, 5, 0)
+        dl.addWidget(self.suffix, 5, 1)
         lay.addWidget(dest)
         for w in (self.folder, self.prefix, self.suffix):
             w.textChanged.connect(self._fill)
-        for w in (self.prefix_on, self.suffix_on, self.flatten, self.minimal, self.keep_paths, self.as_folder, self.as_zip):
+        for w in (self.prefix_on, self.suffix_on, self.flatten, self.minimal, self.as_folder, self.as_zip):
             w.toggled.connect(self._fill)
 
         bb = QtWidgets.QDialogButtonBox()
@@ -1193,7 +1539,7 @@ class PackAndGoDialog(QtWidgets.QDialog):
             item.setTextAlignment(4, int(Qt.AlignRight | Qt.AlignVCenter))
             if os.path.normcase(os.path.normpath(os.path.join(folder, name))) in clash:
                 for c in (2, 3):
-                    item.setForeground(c, QtGui.QColor(200, 0, 0))     # pg95: two files on one Save To path
+                    item.setForeground(c, QtGui.QColor(_broken_red()))     # pg95: two files on one Save To path
                 item.setToolTip(2, "Another file is saved under this name in this folder")
             if d is not None:
                 made.setdefault(d.Name, item)
@@ -1217,7 +1563,7 @@ class PackAndGoDialog(QtWidgets.QDialog):
         if clash:
             names = sorted({os.path.basename(k) for k in clash})
             QtWidgets.QMessageBox.warning(self, "Pack and Go", "More than one file would be saved as %s. Change the "
-                                          "Save To Name of one of them, or pick Flatten to minimal folders."
+                                          "Save To Name of one of them, or pick Flatten to simplest folder structure."
                                           % ", ".join(names))
             return
         try:
@@ -1242,7 +1588,28 @@ class PackAndGoDialog(QtWidgets.QDialog):
     def _write(self, plan, work):
         written = []
         base = self.folder.text()
-        for d, src, name, folder in plan:
+
+        bar = QtWidgets.QProgressDialog("Pack and Go", None, 0, len(plan) + 1, self)
+        bar.setObjectName("SWStyle_PackAndGoProgress")
+        bar.setWindowTitle("Pack and Go")
+        bar.setWindowModality(Qt.WindowModal)
+        bar.setMinimumDuration(0)
+        bar.setAutoClose(True)
+        bar.setValue(0)
+        self.progress = bar
+        try:
+            written = self._write_files(plan, work, base, bar)
+        finally:
+            bar.setValue(bar.maximum())
+            bar.close()
+        return written
+
+    def _write_files(self, plan, work, base, bar):
+        written = []
+        for i, (d, src, name, folder) in enumerate(plan):
+            bar.setLabelText("Saving %s" % name)
+            bar.setValue(i)
+            QtWidgets.QApplication.processEvents()
             if work is not None:
                 folder = os.path.join(work, os.path.relpath(folder, base)) if folder != base else work
             os.makedirs(folder, exist_ok=True)
@@ -1255,7 +1622,67 @@ class PackAndGoDialog(QtWidgets.QDialog):
                 if inc is not None and not inc.isChecked() and simulation_results(d):
                     strip_results(target)       # exportopts-1119: Include simulation results off
             written.append(target)
+        bar.setLabelText("Updating the references")
+        bar.setValue(len(plan))
+        QtWidgets.QApplication.processEvents()
+        _pack_relink(plan, written)
         return written
+
+
+_PACK_XLINK = None
+
+
+def _pack_relink(plan, written):
+    """fh208: each packed .FCStd links the packed copies. saveCopy has already rewritten the links
+    relative to the new file (back to the originals), so a link is read from the copy's own folder
+    first, then from its source folder; a link to a file not packed points at the original by its
+    full path (a zipped pack is unzipped anywhere)."""
+    global _PACK_XLINK
+    import re
+    if _PACK_XLINK is None:
+        _PACK_XLINK = re.compile(r'(<XLink(?:Sub)?\b[^>]*?\bfile=")([^"]*)(")')
+    mapping = {}
+    for (d, src, _name, _folder), target in zip(plan, written):
+        if src:
+            mapping[os.path.normcase(os.path.normpath(src))] = os.path.normpath(target)
+    for (d, src, _name, _folder), target in zip(plan, written):
+        if not target.lower().endswith(".fcstd"):
+            continue
+        new_dir = os.path.dirname(target)
+        dirs = [new_dir] + ([os.path.dirname(src)] if src else [])
+
+        def fix(m):
+            rel = m.group(2)
+            if not rel:
+                return m.group(0)
+            olds = [os.path.normpath(rel)] if os.path.isabs(rel) else \
+                [os.path.normpath(os.path.join(x, rel)) for x in dirs]
+            for old in olds:
+                new = mapping.get(os.path.normcase(old))
+                if new is not None:
+                    return m.group(1) + os.path.relpath(new, new_dir).replace("\\", "/") + m.group(3)
+            for old in olds:
+                if os.path.exists(old) and not os.path.isabs(rel):
+                    return m.group(1) + old.replace("\\", "/") + m.group(3)
+            return m.group(0)
+        try:
+            with zipfile.ZipFile(target) as z:
+                names = z.namelist()
+                data = {n: z.read(n) for n in names}
+                infos = {n: z.getinfo(n) for n in names}
+            xml = data.get("Document.xml")
+            if xml is None:
+                continue
+            text = _PACK_XLINK.sub(fix, xml.decode("utf-8"))
+            if text.encode("utf-8") == xml:
+                continue
+            data["Document.xml"] = text.encode("utf-8")
+            with zipfile.ZipFile(target + ".tmp", "w", zipfile.ZIP_DEFLATED) as out:
+                for n in names:
+                    out.writestr(infos[n], data[n])
+            os.replace(target + ".tmp", target)
+        except Exception as error:
+            App.Console.PrintWarning("FreeCAD: Pack and Go references in %s: %s\n" % (os.path.basename(target), error))
 
 
 def simulation_results(doc):
@@ -1550,9 +1977,14 @@ class BrowseRecentFoldersCommand(_Cmd):
 
 
 class PageSetupCommand(_Cmd):
-    MENU, TIP, PIXMAP = "Page Setup...", "Sets the paper, orientation, scale and margins for printing", "document-print-preview"
+    MENU, TIP, PIXMAP = "Page Setup...", "Sets the paper, orientation, scale and color for printing", "document-print-preview"
 
     def Activated(self):
+        page = _drawing_page()
+        if page is not None:        # fh235: a drawing's own Page Setup (per sheet), not the part one
+            from . import drawprint
+            drawprint.PageSetupDialog(page.Document).exec_()
+            return
         PageSetupDialog().exec()
 
 
@@ -1561,20 +1993,31 @@ class PrintCommand(_Cmd):
     FOR_EDIT = True
 
     def Activated(self):
+        page = _drawing_page()
+        if page is not None:        # fh235: a drawing prints its sheets (drawprint), not a picture of the view
+            from . import drawprint
+            drawprint.PrintDialog(page.Document).exec_()
+            return
         PrintDialog().exec()
 
     def IsActive(self):
-        return _has_doc() and hasattr(Gui.ActiveDocument.ActiveView, "saveImage")
+        # fh235: on a drawing too (it fell through to FreeCAD's Std_Print, Qt's box)
+        return _has_doc() and (hasattr(Gui.ActiveDocument.ActiveView, "saveImage") or _drawing_page() is not None)
 
 
 class PrintPreviewCommand(_Cmd):
     MENU, TIP, PIXMAP = "Print Preview...", "Shows the page as it will print", "document-print-preview"
 
     def Activated(self):
+        page = _drawing_page()
+        if page is not None:
+            DrawingPreviewDialog(page.Document).exec()
+            return
         PrintPreviewDialog().exec()
 
     def IsActive(self):
-        return _has_doc() and hasattr(Gui.ActiveDocument.ActiveView, "saveImage")
+        # fh235 (PR-1): on a drawing too (it fell through to FreeCAD's Std_PrintPreview, Qt's preview)
+        return _has_doc() and (hasattr(Gui.ActiveDocument.ActiveView, "saveImage") or _drawing_page() is not None)
 
 
 class Print3DCommand(_Cmd):

@@ -176,6 +176,20 @@ def toggle_snaps():
     return on
 
 
+def refresh_params():
+    ""
+
+    try:
+        from . import toolbase
+        running = toolbase.active()
+        snapper = getattr(running, "snapper", None) if running is not None else None
+        if snapper is not None:
+            snapper.p = Params()
+            snapper._entries_cache = None
+    except Exception as _fw_err:
+        _fw_log("fwsketch/snap.py:refresh_params", _fw_err)
+
+
 def grid_shown():
     """The sketch's grid is on screen (Snap only when grid is displayed)."""
     try:
@@ -510,8 +524,34 @@ class Snapper:
         self.pixel_size = pixel_size
         self.last_input = cursor
         d = self._find(cursor, allow_point, allow_edge, allow_angle, allow_grid)
+        if allow_point and d.winner not in (SKETCH_POINT, MIDPOINT, QUADRANT, INTERSECTION, TANGENT_POINT, NORMAL_POINT,
+                                            DISABLED, SUPPRESSED):
+            self._on_a_point(d)
         self.last = d
         return d
+
+    def _on_a_point(self, d):
+        ""
+
+
+        try:
+            tiny = max(1e-7, 1e-3 * self.pixel_size)
+            q = I.Query(d.position, tiny, filter=self.p.filter)
+            q.woken = list(self.woken)
+            c = I.find_point_candidate(self.current_geometry, q)
+            if c is None or not c.valid() or dist(c.position, d.position) > tiny:
+                return False
+            if c.kind == I.VERTEX and not (self.p.centers if c.pos == I.MID else self.p.endpoints):
+                return False
+            d.winner = {I.VERTEX: SKETCH_POINT, I.MIDPOINT: MIDPOINT, I.QUADRANT: QUADRANT,
+                        I.INTERSECTION: INTERSECTION}[c.kind]
+            d.geo, d.pos, d.geo2 = c.geo, c.pos, c.geo2
+            d.position = c.position
+            d.aligned_points = []
+            return True
+        except Exception as _fw_err:
+            _fw_log("fwsketch/snap.py:on a point", _fw_err)
+            return False
 
     def _find(self, cursor, allow_point, allow_edge, allow_angle, allow_grid):
         p = self.p

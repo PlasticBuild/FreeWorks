@@ -59,6 +59,7 @@ except ImportError:
 TAB = "Inspection"
 KEY = "FreeWorksInspection"
 BALLOON_TAG = "SWInspectionItem"
+SHEET_PROJECT = "SWInspectionProject"
 HEADERS = ("Item", "Zone", "Type", "Requirement", "Nominal", "Lower", "Upper", "Measured", "Result", "Classification",
            "Method", "Notes")
 COL = dict((h, n) for n, h in enumerate(HEADERS))
@@ -244,25 +245,43 @@ def _store(doc):
     return store if isinstance(store, dict) else None
 
 
-def project(doc, create=False, page=None):
-    """The inspection project of one sheet: the document's part number, revision and default tolerance, and that
-    sheet's own characteristics ("items"). Each sheet is numbered on its own, so working on one sheet never
-    touches what was typed for another."""
-    store = _store(doc)
-    if store is None:
-        if not create:
-            return None
-        store = {"part": doc.Label, "revision": "A", "default": 0.1, "pages": {}, "settings": template()}
+def _page_record(store, page):
     name = page.Name if page is not None else ""
+    raw = getattr(page, SHEET_PROJECT, "")
+    if raw:
+        try:
+            return json.loads(raw)
+        except (TypeError, ValueError):
+            pass
     pages = store.get("pages") or {}
-    items = pages.get(name)
-    if items is None:
-        items = store.get("items") or []          # a project of the first version: one list for the document
-    excluded = (store.get("excluded") or {}).get(name, [])
-    return {"part": store.get("part", doc.Label), "revision": store.get("revision", "A"),
-            "default": store.get("default", 0.1), "items": list(items), "page": name,
-            "settings": dict(TEMPLATE, **(store.get("settings") or {})), "excluded": list(excluded)}
+    if name not in pages and "items" not in store:
+        return None
+    return {"items": pages.get(name, store.get("items") or []),
+            "excluded": (store.get("excluded") or {}).get(name, [])}
 
+
+def _set_page_record(page, record):
+    raw = json.dumps(record)
+    if SHEET_PROJECT not in page.PropertiesList:
+        page.addProperty("App::PropertyString", SHEET_PROJECT, "Inspection",
+                         "Inspection characteristics and exclusions")
+        page.setPropertyStatus(SHEET_PROJECT, ["Hidden"])
+    if getattr(page, SHEET_PROJECT) != raw:
+        setattr(page, SHEET_PROJECT, raw)
+
+
+def project(doc, create=False, page=None):
+    """The document header fields and one sheet's independently numbered characteristics."""
+    store = _store(doc) or {}
+    record = _page_record(store, page)
+    if record is None and not create:
+        return None
+    record = record or {}
+    return {"part": store.get("part", doc.Label), "revision": store.get("revision", "A"),
+            "default": store.get("default", 0.1), "items": list(record.get("items", [])),
+            "page": page.Name if page is not None else "",
+            "settings": dict(TEMPLATE, **(store.get("settings") or (template() if not store else {}))),
+            "excluded": list(record.get("excluded", []))}
 
 def settings(data):
     return dict(TEMPLATE, **((data or {}).get("settings") or {}))
@@ -287,20 +306,26 @@ def save_template(values):
 
 def _save(doc, data):
     store = _store(doc) or {}
-    store.pop("items", None)
     for key in ("part", "revision", "default", "settings"):
         if key in data or key not in store:
             store[key] = data.get(key, store.get(key, ""))
-    pages = store.get("pages") or {}
-    pages[data.get("page", "")] = data["items"]
-    store["pages"] = pages
-    excluded = store.get("excluded") or {}
-    excluded[data.get("page", "")] = list(data.get("excluded", []))
-    store["excluded"] = excluded
+    name = data.get("page", "")
+    page = doc.getObject(name) if name else None
+    record = {"items": data["items"], "excluded": list(data.get("excluded", []))}
+    if page is not None:
+        _set_page_record(page, record)
+    else:
+        pages = store.get("pages") or {}
+        pages[name] = record["items"]
+        store["pages"] = pages
+        excluded = store.get("excluded") or {}
+        excluded[name] = record["excluded"]
+        store["excluded"] = excluded
     meta = dict(doc.Meta)
-    meta[KEY] = json.dumps(store)
-    doc.Meta = meta
-
+    raw = json.dumps(store)
+    if meta.get(KEY) != raw:
+        meta[KEY] = raw
+        doc.Meta = meta
 
 def sync(doc, page, data):
     """The items follow the sheet's characteristics: new ones are numbered on, gone ones leave, typed values stay;
@@ -770,21 +795,11 @@ def set_field(data, dim, key, value):
 
 
 def delete_project(doc, page):
-    """The sheet's project and its balloons go; other sheets' projects stay."""
+    """Remove the selected sheet's project and balloons in the same native transaction."""
+    _set_page_record(page, None)
     gone = remove_balloons(doc, page)
-    store = _store(doc)
-    if store is not None:
-        (store.get("pages") or {}).pop(page.Name, None)
-        (store.get("excluded") or {}).pop(page.Name, None)
-        meta = dict(doc.Meta)
-        if store.get("pages"):
-            meta[KEY] = json.dumps(store)
-        else:
-            meta.pop(KEY, None)
-        doc.Meta = meta
     doc.recompute()
     return gone
-
 
 if Gui is not None:
     class TemplateEditor(QtWidgets.QDialog):

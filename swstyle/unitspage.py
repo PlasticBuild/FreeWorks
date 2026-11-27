@@ -53,6 +53,12 @@ SCHEMA_UNIT = {0: ("mm", 1.0), 1: ("m", 1000.0), 2: ("in", 25.4), 3: ("in", 25.4
                5: ("in", 25.4), 6: ("mm", 1.0), 7: ("ft", 304.8), 8: ("mm", 1.0), 9: ("m", 1000.0)}
 DECIMALS = [".1", ".12", ".123", ".1234", ".12345", ".123456", ".1234567", ".12345678"]
 ANGLE_DECIMALS = ["None", ".1", ".12", ".123", ".1234", ".12345"]
+DUAL_DECIMALS = ["None"] + DECIMALS
+
+FRACTIONS = ["2", "4", "8", "16", "32", "64", "128"]
+
+MORE_ROUND = "Round to nearest fraction"
+MORE_FEET = "Convert from 2\" to 1'-2\""
 
 PAGE = "Units"
 LENGTH_NAMES = ["millimeters", "centimeters", "meters", "inches", "feet"]
@@ -106,6 +112,23 @@ def dual_length(doc=None):
     return name, sym, mm, int(doc_setting(doc, "Dual dimension decimals", 3))
 
 
+def fractions(doc=None, row="Length"):
+    """The Fractions column's denominator for the Length (or Dual Dimension Length) row: the part's own, else
+    FreeCAD's (Preferences > General > Minimum fractional inch, 8 when unset)."""
+    own = doc_setting(doc, "%s fractions" % row, "")
+    try:
+        return int(own) if str(own) != "" else App.ParamGet(UNITS).GetInt("FracInch", 8)
+    except (TypeError, ValueError):
+        return App.ParamGet(UNITS).GetInt("FracInch", 8)
+
+
+def more(doc=None, row="Length"):
+    ""
+
+    return (bool(doc_setting(doc, "%s %s" % (row, MORE_ROUND), True)),
+            bool(doc_setting(doc, "%s %s" % (row, MORE_FEET), True)))
+
+
 def angle_decimals(doc=None):
     ""
     return int(doc_setting(doc, "Angle decimals", 2))
@@ -142,6 +165,7 @@ def follow(doc=None):
         # shown, not written: a new part its template's .12; a file from before it kept decimals, the user's own
         own = _follow["base"] if getattr(doc, "FileName", "") else NEW_PART_DECIMALS
     own = int(own)
+    _follow_fractions(doc)
     if own != decimals():
         _follow["busy"] = True
         units = App.ParamGet(UNITS)
@@ -152,6 +176,19 @@ def follow(doc=None):
             _follow["busy"] = False
             if units.GetInt("UserSchema", 0) != user_schema:
                 units.SetInt("UserSchema", user_schema)
+
+
+def _follow_fractions(doc):
+    """A part in feet & inches shows its own Fractions denominator in FreeCAD's inputs (one setting for all of
+    FreeCAD, as the decimals)."""
+    try:
+        if str(doc_setting(doc, "Length fractions", "")) == "" or schema_of(doc) != 5:
+            return
+        den = fractions(doc)
+        if den != App.ParamGet(UNITS).GetInt("FracInch", 8):
+            apply_fractions(den)
+    except Exception as _fw_err:
+        _fw_log("unitspage.py:follow fractions", _fw_err)
 
 
 def _restore_base():
@@ -285,9 +322,9 @@ class _PrefsDecimals(QtCore.QObject):
     """Fills FreeCAD's own Preferences page (General: Number of decimals) out of sight and presses OK: the
     only way FreeCAD 1.1 takes new decimals without a restart."""
 
-    def __init__(self, n):
+    def __init__(self, n, fraction=None):
         super().__init__()
-        self.n, self.done = n, False
+        self.n, self.done, self.fraction = n, False, fraction
 
     def eventFilter(self, obj, event):
         try:
@@ -303,8 +340,18 @@ class _PrefsDecimals(QtCore.QObject):
     def fill(self, box):
         try:
             spin = box.findChild(QtWidgets.QSpinBox, "spinBoxDecimals")
+            if self.fraction is not None:
+                # Minimum fractional inch (FreeCAD's feet & inches unit system): its "1/8" row
+                combo = box.findChild(QtWidgets.QComboBox, "comboBox_FracInch")
+                at = combo.findText('1/%d"' % self.fraction) if combo is not None else -1
+                if at < 0:
+                    box.reject()
+                    return
+                combo.setCurrentIndex(at)
+                self.done = True
             if spin is not None:
-                spin.setValue(self.n)
+                if self.n is not None:
+                    spin.setValue(self.n)
                 self.done = True
                 box.accept()
             else:
@@ -352,6 +399,63 @@ def apply_decimals(n):
     return watch.done
 
 
+def apply_fractions(den):
+    """The Fractions column for a part in feet & inches: FreeCAD's Minimum fractional inch, applied now."""
+    den = int(den)
+    units = App.ParamGet(UNITS)
+    doc = App.ActiveDocument
+    schema = schema_of(doc)
+    system = getattr(doc, "UnitSystem", None) if doc is not None else None
+    user_schema = units.GetInt("UserSchema", 0)
+    app = QtWidgets.QApplication.instance()
+    watch = _PrefsDecimals(None, den)
+    app.installEventFilter(watch)
+    try:
+        Gui.showPreferences("General", 0)
+    except Exception as _fw_err:
+        _fw_log("unitspage.py:apply_fractions", _fw_err)
+    finally:
+        app.removeEventFilter(watch)
+    try:
+        if doc is not None and system is not None and doc.UnitSystem != system:
+            doc.UnitSystem = system
+        App.Units.setSchema(schema)
+    except Exception as _fw_err:
+        _fw_log("unitspage.py:apply_fractions schema", _fw_err)
+    if units.GetInt("UserSchema", 0) != user_schema:
+        units.SetInt("UserSchema", user_schema)
+    units.SetInt("FracInch", den)
+    return watch.done
+
+
+class MoreBox(QtWidgets.QDialog):
+    ""
+
+    def __init__(self, row, values, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Length Units" if row == "Length" else "Dual Dimension Length Units")
+        self.setObjectName("SWUnitsMoreBox")
+        lay = QtWidgets.QVBoxLayout(self)
+        self.round = QtWidgets.QCheckBox(MORE_ROUND)
+        self.round.setObjectName("SWUnitsMoreRound")
+        self.round.setToolTip("Fractions show the nearest fraction of the Fractions column; off, a length that is no "
+                              "such fraction shows as a decimal")
+        self.feet = QtWidgets.QCheckBox(MORE_FEET)
+        self.feet.setObjectName("SWUnitsMoreFeet")
+        self.feet.setToolTip("Feet & inches: a length over 12\" shows in feet and inches (1'-2\"); off, in inches")
+        self.round.setChecked(values[0])
+        self.feet.setChecked(values[1])
+        lay.addWidget(self.round)
+        lay.addWidget(self.feet)
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        lay.addWidget(buttons)
+
+    def values(self):
+        return (self.round.isChecked(), self.feet.isChecked())
+
+
 def system_of(schema):
     ""
     for _label, short, index in SYSTEMS:
@@ -381,9 +485,10 @@ class UnitsTable(Setting):
             blay.addWidget(r)
             self.radios[short] = r
         lay.addWidget(box)
-        self.table = QtWidgets.QTableWidget(0, 3)
+        self.table = QtWidgets.QTableWidget(0, 5)
         self.table.setObjectName("SWUnitsTable")
-        self.table.setHorizontalHeaderLabels(["Type", "Unit", "Decimals"])
+        self.table.setHorizontalHeaderLabels(["Type", "Unit", "Decimals", "Fractions", "More"])
+        self.more_values = {}
         self.table.verticalHeader().hide()
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
@@ -414,15 +519,18 @@ class UnitsTable(Setting):
                 self.decimals.setObjectName("SWUnitsLengthDecimals")
                 self.decimals.addItems(DECIMALS)
                 self.table.setCellWidget(r, 2, self.decimals)
+                self._fraction_cells(r, "Length")
             elif key in ("dual", "mlength"):
                 unit = QtWidgets.QComboBox()
                 unit.setObjectName("SWUnitsDual" if key == "dual" else "SWUnitsMassLength")
                 unit.addItems(LENGTH_NAMES)
                 dec = QtWidgets.QComboBox()
                 dec.setObjectName(unit.objectName() + "Decimals")
-                dec.addItems(DECIMALS)
+                dec.addItems(DUAL_DECIMALS if key == "dual" else DECIMALS)
                 self.table.setCellWidget(r, 1, unit)
                 self.table.setCellWidget(r, 2, dec)
+                if key == "dual":
+                    self._fraction_cells(r, "Dual dimension")
                 setattr(self, key + "_unit", unit)
                 setattr(self, key + "_decimals", dec)
                 if key == "mlength":
@@ -453,12 +561,47 @@ class UnitsTable(Setting):
                 cell.setFlags(QtCore.Qt.ItemIsEnabled)
                 self.table.setItem(r, 1, cell)
                 self.cells[key] = cell
+        for combo in (self.length, self.dual_decimals, self.dual_unit):
+            combo.currentIndexChanged.connect(self._fraction_shown)
+        self._fraction_shown()
         self.table.resizeColumnsToContents()
         self.table.setMinimumHeight(self.table.verticalHeader().length() + self.table.horizontalHeader().height() + 4)
         lay.addWidget(self.table)
         lay.addStretch(1)
         self.tag(self.length)
         return page
+
+    def _fraction_cells(self, r, row):
+        ""
+        name = "SWUnitsDual" if row != "Length" else "SWUnitsLength"
+        combo = QtWidgets.QComboBox()
+        combo.setObjectName(name + "Fractions")
+        combo.addItems(FRACTIONS)
+        combo.setToolTip("Lengths in inches show as fractions of this denominator: with feet & inches%s" %
+                         ("" if row == "Length" else ", or with Decimals None"))
+        holder = QtWidgets.QWidget()        # the table shows its cell widgets itself: the box hides inside this
+        hl = QtWidgets.QHBoxLayout(holder)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.addWidget(combo)
+        self.table.setCellWidget(r, 3, holder)
+        button = QtWidgets.QToolButton()
+        button.setObjectName(name + "More")
+        button.setText("...")
+        button.setToolTip("Round to nearest fraction, Convert from 2\" to 1'-2\"")
+        button.clicked.connect(lambda checked=False, k=row: self._more(k))
+        holder = QtWidgets.QWidget()
+        hl = QtWidgets.QHBoxLayout(holder)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.addWidget(button)
+        hl.addStretch(1)
+        self.table.setCellWidget(r, 4, holder)
+        combo.more_button = button
+        setattr(self, ("length" if row == "Length" else "dual") + "_fractions", combo)
+
+    def _more(self, row):
+        box = MoreBox(row, self.more_values.get(row, (True, True)), self.table.window())
+        if box.exec():
+            self.more_values[row] = box.values()
 
     # -- what the page shows
     def _system(self, short):
@@ -472,6 +615,15 @@ class UnitsTable(Setting):
             finally:
                 self._setting = False
         self._rows(short)
+
+    def _fraction_shown(self, *_args):
+        ""
+
+        on = self.length.currentText() == "feet & inches"
+        dual = self.dual_decimals.currentIndex() == 0 and self.dual_unit.currentText() in ("inches", "feet")
+        for combo, shown in ((self.length_fractions, on), (self.dual_fractions, dual)):
+            combo.setVisible(shown)
+            combo.more_button.setVisible(shown)     # its two rows only change fractions
 
     def _length_picked(self, *_args):
         ""
@@ -522,9 +674,11 @@ class UnitsTable(Setting):
 
     def value(self):
         return (self.schema(), self.decimals.currentIndex(), self.dual_unit.currentText(),
-                self.dual_decimals.currentIndex() + 1, self.angle_decimals.currentIndex(),
+                self.dual_decimals.currentIndex(), self.angle_decimals.currentIndex(),
                 self.mlength_unit.currentText(), self.mlength_decimals.currentIndex() + 1,
-                self.mass_unit.currentText(), self.mass_decimals.currentIndex() + 1)
+                self.mass_unit.currentText(), self.mass_decimals.currentIndex() + 1,
+                int(self.length_fractions.currentText()), int(self.dual_fractions.currentText()),
+                self.more_values.get("Length", (True, True)), self.more_values.get("Dual dimension", (True, True)))
 
     def load(self):
         self._loading = True
@@ -556,7 +710,13 @@ class UnitsTable(Setting):
         try:
             name, _sym, _mm, dd = dual_length(doc)
             self.dual_unit.setCurrentIndex(LENGTH_NAMES.index(name))
-            self.dual_decimals.setCurrentIndex(min(max(dd - 1, 0), len(DECIMALS) - 1))
+            self.dual_decimals.setCurrentIndex(min(max(dd, 0), len(DUAL_DECIMALS) - 1))    # None: fractions
+            for combo, row in ((self.length_fractions, "Length"), (self.dual_fractions, "Dual dimension")):
+                den = str(fractions(doc, row))
+                if combo.findText(den) < 0:
+                    combo.addItem(den)
+                combo.setCurrentText(den)
+            self.more_values = {"Length": more(doc, "Length"), "Dual dimension": more(doc, "Dual dimension")}
             self.angle_decimals.setCurrentIndex(min(max(angle_decimals(doc), 0), len(ANGLE_DECIMALS) - 1))
             ml, mu, mld, md = mass_units(doc)
             self.mlength_unit.setCurrentIndex(LENGTH_NAMES.index(ml))
@@ -577,7 +737,8 @@ class UnitsTable(Setting):
             apply_decimals(decimals + 1)
         doc = App.ActiveDocument
         short = next((k for k, r in self.radios.items() if r.isChecked()), "MMGS")
-        values = list(v[2:])
+        values = list(v[2:9])
+        frac, dual_frac, more_len, more_dual = v[9:]
         if short != "Custom":
             # the system's own units: kept empty so a system picked later (status bar) brings its own
             if values[0] == SYSTEM_DUAL.get(short):
@@ -587,4 +748,14 @@ class UnitsTable(Setting):
         for text, value in zip(("Dual dimension length", "Dual dimension decimals", "Angle decimals", "Mass length",
                                 "Mass length decimals", "Mass unit", "Mass decimals"), values):
             set_doc_setting(doc, text, value)
+        old = self.loaded[9:]
+        for (text, value, before) in (("Length fractions", frac, old[0]), ("Dual dimension fractions", dual_frac, old[1])):
+            if value != before or str(doc_setting(doc, text, "")) != "":
+                set_doc_setting(doc, text, value)
+        for row, values, before in (("Length", more_len, old[2]), ("Dual dimension", more_dual, old[3])):
+            if values != before:
+                set_doc_setting(doc, "%s %s" % (row, MORE_ROUND), values[0])
+                set_doc_setting(doc, "%s %s" % (row, MORE_FEET), values[1])
+        if frac != old[0] and schema_of(doc) == 5:
+            apply_fractions(frac)       # FreeCAD's own feet & inches inputs show the part's denominator
         self.loaded = self.value()

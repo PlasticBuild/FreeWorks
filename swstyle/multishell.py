@@ -264,6 +264,51 @@ def closed_hollow(solid, t, outward=False):
     return out.Solids[0]
 
 
+def _round_radius(face):
+    """The radius of a round face that bulges out of the solid (an outside fillet, a boss's side), or None: an
+    inward wall at least that thick folds the face's offset onto itself."""
+    surface = face.Surface
+    kind = surface.TypeId
+    if kind not in ("Part::GeomCylinder", "Part::GeomSphere", "Part::GeomToroid"):
+        return None
+    u0, u1, v0, v1 = face.ParameterRange
+    u, v = 0.5 * (u0 + u1), 0.5 * (v0 + v1)
+    p = face.valueAt(u, v)
+    n = face.normalAt(u, v)                 # out of the solid
+    if kind == "Part::GeomCylinder":
+        axis = surface.Axis
+        c = surface.Center + axis * (p - surface.Center).dot(axis)
+        r = surface.Radius
+    elif kind == "Part::GeomSphere":
+        c, r = surface.Center, surface.Radius
+    else:
+        axis = surface.Axis
+        rel = p - surface.Center
+        flat = rel - axis * rel.dot(axis)
+        if flat.Length < 1e-12:
+            return None
+        c = surface.Center + flat.normalize() * surface.MajorRadius
+        r = surface.MinorRadius
+    out = p - c
+    return r if out.Length > 1e-12 and out.dot(n) > 0 else None
+
+
+def too_thick(solid, removed, t):
+    ""
+
+
+    try:
+        for f in solid.Faces:
+            if any(_same(f, r) for r in removed):
+                continue
+            r = _round_radius(f)
+            if r is not None and t >= r - 1e-9:
+                return r
+    except Exception as _fw_err:
+        _fw_log("multishell.py:too_thick", _fw_err)
+    return None
+
+
 def hollow(solid, removed, t, outward=False):
     if not removed:
         return closed_hollow(solid, t, outward)
@@ -272,6 +317,10 @@ def hollow(solid, removed, t, outward=False):
         return out
     if outward:
         raise RuntimeError("The shell could not be made: try a smaller thickness.")
+    radius = too_thick(solid, removed, t)
+    if radius is not None:
+        raise RuntimeError("The shell could not be made: the thickness is more than the %.2fmm radius of a round "
+                           "face. Try a smaller thickness." % radius)
     try:
         return _offset_hollow(solid, removed, t)
     except Exception:

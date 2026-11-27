@@ -39,9 +39,10 @@ from PySide import QtCore, QtGui, QtWidgets
 TITLE = "Appearance"
 PROP = "SWAppearance"
 LEVELS = ("part", "body", "feature", "face")
-LABELS = {"part": "Part", "body": "Body", "feature": "Feature", "face": "Face"}
+LABELS = {"part": "Part", "body": "Body", "feature": "Feature", "face": "Face", "surface": "Surface"}
 
-BUTTON_ORDER = ("part", "face", "feature", "body")
+# Select Surfaces, which takes surface bodies the way Select Bodies takes solid ones; stored as body level)
+BUTTON_ORDER = ("part", "face", "feature", "body", "surface")
 
 
 def level_icon(level, size=20):
@@ -71,6 +72,15 @@ def level_icon(level, size=20):
         p.drawLine(QtCore.QPointF(10 * s, 11 * s), QtCore.QPointF(10 * s, 18 * s))
     elif level == "face":
         poly(top, hot); poly(left, None); poly(right, None)
+    elif level == "surface":
+        # a thin curved sheet, no thickness
+        path = G.QPainterPath(QtCore.QPointF(2 * s, 13 * s))
+        path.cubicTo(QtCore.QPointF(6 * s, 6 * s), QtCore.QPointF(10 * s, 12 * s), QtCore.QPointF(13 * s, 5 * s))
+        path.lineTo(QtCore.QPointF(18 * s, 8 * s))
+        path.cubicTo(QtCore.QPointF(15 * s, 15 * s), QtCore.QPointF(11 * s, 9 * s), QtCore.QPointF(7 * s, 16 * s))
+        path.closeSubpath()
+        p.setBrush(G.QBrush(hot))
+        p.drawPath(path)
     elif level == "feature":
         poly([(2, 12), (10, 8), (18, 12), (10, 16)], light)
         poly([(2, 12), (10, 16), (10, 18), (2, 14)], mid)
@@ -121,6 +131,19 @@ def own_body(obj):
 
 
     return body_of(obj) is None and _loose(obj) and not is_component(obj)
+
+
+def _owners(doc):
+    """Everything that keeps appearances of its own: the bodies, then the loose solids and surface bodies."""
+    return bodies(doc) + [o for o in loose_features(doc) if PROP in o.PropertiesList]
+
+
+def _surface(obj):
+    try:
+        shape = obj.Shape
+        return not shape.isNull() and bool(shape.Faces) and not shape.Solids
+    except Exception:
+        return False
 
 
 def body_of(obj):
@@ -507,7 +530,14 @@ class Target:
 
 
 def target_for(level, obj, sub):
-    """The target at this level for a pick (a face, a feature, a body)."""
+    ""
+
+    if level == "surface":
+        if body_of(obj) is not None or not own_body(obj) or not _surface(obj):
+            return None
+        t = Target("body", obj)
+        t.pick = (obj, sub)
+        return t
     body = body_of(obj)
     if body is None:
         if level == "part" and _loose(obj):
@@ -722,13 +752,13 @@ class _ColourPicker(QtWidgets.QWidget):
         self.dropper.setIcon(_dropper_icon())
         self.dropper.setIconSize(QtCore.QSize(20, 20))
         self.dropper.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
-        self.dropper.setToolTip("Pick a Color: click anywhere on the screen to take the colour there")
+        self.dropper.setToolTip("Pick a Color: click anywhere on the screen to take the color there")
         self.dropper.setCheckable(True)
         self.dropper.toggled.connect(self._dropping)
         top.addWidget(self.dropper)
         self.preview = QtWidgets.QToolButton(self)
         self.preview.setObjectName("SWAppearanceColorPreview")
-        self.preview.setToolTip("The colour: click to define a custom colour")
+        self.preview.setToolTip("The color: click to define a custom color")
         self.preview.setMinimumSize(64, 28)
         self.preview.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.preview.clicked.connect(self._define)
@@ -747,7 +777,7 @@ class _ColourPicker(QtWidgets.QWidget):
         for name in ("RGB", "HSV"):
             b = QtWidgets.QRadioButton(name, self)
             b.setObjectName("SWAppearanceColor" + name)
-            b.setToolTip("Define colours with %s values" % ("red, green and blue" if name == "RGB" else
+            b.setToolTip("Define colors with %s values" % ("red, green and blue" if name == "RGB" else
                                                            "hue, saturation and value"))
             b.clicked.connect(lambda _c=False, n=name: self.set_mode(n))
             group.addButton(b)
@@ -920,7 +950,7 @@ class _Spectrum(QtWidgets.QWidget):
         self.setMaximumHeight(56)
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.setCursor(QtCore.Qt.CrossCursor)
-        self.setToolTip("Click a colour in the spectrum")
+        self.setToolTip("Click a color in the spectrum")
         self._image = None
 
     def colour_at(self, x, y):
@@ -1017,6 +1047,103 @@ class _Dropper(QtCore.QObject):
         return False
 
 
+class MapHandle:
+    """The image's handle on the faces (Mapping tab): a cross in the projection plane at the middle of the
+    faces, drawn over the model; dragging it slides the image (Horizontal / Vertical location)."""
+
+    NAME = "SWAppearanceMapHandle"
+
+    def __init__(self, panel):
+        from pivy import coin
+        self.panel = panel
+        self.view = Gui.ActiveDocument.ActiveView if Gui.ActiveDocument is not None else None
+        self.root = coin.SoSeparator()
+        self.root.setName(self.NAME)
+        depth = coin.SoDepthBuffer()
+        depth.test = False
+        self.root.addChild(depth)
+        self.xf = coin.SoTransform()
+        self.root.addChild(self.xf)
+        self.dragger = coin.SoTranslate2Dragger()
+        self.root.addChild(self.dragger)
+        self.dragger.addStartCallback(self._start, None)
+        self.dragger.addMotionCallback(self._moved, None)
+        self.dragger.addFinishCallback(self._done, None)
+        self.k = 1.0
+        self.axes = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+        self.start = (0.0, 0.0)
+        if self.view is not None:
+            self.view.getSceneGraph().addChild(self.root)
+
+    def _centre_and_size(self):
+        box = None
+        for t in self.panel.targets:
+            try:
+                if t.level == "face":
+                    shape = t.obj.Shape.getElement(t.sub)
+                elif t.level == "feature":
+                    shape = t.obj.Shape
+                else:
+                    shape = t.body.Shape
+                b = shape.BoundBox
+            except Exception:
+                continue
+            if box is None:
+                box = b
+            else:
+                box.add(b)
+        if box is None or not box.isValid():
+            return App.Vector(), 10.0
+        return box.Center, max(box.DiagonalLength, 1.0)
+
+    def place(self):
+        """Puts the handle at the middle of the faces, in the plane the image is projected on, turned with it."""
+        from pivy import coin
+        import math
+        from . import appeartex
+        s = self.panel.texture_values()
+        u, v = {"XY": ((1, 0, 0), (0, 1, 0)), "YZ": ((0, 1, 0), (0, 0, 1)),
+                "ZX": ((0, 0, 1), (1, 0, 0))}[s["direction"] if s["direction"] in appeartex.DIRECTIONS else "XY"]
+        a = math.radians(self.panel.tex_angle.value())
+        su = tuple(math.cos(a) * x - math.sin(a) * y for x, y in zip(u, v))
+        tv = tuple(math.sin(a) * x + math.cos(a) * y for x, y in zip(u, v))
+        self.axes = (su, tv)
+        centre, size = self._centre_and_size()
+        # the image's location moves the handle with it
+        p = centre + App.Vector(*su) * self.panel.hloc.value() + App.Vector(*tv) * self.panel.vloc.value()
+        self.k = size * 0.04
+        n = App.Vector(*su).cross(App.Vector(*tv))
+        rot = App.Rotation(App.Vector(*su), App.Vector(*tv), n, "ZXY")
+        self.xf.translation.setValue(p.x, p.y, p.z)
+        self.xf.rotation.setValue(coin.SbRotation(*rot.Q))
+        self.xf.scaleFactor.setValue(self.k, self.k, self.k)
+        self.dragger.translation.setValue(0, 0, 0)
+
+    def _start(self, *_a):
+        self.start = (self.panel.hloc.value(), self.panel.vloc.value())
+
+    def _moved(self, *_a):
+        x, y, _z = self.dragger.translation.getValue().getValue()
+        # the dragger moves in its own plane (the image's axes), in units of k
+        self.panel.hloc.blockSignals(True)
+        self.panel.vloc.blockSignals(True)
+        self.panel.hloc.setValue(self.start[0] + x * self.k)
+        self.panel.vloc.setValue(self.start[1] + y * self.k)
+        self.panel.hloc.blockSignals(False)
+        self.panel.vloc.blockSignals(False)
+        QtCore.QTimer.singleShot(0, self.panel._texture_changed)
+
+    def _done(self, *_a):
+        QtCore.QTimer.singleShot(0, lambda: (self.panel._texture_changed(), self.place()))
+
+    def remove(self):
+        try:
+            if self.view is not None:
+                self.view.getSceneGraph().removeChild(self.root)
+        except Exception as _fw_err:
+            _fw_log("appearance.py:handle-remove", _fw_err)
+
+
 class AppearancePanel:
     ""
 
@@ -1050,6 +1177,13 @@ class AppearancePanel:
         self.tabs.setUsesScrollButtons(False)
         self.tabs.setExpanding(True)
         self.tabs.setElideMode(QtCore.Qt.ElideRight)
+        # pkg173: tight tabs, so the four names read in full in the PM's width (they were cut to "Color/Im...", "Map...")
+        self.tabs.setStyleSheet("QTabBar#SWAppearanceTabs::tab { padding: 4px 1px; margin: 0px; min-width: 0px; }")
+        _f = self.tabs.font()
+        _f.setPointSizeF(max(6.0, _f.pointSizeF() - 1.0))
+        self.tabs.setFont(_f)
+        self.tabs.setExpanding(False)
+        self.tabs.setElideMode(QtCore.Qt.ElideNone)      # ElideRight cut every name even with room to spare
         self.tabs.setStyleSheet("QTabBar::tab { padding: 3px 4px; min-width: 0px; }")
         lay.addWidget(self.tabs)
         row = QtWidgets.QHBoxLayout()
@@ -1064,7 +1198,7 @@ class AppearancePanel:
             b.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
             b.setCheckable(True)
             b.setAutoRaise(True)
-            b.setToolTip("Select %s" % LABELS[lv].lower() + ("" if lv == "part" else "s"))
+            b.setToolTip("Select " + {"part": "part", "body": "bodies"}.get(lv, LABELS[lv].lower() + "s"))
             b.clicked.connect(lambda _c=False, v=lv: self.set_level(v))
             group.addButton(b)
             row.addWidget(b)
@@ -1148,6 +1282,17 @@ class AppearancePanel:
         self.direction.setObjectName("SWAppearanceMappingDirection")
         self.direction.addItems(list(appeartex.DIRECTIONS))
         form.addRow("Projection direction:", self.direction)
+
+        self.hloc = QtWidgets.QDoubleSpinBox(mapping)
+        self.hloc.setObjectName("SWAppearanceHorizontalLocation")
+        self.vloc = QtWidgets.QDoubleSpinBox(mapping)
+        self.vloc.setObjectName("SWAppearanceVerticalLocation")
+        for box in (self.hloc, self.vloc):
+            box.setRange(-100000.0, 100000.0)
+            box.setDecimals(2)
+            box.setSuffix(" mm")
+        form.addRow("Horizontal location:", self.hloc)
+        form.addRow("Vertical location:", self.vloc)
         size = QtWidgets.QWidget()
         size.setWindowTitle("Size/Orientation")
         form = QtWidgets.QFormLayout(size)
@@ -1204,17 +1349,27 @@ class AppearancePanel:
         form.addRow("Scale:", self.finish_scale)
         self.image_box, self.mapping_box, self.size_box, self.finish_box = image, mapping, size, finish
         self.advanced = [kind, image, mapping, size, light, finish]
-        self.by_tab = {0: [geometry, kind, image, colour], 1: [geometry, mapping, size], 2: [geometry, light],
+        states = self._states_box()
+        self.by_tab = {0: [geometry, kind, image, colour, states], 1: [geometry, mapping, size], 2: [geometry, light],
                        3: [geometry, finish]}
-        self.form = [geometry, colour, kind, image, mapping, size, light, finish]
+        self.form = [geometry, colour, states, kind, image, mapping, size, light, finish]
+        self.start_maps = {o.Name: dict(stored(o)) for o in _owners(doc)}
         self._load()
         self._load_texture()
         for w in (self.image_path, self.bump_path):
             w.editingFinished.connect(self._texture_changed)
         for w in (self.mapping, self.direction, self.finish):
             w.currentIndexChanged.connect(lambda _i: self._texture_changed())
+        for w in (self.hloc, self.vloc):
+            w.valueChanged.connect(lambda _v: self._texture_changed())
+        self.mapping.currentIndexChanged.connect(lambda _i: self._sync_handle())
+        self.direction.currentIndexChanged.connect(lambda _i: self._sync_handle())
+        self.tex_angle.valueChanged.connect(lambda _v: self._sync_handle())
+        self.image_path.editingFinished.connect(self._sync_handle)
         for w in (self.tex_width, self.tex_height, self.tex_angle):
-            w.valueChanged.connect(lambda _v: self._size_changed())
+            # the box that changed goes along: the panel is no QObject, so it has no sender() (Fixed
+            # aspect ratio never followed)
+            w.valueChanged.connect(lambda _v, box=w: self._size_changed(box))
         for w in (self.aspect, self.mirror_h, self.mirror_v):
             w.toggled.connect(lambda _on: self._texture_changed())
         self.finish_scale.valueChanged.connect(lambda _v: self._texture_changed())
@@ -1286,7 +1441,7 @@ class AppearancePanel:
             self.tabs.blockSignals(True)
             self.tabs.setCurrentIndex(0)
             self.tabs.blockSignals(False)
-        shown = self.by_tab.get(self.tabs.currentIndex(), []) if advanced else [self.form[0], self.form[1]]
+        shown = self.by_tab.get(self.tabs.currentIndex(), []) if advanced else self.form[:3]
         for w in self.form:
             on = w in shown
             w.setVisible(on)
@@ -1296,6 +1451,23 @@ class AppearancePanel:
                 box = box.parentWidget()
             if box is not None:
                 box.setVisible(on)
+        self._sync_handle()
+
+    def _sync_handle(self):
+        ""
+        try:
+            want = (self.mode.currentIndex() == 1 and self.tabs.currentIndex() == 1 and bool(self.image_path.text().strip())
+                    and self.mapping.currentText() not in ("Spherical", "Cylindrical") and bool(self.targets))
+            if not want:
+                if getattr(self, "handle", None) is not None:
+                    self.handle.remove()
+                    self.handle = None
+                return
+            if getattr(self, "handle", None) is None:
+                self.handle = MapHandle(self)
+            self.handle.place()
+        except Exception as _fw_err:
+            _fw_log("appearance.py:handle", _fw_err)
 
     def _place_swatches(self):
         ""
@@ -1332,7 +1504,8 @@ class AppearancePanel:
         else:
             s = appeartex.settings(bs[0]) if bs else dict(appeartex.DEFAULTS)
         widgets = (self.image_path, self.bump_path, self.mapping, self.direction, self.finish, self.tex_width,
-                   self.tex_height, self.tex_angle, self.aspect, self.mirror_h, self.mirror_v, self.finish_scale)
+                   self.tex_height, self.tex_angle, self.aspect, self.mirror_h, self.mirror_v, self.finish_scale,
+                   self.hloc, self.vloc)
         for w in widgets:
             w.blockSignals(True)
         self.image_path.setText(s["image"])
@@ -1349,6 +1522,11 @@ class AppearancePanel:
             _fw_log("appearance.py:842", _fw_err)
         self.mirror_h.setChecked(s["mirror_h"] == "1")
         self.mirror_v.setChecked(s["mirror_v"] == "1")
+        try:
+            self.hloc.setValue(float(s.get("hloc", "0")))
+            self.vloc.setValue(float(s.get("vloc", "0")))
+        except ValueError as _fw_err:
+            _fw_log("appearance.py:location", _fw_err)
         for w in widgets:
             w.blockSignals(False)
         if advanced_wanted(s):
@@ -1360,13 +1538,14 @@ class AppearancePanel:
                 "width": "%g" % self.tex_width.value(), "height": "%g" % self.tex_height.value(),
                 "angle": "%g" % self.tex_angle.value(), "mirror_h": "1" if self.mirror_h.isChecked() else "0",
                 "mirror_v": "1" if self.mirror_v.isChecked() else "0", "finish": self.finish.currentText(),
-                "finish_scale": "%d" % self.finish_scale.value()}
+                "finish_scale": "%d" % self.finish_scale.value(),
+                "hloc": "%g" % self.hloc.value(), "vloc": "%g" % self.vloc.value()}
 
-    def _size_changed(self):
-        if self.aspect.isChecked() and self.sender() in (self.tex_width, self.tex_height):
-            other = self.tex_height if self.sender() is self.tex_width else self.tex_width
+    def _size_changed(self, box=None):
+        if self.aspect.isChecked() and box in (self.tex_width, self.tex_height):
+            other = self.tex_height if box is self.tex_width else self.tex_width
             other.blockSignals(True)
-            other.setValue(self.sender().value())
+            other.setValue(box.value())
             other.blockSignals(False)
         self._texture_changed()
 
@@ -1395,8 +1574,11 @@ class AppearancePanel:
     def _reset_mapping(self):
         from . import appeartex
         d = appeartex.DEFAULTS
-        for w in (self.mapping, self.direction, self.tex_width, self.tex_height, self.tex_angle, self.mirror_h, self.mirror_v):
+        for w in (self.mapping, self.direction, self.tex_width, self.tex_height, self.tex_angle, self.mirror_h, self.mirror_v,
+                  self.hloc, self.vloc):
             w.blockSignals(True)
+        self.hloc.setValue(0.0)
+        self.vloc.setValue(0.0)
         self.mapping.setCurrentText(d["mapping"])
         self.direction.setCurrentText(d["direction"])
         self.tex_width.setValue(float(d["width"]))
@@ -1404,9 +1586,11 @@ class AppearancePanel:
         self.tex_angle.setValue(0.0)
         self.mirror_h.setChecked(False)
         self.mirror_v.setChecked(False)
-        for w in (self.mapping, self.direction, self.tex_width, self.tex_height, self.tex_angle, self.mirror_h, self.mirror_v):
+        for w in (self.mapping, self.direction, self.tex_width, self.tex_height, self.tex_angle, self.mirror_h, self.mirror_v,
+                  self.hloc, self.vloc):
             w.blockSignals(False)
         self._texture_changed()
+        self._sync_handle()
 
     def _browse_image(self):
         path, _f = QtWidgets.QFileDialog.getOpenFileName(None, "Open Image", self.image_path.text(),
@@ -1481,9 +1665,15 @@ class AppearancePanel:
             return
         from . import refplane
         obj, sub = refplane.resolve(obj, sub)
-        QtCore.QTimer.singleShot(0, lambda: self._picked(obj, sub))
+        from . import safe_later as _sl; _sl.later(0, lambda: self._picked(obj, sub), self, "list")
 
     def _picked(self, obj, sub):
+        try:
+            import shiboken6
+            if not shiboken6.isValid(self.list):
+                return          # the panel is closed: this call was queued before it (lifetime2-1126)
+        except Exception:
+            pass
         try:
             Gui.Selection.clearSelection()
         except Exception as _fw_err:
@@ -1503,6 +1693,12 @@ class AppearancePanel:
         self.targets.append(t)
 
     def _show(self):
+        try:
+            import shiboken6
+            if not shiboken6.isValid(self.list):
+                return          # the panel is closed: this call was queued before it (lifetime2-1126)
+        except Exception:
+            pass
         for lv, b in self.level_buttons.items():
             b.setChecked(lv == self.level)
         self.list.clear()
@@ -1517,6 +1713,9 @@ class AppearancePanel:
     def _close(self):
         global _current
         _current = None
+        if getattr(self, "handle", None) is not None:
+            self.handle.remove()
+            self.handle = None
         for w in self._views:
             try:
                 w.removeEventFilter(self._esc)
@@ -1529,7 +1728,95 @@ class AppearancePanel:
             _fw_log("appearance.py:1010", _fw_err)
         Gui.Control.closeDialog()
 
+
+    def _states_box(self):
+        box = QtWidgets.QWidget()
+        box.setWindowTitle("Display States")
+        box.setObjectName("SWAppearanceStates")
+        lay = QtWidgets.QVBoxLayout(box)
+        self.state_choice = QtWidgets.QButtonGroup(box)
+        for i, text in enumerate(("This display state", "All display states", "Specify display states")):
+            r = QtWidgets.QRadioButton(text, box)
+            r.setObjectName("SWAppearanceStates%d" % i)
+            r.setChecked(i == 0)
+            self.state_choice.addButton(r, i)
+            lay.addWidget(r)
+        self.state_list = QtWidgets.QListWidget(box)
+        self.state_list.setObjectName("SWAppearanceStateList")
+        self.state_list.setFixedHeight(60)
+        try:
+            from . import displaystates
+            names = displaystates.names(self.doc) or [displaystates.default_name(self.doc)]
+            here = displaystates.active(self.doc) or names[0]
+        except Exception as _fw_err:
+            _fw_log("appearance.py:states", _fw_err)
+            names, here = [], None
+        for name in names:
+            item = QtWidgets.QListWidgetItem(name, self.state_list)
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+            item.setCheckState(QtCore.Qt.Checked if name == here else QtCore.Qt.Unchecked)
+        lay.addWidget(self.state_list)
+        self.state_choice.idClicked.connect(lambda i: self.state_list.setEnabled(i == 2))
+        self.state_list.setEnabled(False)
+        return box
+
+    def chosen_states(self):
+        """The display states (other than the active one) this appearance also goes to."""
+        try:
+            from . import displaystates
+            names, here = displaystates.names(self.doc), displaystates.active(self.doc)
+        except Exception:
+            return []
+        how = self.state_choice.checkedId()
+        if how == 1:
+            return [n for n in names if n != here]
+        if how == 2:
+            out = []
+            for i in range(self.state_list.count()):
+                item = self.state_list.item(i)
+                if item.checkState() == QtCore.Qt.Checked and item.text() != here and item.text() in names:
+                    out.append(item.text())
+            return out
+        return []
+
+    def _spread(self):
+        """The appearance changes made on this page go to the chosen display states too: each keeps its other
+        appearances, only what was set or removed here changes."""
+        names = self.chosen_states()
+        if not names:
+            return
+        from . import displaystates
+        data = displaystates._data(self.doc)
+        states = data.get("states", {})
+        for owner in _owners(self.doc):
+            before, after = self.start_maps.get(owner.Name, {}), stored(owner)
+            changed = {k: v for k, v in after.items() if before.get(k) != v}
+            gone = [k for k in before if k not in after]
+            if not changed and not gone:
+                continue
+            for name in names:
+                item = states.get(name, {}).get(owner.Name)
+                if item is None:
+                    continue
+                if "sw" in item:
+                    kept = dict(item["sw"] or {})
+                    kept.update(changed)
+                    for k in gone:
+                        kept.pop(k, None)
+                    item["sw"] = kept
+                elif "a" in item:
+                    try:
+                        item["a"] = [list(m.DiffuseColor[:3]) + [float(m.Transparency)]
+                                     for m in owner.ViewObject.ShapeAppearance]
+                    except Exception as _fw_err:
+                        _fw_log("appearance.py:spread", _fw_err)
+        displaystates._save(self.doc, data)
+
     def accept(self):
+        try:
+            self._spread()
+        except Exception as _fw_err:
+            _fw_log("appearance.py:spread-all", _fw_err)
         if self.opened:
             self.doc.commitTransaction()
         self._close()
@@ -1576,8 +1863,19 @@ def open_page(doc, level, picks):
             return False
         targets = [Target("part", bs[0])]
         level = "part"
-    QtCore.QTimer.singleShot(0, lambda: Gui.Control.showDialog(AppearancePanel(doc, level, targets)))
+    QtCore.QTimer.singleShot(0, lambda: _show_page(doc, level, targets))
     return True
+
+
+def _show_page(doc, level, targets):
+    ""
+
+    Gui.Control.showDialog(AppearancePanel(doc, level, targets))
+    try:
+        from . import taskpane
+        taskpane.open_tab(4)
+    except Exception as _fw_err:
+        _fw_log("appearance.py:taskpane", _fw_err)
 
 
 _menu = None
@@ -1690,7 +1988,7 @@ def remove_with_undo(doc, targets):
 class AppearanceCommand:
     def GetResources(self):
         return {"Pixmap": "Std_SetAppearance", "MenuText": "Edit Appearance",
-                "ToolTip": "Colours the picked face, feature or body, or the part"}
+                "ToolTip": "Colors the picked face, feature or body, or the part"}
 
     def IsActive(self):
         return App.ActiveDocument is not None and not Gui.Control.activeDialog()
@@ -1745,6 +2043,46 @@ def _picks(doc):
 _clipboard = None
 
 
+class Clip:
+    """A copied appearance: the look (colour, transparency and illumination values) and the image
+    settings (image, mapping, finish), None when it had none of its own."""
+
+    def __init__(self, look, texture):
+        self.look, self.texture = tuple(look), (dict(texture) if texture else None)
+
+
+def _texture_of(t):
+    """The target's image, mapping and finish when they show on it (its own, or its body's), else None."""
+    try:
+        from . import appeartex
+        s = appeartex.settings_for(t.body, t.key())
+        if t.level in ("face", "feature") and not appeartex.keyed(t.body).get(t.key()):
+            s = appeartex.settings(t.body)          # nothing of its own: the body's image shows on it
+        return dict(s) if appeartex._on(s) else None
+    except Exception as _fw_err:
+        _fw_log("appearance.py:copy-texture", _fw_err)
+        return None
+
+
+def _paste_texture(targets, texture):
+    """Gives each pasted target the copied image settings, or takes its own away when the copy had none."""
+    try:
+        from . import appeartex
+    except Exception as _fw_err:
+        _fw_log("appearance.py:paste-texture", _fw_err)
+        return
+    done = []
+    for t in targets:
+        for b in t.bodies():
+            if texture is None and not (t.level in ("face", "feature") and t.key() in appeartex.keyed(b)):
+                continue            # nothing to give and nothing of its own to take away
+            appeartex.store_for(b, t.key(), texture or {})
+            if b not in done:
+                done.append(b)
+    for b in done:
+        appeartex.apply(b)
+
+
 class CopyAppearanceCommand:
     """Copy Appearance: keeps the picked face's, feature's or body's colour to paste."""
 
@@ -1760,7 +2098,9 @@ class CopyAppearanceCommand:
         obj, sub = _picks(App.ActiveDocument)[0]
         t = target_for(natural(obj, sub), obj, sub)
         if t is not None:
-            _clipboard = current_colour(t)
+
+            # and finish (only the colour was kept)
+            _clipboard = Clip(current_colour(t, True), _texture_of(t))
 
 
 class PasteAppearanceCommand:
@@ -1785,7 +2125,9 @@ class PasteAppearanceCommand:
             return
         doc.openTransaction("Paste Appearance")
         try:
-            apply(targets, _clipboard)
+            clip = _clipboard if isinstance(_clipboard, Clip) else Clip(_clipboard, None)
+            apply(targets, clip.look)
+            _paste_texture(targets, clip.texture)
         except BaseException:
             try:
                 doc.abortTransaction()

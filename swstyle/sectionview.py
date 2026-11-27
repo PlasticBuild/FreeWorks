@@ -933,7 +933,7 @@ class SectionPanel:
         self.cap_box = QtWidgets.QCheckBox("Show section cap")
         self.cap_box.setToolTip("Fills the cut faces, so the cut looks solid.")
         self.keep_box = QtWidgets.QCheckBox("Keep cap color")
-        self.keep_box.setToolTip("The cut faces take the section colour (Edit Color) instead of the part's colour.")
+        self.keep_box.setToolTip("The cut faces take the section color (Edit Color) instead of the part's color.")
         lay.addWidget(self.cap_box)
         lay.addWidget(self.keep_box)
 
@@ -1039,7 +1039,7 @@ class SectionPanel:
             self.sel_radio.setChecked(s.offset_selected)
             self.cap_box.setChecked(s.show_cap)
             self.keep_box.setChecked(s.keep_cap_color)
-            self.keep_box.setEnabled(s.show_cap)
+            self.keep_box.setEnabled(True)   # never greyed (no dead controls)
             for name, button in self.plane_buttons.items():
                 button.setChecked(s.ref == ("std", name))
             self.reverse_button.setChecked(s.reverse)
@@ -1094,6 +1094,13 @@ class SectionPanel:
             elif abs(along) > 1e-6:
                 s.offset = s.offset / along
             s.offset_selected = self.sel_radio.isChecked()
+        if self.keep_box.isChecked() and not s.keep_cap_color and not self.cap_box.isChecked():
+            # Keep cap color ticked while the cap is off: it needs a cap, so turn Show section cap on
+            self._quiet = True
+            try:
+                self.cap_box.setChecked(True)
+            finally:
+                self._quiet = False
         s.show_cap = self.cap_box.isChecked()
         s.keep_cap_color = self.keep_box.isChecked()
         self.show()
@@ -1379,10 +1386,28 @@ class SectionViewCommand:
                 "Checkable": False}
 
     def IsActive(self):
-        return coin is not None and _active_3d_view() is not None
+        # NO DEAD CONTROLS: with a drawing sheet in front the button stays live and says what to do first
+        return coin is not None and App.ActiveDocument is not None
 
     def Activated(self, checked=None):
+        if _active_3d_view() is None and controller().panel is None and not controller().active():
+            _not_ready()
+            controller().sync_button()
+            return
         controller().button(checked)
+
+
+def _not_ready():
+    """View > Display > Section View with no 3D view in front (a drawing sheet): the Message page."""
+    try:
+        from . import notready
+        notready.TEXTS.setdefault("SectionView", "Section View cuts a part or assembly open in the graphics area, and a "
+                                           "drawing sheet is in front now. Open the part or assembly (right-click a "
+                                           "drawing view > Open Part), then use Section View again. For a section "
+                                           "of a drawing view, use Section View on the Drawing tab.")
+        notready.show("SectionView")
+    except Exception as error:
+        _fw_log("sectionview.py:not-ready", error)
 
 
 def menu_items(have):

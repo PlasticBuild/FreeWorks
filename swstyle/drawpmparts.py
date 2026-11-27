@@ -141,11 +141,68 @@ def delete_style(doc, kind, name):
     _set(doc, "SWAnnotationStyles", allst, "Annotation styles")
 
 
+def _drawn_style_icon(key, size=16):
+    """A drawn icon for the Style group's buttons: Default (a turning arrow), Add (+), Delete (-), Save (a disk),
+    Load (an open folder)."""
+    pm = QtGui.QPixmap(size, size)
+    pm.fill(QtCore.Qt.transparent)
+    qp = QtGui.QPainter(pm)
+    qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
+    pen = QtGui.QPen(QtGui.QColor("#2b6cb0"))
+    pen.setWidthF(1.6)
+    qp.setPen(pen)
+    m = size / 16.0
+    if key == "Default":
+        qp.drawArc(QtCore.QRectF(3 * m, 3 * m, 10 * m, 10 * m), 60 * 16, 280 * 16)
+        qp.drawLine(QtCore.QPointF(11 * m, 2 * m), QtCore.QPointF(11.5 * m, 5.5 * m))
+        qp.drawLine(QtCore.QPointF(11.5 * m, 5.5 * m), QtCore.QPointF(8 * m, 5.5 * m))
+    elif key == "Add":
+        qp.drawLine(QtCore.QPointF(8 * m, 3 * m), QtCore.QPointF(8 * m, 13 * m))
+        qp.drawLine(QtCore.QPointF(3 * m, 8 * m), QtCore.QPointF(13 * m, 8 * m))
+    elif key == "Delete":
+        pen.setColor(QtGui.QColor("#c0392b"))
+        qp.setPen(pen)
+        qp.drawLine(QtCore.QPointF(4 * m, 4 * m), QtCore.QPointF(12 * m, 12 * m))
+        qp.drawLine(QtCore.QPointF(12 * m, 4 * m), QtCore.QPointF(4 * m, 12 * m))
+    elif key == "Save":
+        qp.drawRect(QtCore.QRectF(2.5 * m, 2.5 * m, 11 * m, 11 * m))
+        qp.drawRect(QtCore.QRectF(5 * m, 2.5 * m, 6 * m, 4 * m))
+    else:
+        qp.drawPolyline(QtGui.QPolygonF([QtCore.QPointF(2 * m, 13 * m), QtCore.QPointF(2 * m, 4 * m),
+                                         QtCore.QPointF(6 * m, 4 * m), QtCore.QPointF(7.5 * m, 5.5 * m),
+                                         QtCore.QPointF(13 * m, 5.5 * m), QtCore.QPointF(13 * m, 7.5 * m)]))
+        qp.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(2 * m, 13 * m), QtCore.QPointF(4.5 * m, 7.5 * m),
+                                        QtCore.QPointF(15 * m, 7.5 * m), QtCore.QPointF(12.5 * m, 13 * m)]))
+    qp.end()
+    return QtGui.QIcon(pm)
+
+
 STYLE_BUTTONS = (("Default", "Apply the default attributes", "Std_Refresh"),
                  ("Add", "Add or Update a Style", "list-add"),
                  ("Delete", "Delete a Style", "list-remove"),
                  ("Save", "Save a Style", "document-save"),
                  ("Load", "Load Style", "document-open"))
+
+
+def _lifted(icon):
+    """The icon with its colours lifted in the dark theme (FreeCAD's blue art is dim on the dark panel)."""
+    try:
+        from . import style as _style
+        if not _style.dark():
+            return icon
+        img = icon.pixmap(32, 32).toImage().convertToFormat(QtGui.QImage.Format_ARGB32)
+        for y in range(img.height()):
+            for x in range(img.width()):
+                c = QtGui.QColor.fromRgba(img.pixel(x, y))
+                if c.alpha() == 0:
+                    continue
+                h, s, l, a = c.getHsl()
+                c.setHsl(h, s, min(255, l + int((255 - l) * 0.45)), a)
+                img.setPixel(x, y, c.rgba())
+        return QtGui.QIcon(QtGui.QPixmap.fromImage(img))
+    except Exception as _fw_err:
+        _fw_log("drawpmparts.py:lifted", _fw_err)
+        return icon
 
 
 def style_group(panel, kind=None):
@@ -162,12 +219,19 @@ def style_group(panel, kind=None):
         b.setText(key)
 
         # the icon theme's
-        for name in (icons[key], theme, {"Delete": "edit-delete"}.get(key, "")):
+        # FreeCAD's own icon by name; the icon theme's names only through the theme (asking FreeCAD for them
+        # printed "Cannot find icon: Std_Refresh", look audit BB37); last a drawn one, so no button is text only
+        for name, own in ((icons[key], True), (theme, False), ({"Delete": "edit-delete"}.get(key, ""), False),
+                          (key, None)):
             try:
-                ic = QtGui.QIcon(D.pixmap(name)) if name else QtGui.QIcon()
-                if ic.isNull() and name:
-                    ic = QtGui.QIcon.fromTheme(name)
+                if own is None:
+                    ic = _drawn_style_icon(key)
+                elif own:
+                    ic = QtGui.QIcon(D.pixmap(name)) if name else QtGui.QIcon()
+                else:
+                    ic = QtGui.QIcon.fromTheme(name) if name else QtGui.QIcon()
                 if not ic.isNull() and not ic.pixmap(16, 16).isNull():
+                    ic = _lifted(ic)
                     b.setIcon(ic)
                     b.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
                     break
@@ -632,7 +696,10 @@ class LayerDialog(QtWidgets.QDialog):
 def non_printing(doc):
     """The drawing items on layers set not to print."""
     off = {L["name"] for L in layers(doc) if not L.get("print", True)}
-    return [o for o in doc.Objects if getattr(o, "SWLayer", "") in off] if off else []
+    out = [o for o in doc.Objects if getattr(o, "SWLayer", "") in off] if off else []
+
+    # in the PDF)
+    return out + [o for o in doc.Objects if getattr(o, "SWAnnotation", "") == "MagneticLine" and o not in out]
 
 
 def print_drawing(doc, command):

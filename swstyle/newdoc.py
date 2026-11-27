@@ -125,9 +125,28 @@ def make_from_template(path):
     except Exception as _fw_err:
         _fw_log("newdoc.py:124", _fw_err)
     doc.Label = name
+    stamp_standard(doc)         # fh255: a template with no standard of its own takes the default one
     doc.recompute()
     QtCore.QTimer.singleShot(200, _trimetric)
     return doc
+
+
+def stamp_standard(doc):
+    ""
+
+
+
+    try:
+        from . import migrate, options
+        if migrate.doc_meta(doc) in options.STANDARDS:
+            return False
+        meta = dict(doc.Meta)
+        meta[migrate.DOC_META_NEW] = paths.params().GetString(options.DRAFTING, "ISO")
+        doc.Meta = meta
+        return True
+    except Exception as _fw_err:
+        _fw_log("newdoc.py:stamp_standard", _fw_err)
+        return False
 
 
 def _icon(sw_name, fc_name):
@@ -330,6 +349,9 @@ class NewDocumentDialog(QtWidgets.QDialog):
                 lst.addItem(item)
             lst.currentItemChanged.connect(lambda cur, _p: self._template_picked(cur))
             lst.itemDoubleClicked.connect(lambda item: (self._template_picked(item), QtCore.QTimer.singleShot(0, self.accept)))
+            if not lst.count() and self.tabs.count():
+                lst.deleteLater()           # fh266: a template folder with no templates in it: no empty tab
+                continue
             self.tabs.addTab(lst, name)
             self.lists.append(lst)
 
@@ -641,6 +663,7 @@ def user_units(doc):
             App.Units.setSchema(i)          # the status bar and the new document's fields at once
     except Exception as _fw_err:
         _fw_log("newdoc.py:user units", _fw_err)
+    stamp_standard(doc)     # fh255: and the default drafting standard, kept as the document's own
 
 
 def _template_units(doc, path):

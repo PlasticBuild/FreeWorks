@@ -11,6 +11,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -413,7 +414,7 @@ def _sheet_body(doc=None):
     if doc is None:
         return None
     try:
-        body = Gui.ActiveDocument.ActiveView.getActiveObject("pdbody") or smflatten._body()
+        body = smflatten._body()
     except Exception:
         body = None
     if body is None or smflatten.root(body) is None:
@@ -453,8 +454,8 @@ def start():
         return
     gdoc = Gui.ActiveDocument
     edit = gdoc.getInEdit() if gdoc is not None else None
-    if edit is not None and edit.Object.TypeId == "Sketcher::SketchObject":
-        sketch = edit.Object
+    if edit is not None and editobj.type_id(edit) == "Sketcher::SketchObject":
+        sketch = editobj.of(edit)
         Gui.runCommand("Sketcher_LeaveSketch", 0)
         if sketch.Geometry:
             QtCore.QTimer.singleShot(0, lambda: open_on(sketch))
@@ -476,7 +477,7 @@ class Command:
         from . import smflatten
         try:
             edit = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument else None
-            sketching = edit is not None and edit.Object.TypeId == "Sketcher::SketchObject"
+            sketching = edit is not None and editobj.type_id(edit) == "Sketcher::SketchObject"
             if Gui.Control.activeDialog() and not sketching:
                 return False
         except Exception:

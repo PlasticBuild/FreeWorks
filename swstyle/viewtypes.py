@@ -87,6 +87,8 @@ _DRAFT_ANNOTATIONS = {"LinearDimension", "AngularDimension", "Dimension", "Label
 
 
 def _is_annotation(o):
+    if getattr(o, "SWStyleKind", "") == "PMI":
+        return True         # a part's 3D annotations (notes, DimXpert): Display Annotations / All Annotations hide them
     if o.TypeId in ("App::Annotation", "App::AnnotationLabel", "App::MeasureDistance"):
         return True
     if o.TypeId.startswith("Measure::Measure"):
@@ -619,6 +621,7 @@ def install():
         checkstate.register(name, lambda key=key: App.ActiveDocument is not None and shown(key))
     if Gui.Command.get("SWStyle_HideAllTypes") is None:
         Gui.addCommand("SWStyle_HideAllTypes", _HideAllCmd())
+    checkstate.register("SWStyle_HideAllTypes", lambda: all_hidden())     # pressed in the grid while it hides
     for name, make in SWITCHES.items():
         if Gui.Command.get(name) is None:
             Gui.addCommand(name, make())

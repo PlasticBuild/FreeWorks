@@ -59,7 +59,7 @@ APPS = {
                          "thickness and models the scan into a solid. By CNC Kitchen (AGPL).",
                   "download": r"(?!)"},
     "Diotopo": {"repo": "Diotopo/diotopo", "mode": "local",
-                "tip": "Free topology optimisation for 3D printing, by Diotopo. Optional: not part of this "
+                "tip": "Free topology optimization for 3D printing, by Diotopo. Optional: not part of this "
                        "download; get it from Tools > Add-Ins. Kept up to date once downloaded.",
                 "download": r"(browser.*\.zip$|portable.*\.zip$|\.zip$)"},
 }
@@ -183,7 +183,7 @@ def _close_progress(app):
 def _cancel(app):
     """Stops a download: the worker sees it at its next block, the partial copy is removed, nothing is installed."""
     _cancelled.add(app)
-    _status("%s: cancelling the download" % app)
+    _status("%s: canceling the download" % app)
 
 
 def _emit(app, result, error):
@@ -297,7 +297,7 @@ def _checked(app, result, error):
         _open_when_installed.discard(app)
         _quiet_now.discard(app)
         if was_cancelled:
-            _status("%s: the download was cancelled, nothing was installed" % app, 8000)
+            _status("%s: the download was canceled, nothing was installed" % app, 8000)
         else:
             _status("%s: the download failed (%s). Choose Download %s in Tools > Add-Ins to try again." % (app, plain_error(error), app), 12000)
             _tell_failed(app, plain_error(error))       # extapps161: not only a status line that goes after 12 s
@@ -824,7 +824,7 @@ _HUB_ACTIONS = {
 }
 _hub_open = {}
 _STEPS = {"Diotopo": "<ol><li>Open Diotopo: its browser version runs from the add-on's own folder.</li>"
-                     "<li>Set up the part and run the optimisation in the page, then export the result.</li>"
+                     "<li>Set up the part and run the optimization in the page, then export the result.</li>"
                      "<li>Come back here: the export is listed under Results and opens in FreeCAD.</li></ol>",
           "ScanRuler": "<ol><li>Select a part or a mesh in FreeCAD and press Send to ScanRuler (a part goes as STEP, a mesh as STL, in millimetres).</li>"
                        "<li>In the page press Load (the scan) or Reference &gt; Load (the nominal part). A flatbed image stays UNCALIBRATED until you "

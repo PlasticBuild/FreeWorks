@@ -325,7 +325,16 @@ class _Triad:
         self.drag["shift"] = self.axes[arm] * d
         self.parts[0].translation.setValue(*(self.base + self.drag["shift"]))
         self._ruler_draw(d)
-        self._apply()
+        # the model follows at most every 80 ms (as Instant3D): a recompute on every pointer move
+        # took 50-90 ms each, so the triad lagged behind the pointer
+        if self.drag.get("timer") is None:
+            timer = QtCore.QTimer()
+            timer.setSingleShot(True)
+            timer.setInterval(80)
+            timer.timeout.connect(self._apply)
+            self.drag["timer"] = timer
+        if not self.drag["timer"].isActive():
+            self.drag["timer"].start()
 
     def value_at(self, pos):
         """The move for the pointer at pos: on the ruler a mark, off it the pointer rounded to STEP."""
@@ -434,6 +443,8 @@ class _Triad:
 
     def _apply(self):
         sk, drag = self.sketch, self.drag
+        if drag is None or sk is None:
+            return
         start = drag["start"]
         if drag["prop"] == "AttachmentOffset":
             # the offset is in the sketch's attachment frame: its own X and Y
@@ -445,6 +456,9 @@ class _Triad:
         sk.Document.recompute()
 
     def _end(self):
+        timer = self.drag.get("timer") if self.drag else None
+        if timer is not None:
+            timer.stop()
         try:
             QtWidgets.QApplication.instance().removeEventFilter(self.filter)
         except Exception as _fw_err:
@@ -457,6 +471,7 @@ class _Triad:
         if abs(drag["d"]) < 1e-9:
             drag["doc"].abortTransaction()
         else:
+            self._apply()               # the last pointer position, even inside the 80 ms wait
             drag["doc"].commitTransaction()
         self._end()
 

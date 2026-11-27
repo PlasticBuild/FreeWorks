@@ -815,6 +815,29 @@ def _show(obj, on):
         _fw_log("suppress.py:show", _fw_err)
 
 
+_STAND_INS = set()      # (document Uid, feature ID) shown by show_built in place of a suppressed tip: a closed
+                        # document's entries can never match a new document or feature of the same name
+
+
+def _stand_key(doc, obj):
+    return (doc.Uid, obj.ID)
+
+
+def _prune_stand_ins():
+    """Entries of closed documents go (no stamp of theirs comes back)."""
+    if _STAND_INS:
+        open_ids = {d.Uid for d in App.listDocuments().values()}
+        for key in [k for k in _STAND_INS if k[0] not in open_ids]:
+            _STAND_INS.discard(key)
+
+
+def _page_open():
+    try:
+        return Gui is not None and Gui.Control.activeDialog()
+    except Exception:
+        return False
+
+
 def show_built(name):
     ""
 
@@ -823,6 +846,7 @@ def show_built(name):
     doc = App.listDocuments().get(name)
     if doc is None or not App.GuiUp:
         return
+    _prune_stand_ins()
     for body in [o for o in doc.Objects if o.TypeId == "PartDesign::Body"]:
         try:
             tip = body.Tip
@@ -837,9 +861,14 @@ def show_built(name):
                 if _shown(tip) and built:
                     _show(tip, False)
                     _show(built[-1], True)
+                    _STAND_INS.add(_stand_key(doc, built[-1]))
             elif not _shown(tip) and _shown(body):
                 stand = [f for f in before if _shown(f)]
-                if len(stand) == 1 and getattr(stand[0], "Suppressed", False) is False and stand[0] in built:
+                if len(stand) == 1 and getattr(stand[0], "Suppressed", False) is False and stand[0] in built \
+                        and (_stand_key(doc, stand[0]) in _STAND_INS or not _page_open()):
+                    # not while a page shows the part before the feature it makes (Fillet, Chamfer, Shell:
+                    # their setback vertices and edges must stay pickable), unless this stand-in is ours
+                    _STAND_INS.discard(_stand_key(doc, stand[0]))
                     _show(stand[0], False)              # the stand-in shown while the tip was suppressed
                     _show(tip, True)
         except Exception as _fw_err:

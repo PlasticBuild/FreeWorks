@@ -138,7 +138,7 @@ def _split(obj, base):
     if not keep:
         raise RuntimeError("Keep at least one body")
     text = "%d bodies: %s" % (len(pieces), ", ".join(
-        "%d (%.0f mm3)" % (i + 1, p.Volume) for i, p in enumerate(pieces)))
+        "%d (%.0f mm³)" % (i + 1, p.Volume) for i, p in enumerate(pieces)))
     if obj.Bodies != text:
         obj.Bodies = text
     _allow_bodies(obj)
@@ -579,7 +579,7 @@ STUD = sf.Spec(
            tip="On surface: a new stud stands on a flat face. On shaft: the thread goes on a shaft already there"),
      Field("Face", "pick", "Face for the stud", tip="A flat face", what=("Face",),
            shown=lambda o: getattr(o, "Type", STUD_TYPES[0]) != "Stud on shaft"),
-     Field("Position", "pick", "Circular edge or point for the stud centre", what=("Edge", "Vertex"),
+     Field("Position", "pick", "Circular edge or point for the stud center", what=("Edge", "Vertex"),
            optional=True),
      Field("Size", "enum", "Size (ISO metric)", "M6", values=[s[0] for s in _stud_sizes()]),
      Field("Length", "length", "Length", 20.0, tip="Stud length; on a shaft, how far the thread runs from the end"),

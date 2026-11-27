@@ -23,6 +23,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -90,7 +91,7 @@ def _in_sketch():
     try:
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
-        return edit is not None and edit.Object.TypeId.startswith("Sketcher::")
+        return edit is not None and editobj.type_id(edit).startswith("Sketcher::")
     except Exception:
         return False
 

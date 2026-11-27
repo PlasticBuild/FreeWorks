@@ -18,7 +18,7 @@ def _fw_log(site, err):
     try:
         if site not in _FW_SEEN:
             _FW_SEEN.add(site)
-            __import__("FreeCAD").Console.PrintLog("FreeWorks %s: %s\n" % (site, err))
+            __import__("FreeCAD").Console.PrintLog("FreeCAD %s: %s\n" % (site, err))
     except Exception:
         return
 
@@ -31,9 +31,12 @@ MARGIN = 6
 
 GRID = ("HideAllTypes", None,
         "ViewAllAnnotations", "ToggleAxisCross", "ViewTemporaryAxes", "ViewCameras", "ViewCenterOfMass",
-        "ViewBoundingBox", "ViewCoordinateSystems", "ViewCurves", "ViewDimensionNames", "ViewLights", "ViewOrigins",
+        "ViewBoundingBox", "ViewCoordinateSystems", "ViewCurves", "ViewDimensionNames", "ViewLights",
+        "ViewLiveSectionPlanes",    # viewrows-1126: View/display pkg154, MENU 12 order
+        "ViewOrigins",
         "ViewPartingLines", "ViewPlanes", "ViewPoints", "ViewSketches", "ViewBendLines", "ViewSketchDimensions",
         "ViewSketchPlanes", "ViewWeldBead", "ViewMarkups", None,
+        "ViewDecals",       # bendtable-1126: View/display pkg153, MENU 12 order
         "ViewGrid", "ViewSketchRelations", None,
         "ViewBodies", "ViewPrimaryPlanes")
 PICKED = ("ToggleVisibility", "ShowSelection", "HideSelection", "ShowAll")

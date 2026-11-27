@@ -987,6 +987,64 @@ def unheld(a, made=()):
     return loose
 
 
+def underconstrained(a):
+    ""
+
+
+    geom = geometry(a)
+    if geom is None or geom.Shape.isNull():
+        return []
+    n = len(geom.Shape.Solids)
+    names = owners(geom)
+
+    def solids(o):
+        out = set()
+        for obj, subs in getattr(o, "References", None) or []:
+            if obj is not geom:
+                continue
+            for sub in subs or ():
+                try:
+                    i = solid_index(geom, sub)
+                except Exception:
+                    i = None
+                if i is not None:
+                    out.add(i)
+        return out
+    held, links = set(), []
+    for o in a.Group:
+        if getattr(o, "Suppressed", False) or AUTO in o.PropertiesList:
+            continue
+        if any(o.isDerivedFrom(t) for t in HOLDS):
+            held |= solids(o)
+        elif CONNECTOR in o.PropertiesList or o.isDerivedFrom("Fem::ConstraintTie") or o.isDerivedFrom("Fem::ConstraintContact"):
+            links.append(solids(o))
+    if n > 1:
+        local = _local_faces(a)
+        dists = {}
+        for i, fi, j, fj in touching_pairs(geom, _reach(a), dists):
+            if fi in local or fj in local:
+                continue
+            kind, _friction, gap = _type_for(a, names[i] if i < len(names) else "", names[j] if j < len(names) else "")
+            if kind == "Free":
+                continue
+            if dists.get((fi, fj), 0.0) > TOUCH and not (kind == "Bonded" and dists[(fi, fj)] <= gap):
+                continue
+            links.append({i, j})
+    grow = True
+    while grow:
+        grow = False
+        for ss in links:
+            if ss & held and not ss <= held:
+                held |= ss
+                grow = True
+    loose = []
+    for i in range(n):
+        if i not in held:
+            c = assembly(a).Document.getObject(names[i]) if i < len(names) else None
+            loose.append(c.Label if c is not None else "Solid%d" % (i + 1))
+    return loose
+
+
 def _patch_run():
     from . import addintabs
     if getattr(addintabs, "_fw_asmsim", False):
@@ -1196,6 +1254,8 @@ def connections_extra(a, key):
         key("Bolt...", "SIM_Bolt")
         key("Bearing...", "SIM_BearingConnector")
         key("Rigid...", "SIM_RigidConnector")
+    if is_assembly_study(a) or two_solids(a):
+        key("Underconstrained Bodies...", "SIM_Underconstrained")
 
 
 def _suppress(o, on):
@@ -1342,7 +1402,7 @@ if Gui is not None:
                 if getattr(edit, "Gap", 0.0) and size:
                     self.gap.setValue(100.0 * edit.Gap / size)
             else:
-                self.kind.setCurrentText("Contact")
+                self.kind.setCurrentText("Bonded")
             self.glob.toggled.connect(lambda *_: self._enable())
             self.kind.currentTextChanged.connect(lambda *_: self._enable())
             self.friction.toggled.connect(lambda *_: self._enable())
@@ -1378,7 +1438,7 @@ if Gui is not None:
             self.friction.setVisible(c)
             self.coef.setVisible(c and self.friction.isChecked())
             simpms._box_visible(self.opt, b or c)
-            QtCore.QTimer.singleShot(0, lambda: self._open() and simpms._box_visible(self.opt, self._props()))
+            from . import safe_later as _sl; _sl.later(0, lambda: self._open() and simpms._box_visible(self.opt, self._props()), self, "glob")
             self.hint.setText("Pick the components or bodies that take a %s interaction wherever they touch another "
                               "component. Global Interaction gives it to every component instead." % kind)
 
@@ -1427,7 +1487,7 @@ if Gui is not None:
             hint = {"Bolt": "Pick the round face of the hole on the head side, then the one on the nut side. Near the "
                             "bolt, within about its diameter, the plotted stress reads higher than in the real part.",
                     "Pin": "Pick the two round faces the pin joins (one on each part, on one axis).",
-                    "Spring": "Pick a face on each part: the spring joins their centres.",
+                    "Spring": "Pick a face on each part: the spring joins their centers.",
                     "Bearing": "Pick the round face of the shaft, then the round face of the housing it turns in.",
                     "Rigid": "Pick a face on each part: the two faces keep their places to each other, as if welded "
                              "through a rigid bar."}[self.kind]
@@ -1472,7 +1532,7 @@ if Gui is not None:
                     self.ptype.addButton(rb, i)
                     row.addWidget(rb)
                 pl.addRow(row)
-                self.ptype.button(PRELOADS.index(v.get("preload_type", "Axial"))).setChecked(True)
+                self.ptype.button(PRELOADS.index(v.get("preload_type", "Torque"))).setChecked(True)
                 self.pre = QtWidgets.QDoubleSpinBox()
                 self.pre.setObjectName("SWSimBoltPreload")
                 self.pre.setRange(0.0, 1e12)
@@ -1634,6 +1694,79 @@ if Gui is not None:
                 vals["stiffness"] = STIFFNESS[max(0, self.stiff.checkedId())]
             return add_connector(self.a, self.kind, self.faces.values(), self.edit, **vals)
 
+    class UnderconstrainedPM:
+        ""
+
+        PM = "Underconstrained Bodies"
+
+        def __init__(self, a):
+            self.a = a
+            msg = sx._box("Message", None, self.PM)
+            hint = QtWidgets.QLabel("Calculate finds the bodies that the fixtures, interactions and connectors leave "
+                                    "free to move. Each one needs a fixture, an interaction or a connector before "
+                                    "the study can run.")
+            hint.setWordWrap(True)
+            QtWidgets.QVBoxLayout(msg).addWidget(hint)
+            box = sx._box("Underconstrained Bodies")
+            bl = QtWidgets.QVBoxLayout(box)
+            self.calc = QtWidgets.QPushButton("Calculate")
+            self.calc.setObjectName("SWSimUnderCalculate")
+            self.calc.clicked.connect(self.calculate)
+            bl.addWidget(self.calc)
+            self.result = QtWidgets.QLabel("")
+            self.result.setObjectName("SWSimUnderResult")
+            self.result.setWordWrap(True)
+            bl.addWidget(self.result)
+            self.list = QtWidgets.QListWidget()
+            self.list.setObjectName("SWSimUnderList")
+            self.list.itemClicked.connect(self._pick)
+            self.list.setVisible(False)
+            bl.addWidget(self.list)
+            self.form = [msg, box]
+
+        def calculate(self):
+            self.list.clear()
+            try:
+                loose = underconstrained(self.a)
+            except Exception as e:
+                self.result.setText(str(e))
+                self.list.setVisible(False)
+                return []
+            if loose:
+                self.result.setText("%d of the bodies can move freely:" % len(loose) if len(loose) > 1
+                                    else "One body can move freely:")
+                self.list.addItems(loose)
+            else:
+                self.result.setText("No underconstrained bodies were found.")
+            self.list.setVisible(bool(loose))
+            return loose
+
+        def _pick(self, item):
+            try:
+                asm = assembly(self.a)
+                doc = asm.Document
+                c = next((o for o in doc.Objects if o.Label == item.text()), None)
+                if c is not None:
+                    Gui.Selection.clearSelection()
+                    Gui.Selection.addSelection(doc.Name, asm.Name, c.Name + ".")
+            except Exception as _fw_err:
+                _fw_log("asmsim.py:underpick", _fw_err)
+
+        def getStandardButtons(self):
+            return int(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+
+        def accept(self):
+            Gui.Control.closeDialog()
+            return True
+
+        def reject(self):
+            Gui.Control.closeDialog()
+            return True
+
+    def open_underconstrained(a=None):
+        a = a or _study()
+        return _show(UnderconstrainedPM(a)) if a is not None else None
+
     def open_interaction(a=None, edit_=None, glob=False):
         doc = App.ActiveDocument
         return _show(InteractionPM(doc, edit_, glob))
@@ -1665,6 +1798,9 @@ if Gui is not None:
                                            lambda: open_connector(None, "Spring"), two_solids),
         "SWStyle_SimBearingConnector": _Cmd("Bearing", "A bearing between a shaft and its housing: the shaft turns, and "
                                             "may tilt when self-aligning.", lambda: open_connector(None, "Bearing"), two_solids),
+        "SWStyle_SimUnderconstrained": _Cmd("Underconstrained Bodies", "Finds the bodies that the fixtures, "
+                                            "interactions and connectors leave free to move.",
+                                            lambda: open_underconstrained(), lambda a: is_assembly_study(a) or two_solids(a)),
         "SWStyle_SimRigidConnector": _Cmd("Rigid", "Two faces of two parts joined rigidly (they keep their places to "
                                           "each other).", lambda: open_connector(None, "Rigid"), two_solids),
     }
@@ -1743,6 +1879,8 @@ if Gui is not None:
         ("SIM_SpringConnector", "Spring", ("SWStyle_SimSpringConnector",), "A spring between faces of two parts.", None),
         ("SIM_BearingConnector", "Bearing", ("SWStyle_SimBearingConnector",), "A bearing between a shaft and its housing.", None),
         ("SIM_RigidConnector", "Rigid", ("SWStyle_SimRigidConnector",), "Two faces of two parts joined rigidly.", None),
+        ("SIM_Underconstrained", "Underconstrained Bodies", ("SWStyle_SimUnderconstrained",),
+         "Finds the bodies that the fixtures, interactions and connectors leave free to move.", None),
     )
 
     def install():

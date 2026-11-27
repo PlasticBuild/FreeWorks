@@ -177,8 +177,9 @@ def _insert(obj, base):
     if "Cached" not in obj.PropertiesList:
         obj.addProperty("Part::PropertyPartShape", "Cached", "Insert Part", "The bodies as last read")
         obj.setEditorMode("Cached", 2)
-    missing = not obj.BreakLink and not os.path.isfile(path)
-    if (obj.BreakLink or missing) and not obj.Cached.isNull():
+    locked = bool(getattr(obj, "FwRefLocked", False))     # asmpkg346: External References' Lock All
+    missing = not obj.BreakLink and not locked and not os.path.isfile(path)
+    if (obj.BreakLink or missing or locked) and not obj.Cached.isNull():
 
         bodies = list(obj.Cached.Solids) + ([] if not obj.SurfaceBodies else
                                            [s for s in obj.Cached.Shells if not _in_solid(s, obj.Cached)])
@@ -341,8 +342,6 @@ INSERT_PART = sf.Spec(
     [Field("File", "text", "Part file", "", box="Part to Insert",
            tip="The part file (.FCStd, STEP, IGES or BREP)"),
      Field("Browse", "button", "Browse...", box="Part to Insert", action=_browse),
-     Field("BreakLink", "bool", "Break link to original part", False, box="Link",
-           tip="Keep the bodies as they are now: later changes to the file are not read"),
      Field("SolidBodies", "bool", "Solid bodies", True, box="Transfer"),
      Field("SurfaceBodies", "bool", "Surface bodies", False, box="Transfer"),
      Field("Axes", "bool", "Axes", False, box="Transfer"),
@@ -361,6 +360,8 @@ INSERT_PART = sf.Spec(
            tip="The other part's hole data, listed on this feature (Transferred group)"),
      Field("SheetMetalInfo", "bool", "Sheet metal information", False, box="Transfer",
            tip="The other part's sheet metal values, listed on this feature (Transferred group)"),
+     Field("BreakLink", "bool", "Break link to original part", False, box="Link",
+           tip="Keep the bodies as they are now: later changes to the file are not read"),
      Field("Position", "vector", "Move (X, Y, Z)", V(0, 0, 0), box="Locate Part"),
      Field("RotationAxis", "enum", "Rotate about", "Z", values=AXES, box="Locate Part"),
      Field("Angle", "angle", "Angle", 0.0, box="Locate Part")],
@@ -433,6 +434,13 @@ def _update_opened(name, stale, missing):
     doc = App.listDocuments().get(name)
     if doc is None:                       # a part read for a moment (another part's Insert Part) and closed again
         return
+    try:
+        # fh228: the features get their classes back on a timer of their own (cleanfiles); without them this
+        # rebuild ran nothing, so a part changed while this one was closed was not read again on open
+        from . import cleanfiles
+        cleanfiles.restore(doc)
+    except Exception as _fw_err:
+        _fw_log("insertpart.py:classes", _fw_err)
     try:
         for n in stale + missing:
             obj = doc.getObject(n)

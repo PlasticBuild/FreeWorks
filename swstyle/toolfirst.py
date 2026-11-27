@@ -111,6 +111,7 @@ for _k in ("SM_CrossBreak", "SM_SweptFlange", "SM_Corners", "SM_ClosedCorner", "
            "SM_Flatten", "SM_NoBends", "SM_UnfoldUpdate"):
     NEEDS[_k] = _SHEETMETAL
 NEEDS["SM_CornerTrim"] = _FLATTENED
+NEEDS["SM_BendTableNew"] = NEEDS["SM_BendTableFile"] = _SHEETMETAL     # bendtable-1126 (Edit/Insert > Bend Table)
 
 NEEDS["SM_SweptFlange"] = ("Select an open profile sketch and a path.", "sketch", [])
 NEEDS["SM_FormingTool"] = ("Select the stopping face of the forming tool.", "any", [])
@@ -122,6 +123,13 @@ for _k in ("FLOW_Clone", "FLOW_Pressure", "FLOW_BatchRun", "FLOW_Results"):
     NEEDS[_k] = _FLOW
 for _k in ("CAM_Inspect", "CAM_Sanity", "CAM_Post"):
     NEEDS[_k] = _CAM
+# case 1625: two Drawing Tools work on objects of the drawing's own document picked in the tree, not on a view's
+# edges; FreeCAD's own command is live with nothing picked and only says "Wrong selection", so the page waits for the
+# right pick first (FreeCAD links these views inside one document only)
+NEEDS["TDX_ArchView"] = ("Select a BIM section plane of this document in the tree: its cut goes on the sheet.",
+                         "bimsection", [])
+NEEDS["TDX_DraftView"] = ("Select Draft or BIM objects of this document in the tree to show them on the sheet.",
+                          "model", [])
 TDX_PREFIX = "TDX_"         # TechDraw's extension tools on the drawing tabs: picks of a view's edges / points
 TDX_SHEET = ("TDX_FillTemplate", "TDX_Redraw")
 LEFT_ALONE = ("DrawMarkupEraser", "DrawMarkupSelect", "DrawZoomToMarkup")     # hidden until a markup (pkg332)
@@ -235,16 +243,47 @@ def fits(pick, sel=None):
         return False
     if pick == "any":
         return True
+    if pick.startswith(("sub:", "dims:")) or pick == "viewprofile":
+        return _counts_fit(pick, sel)
     for s in sel:
         obj = s.Object
         if pick == "sketch" and obj.isDerivedFrom("Sketcher::SketchObject"):
             return True
         if pick == "view" and obj.isDerivedFrom("TechDraw::DrawView") and not obj.isDerivedFrom("TechDraw::DrawViewDimension"):
             return True
+        if pick == "bimsection" and getattr(getattr(obj, "Proxy", None), "Type", "") == "SectionPlane":
+            return True
+        if pick == "model" and not obj.TypeId.startswith(("TechDraw::", "App::Origin", "App::Line", "App::Plane")):
+            return True
         if pick == "viewgeo" and (obj.isDerivedFrom("TechDraw::DrawViewDimension")
                                   or (obj.isDerivedFrom("TechDraw::DrawView") and any(s.SubElementNames))):
             return True
     return False
+
+
+def _counts_fit(pick, sel):
+    """Drawing tools that need a number of things picked: "sub:Edge:2" (two edges of drawing views), "sub:Vertex:1",
+    "sub:Any:1" (edges or points), "dims:2" (two dimensions), "viewprofile" (a view and a sketch or wire)."""
+    edges = verts = dims = views = other = 0
+    for s in sel:
+        obj = s.Object
+        if obj.isDerivedFrom("TechDraw::DrawViewDimension"):
+            dims += 1
+        elif obj.isDerivedFrom("TechDraw::DrawViewPart"):
+            views += 1
+            for n in s.SubElementNames:
+                n = str(n).split(".")[-1]
+                edges += n.startswith("Edge")
+                verts += n.startswith("Vertex")
+        elif not obj.TypeId.startswith("TechDraw::"):
+            other += 1
+    if pick == "viewprofile":
+        return views > 0 and other > 0
+    if pick.startswith("dims:"):
+        return dims >= int(pick[5:])
+    _, kind, n = pick.split(":")
+    have = {"Edge": edges, "Vertex": verts, "Any": edges + verts}[kind]
+    return have >= int(n)
 
 
 def _sig():
@@ -336,13 +375,15 @@ class WaitPanel:
     def go(self):
         """The page goes and the command starts; if it still cannot, the page comes back saying so."""
         native, key, sig, picked = self.native, self.key, _sig(), fits(self.pick)
+        hint, pick = self.hint, self.pick
+        own = (pick or "").startswith(("sub:", "dims:", "viewprofile"))     # a page with its own hint keeps it
         self._close()
 
         def start():
             if _active(native):
                 _run_native(native)
                 return
-            p = show_wait(native, key)
+            p = show_wait(native, key, *((hint, pick) if own else ()))
             if p is not None:
                 p.tried = sig
                 p.say_missing(turned_down=picked)
@@ -365,14 +406,18 @@ class WaitPanel:
         return True
 
 
-def show_wait(native, key):
-    got = needs(key)
+def show_wait(native, key, hint=None, pick=None):
+    """The waiting page of key; hint and pick: what it waits for, when the caller knows better than needs()."""
+    got = needs(key) if hint is None else ("wait", hint, pick, [])
     if got is None or Gui.Control.activeDialog():
         return None
     _kind, hint, pick, actions = got
     panel = WaitPanel(native, key, hint or "Select what this works on.", pick, actions)
     Gui.Control.showDialog(panel)
     return panel
+
+
+_said = {"text": None}      # the last "can't start here" note this module wrote in the status bar
 
 
 # ---------------------------------------------------------------- inside a sketch: wait for the pick
@@ -503,7 +548,8 @@ class _Wrapper:
             # inside a sketch the page cannot open (the sketch is the open page): the status bar says what it needs
             hint = (got[1] if got else "") or "Close the sketch first."
             try:
-                Gui.getMainWindow().statusBar().showMessage("%s: %s" % (_label(native, key), hint), 6000)
+                _said["text"] = "%s: %s" % (_label(native, key), hint)     # fix293: the next sketch tool's prompt may replace it
+                Gui.getMainWindow().statusBar().showMessage(_said["text"], 6000)
             except Exception as _fw_err:
                 _fw_log("toolfirst:insketch", _fw_err)
             return

@@ -365,7 +365,7 @@ class Panel(sf.Panel):
 
 SPEC = sf.Spec(
     COMMAND, "Cosmetic Thread", "Cosmetic Thread",
-    "Shows a thread on a round shaft or hole without modelling it.",
+    "Shows a thread on a round shaft or hole without modeling it.",
     "FEATURES_COSMETIC_THREAD", "PartDesign_Hole",
     [Field("Edge", "pick", "Circular edge", what=("Edge",), box="Thread Settings",
            tip="The circular edge where the thread starts"),

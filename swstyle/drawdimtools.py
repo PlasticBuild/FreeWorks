@@ -441,7 +441,9 @@ class DimensionPalette(QtWidgets.QFrame):
             b.clicked.connect(lambda *_a, fn=fn, tip=tip: self.do_arrange(fn, tip))
             al.addWidget(b)
             self.arrange_buttons[name] = b
-        lay.addWidget(QtWidgets.QLabel("Arrange Dimensions", self))
+        self.arrange_head = QtWidgets.QLabel("Arrange Dimensions", self)
+        self.arrange_head.setObjectName("SWDimPaletteArrangeHead")
+        lay.addWidget(self.arrange_head)        # DW-4: the heading shows and hides with its row
         lay.addWidget(self.arrange)
         self.dims = []
         self._filling = False
@@ -486,6 +488,7 @@ class DimensionPalette(QtWidgets.QFrame):
         finally:
             self._filling = False
         self.arrange.setVisible(len(self.dims) > 1)
+        self.arrange_head.setVisible(len(self.dims) > 1)
         self.adjustSize()
         pos = near or QtGui.QCursor.pos()
         self.move(pos + QtCore.QPoint(18, 18))
@@ -645,8 +648,44 @@ class PaletteSelection:
     def clearSelection(self, doc):
         QtCore.QTimer.singleShot(0, self.update)
 
+    DRAG_PX = 6
+    _wait = None
+
+    def held(self):
+        return bool(QtWidgets.QApplication.mouseButtons() & QtCore.Qt.LeftButton)
+
+    def wait_release(self):
+        ""
+
+        if PaletteSelection._wait is None:
+            PaletteSelection._wait = {"from": QtGui.QCursor.pos()}
+            t = QtCore.QTimer()
+            t.setInterval(40)
+            PaletteSelection._wait["timer"] = t
+            t.timeout.connect(self.poll)
+            t.start()
+        p = getattr(palette, "w", None)
+        if p is not None and p.isVisible():
+            p.hide()
+
+    def poll(self):
+        w = PaletteSelection._wait
+        if w is None:
+            return
+        if self.held():
+            return
+        w["timer"].stop()
+        PaletteSelection._wait = None
+        moved = (QtGui.QCursor.pos() - w["from"]).manhattanLength()
+        if moved > self.DRAG_PX:
+            return                         # a drag: no palette over the dragged text
+        self.update()
+
     def update(self):
         try:
+            if self.held():
+                self.wait_release()
+                return
             dims = picked_dims()
             others = [s for s in Gui.Selection.getSelectionEx("", 0) if not is_dim(s.Object)]
             if dims and not others and palette_enabled():
@@ -791,6 +830,30 @@ def set_ordinate_options(s, precision=None, jog=None, as_chain=None):
     s.SWOrdinateOptions = "%d|%d|%d" % (n, j, c)
 
 
+def _trail(text, doc):
+    """Document Properties > Dimensions > Trailing zeroes, dimensions (usage run 11-27: the ordinate texts read
+    120.00 next to the Model Items' 120). Smart trims a whole value's zeroes, Remove every trailing zero."""
+    try:
+        tz = str(_doc_row(doc, "Dimensions", "Trailing zeroes, dimensions", "Smart"))
+    except Exception:
+        tz = "Smart"
+    if "." not in text:
+        return text
+    if tz == "Remove" or (tz == "Smart" and float(text) == int(float(text))):
+        return text.rstrip("0").rstrip(".")
+    return text
+
+
+def _driven_hex():
+    ""
+    try:
+        from . import drawdocprops
+        c = drawdocprops.driven_color()
+        return "#%02x%02x%02x" % tuple(int(round(v * 255)) for v in c[:3])
+    except Exception:
+        return "#808080"
+
+
 def redraw_ordinate(s):
     """The ordinate set drawn again from its points and options."""
     view = s.Document.getObject(s.SWOrdinateView)
@@ -821,9 +884,11 @@ def redraw_ordinate(s):
     vals = []
     for d, p in ds:
         shown = d - prev[d] if as_chain else d
-        vals.append((p[ax] * k, p[across] * k, ("%%.%df" % precision) % abs(shown)))
+        vals.append((p[ax] * k, p[across] * k, _trail(("%%.%df" % precision) % abs(shown), s.Document)))
     line_off = float(s.SWOrdinateLine)
     body, placed = ordinate_svg(vals, direction, line_off, jog=jog)
+    body = body.replace('stroke="#000"', 'stroke="%s"' % _driven_hex()).replace(
+        '<text ', '<text fill="%s" ' % _driven_hex())
     reach = max([abs(v[0]) for v in vals] + [abs(v[1]) for v in vals] + [abs(line_off) + 15, 10])
     R = max(5.0, reach + 5.0)
     s.Symbol = ('<svg xmlns="http://www.w3.org/2000/svg" width="%gmm" height="%gmm" viewBox="%g %g %g %g">%s</svg>'
@@ -1036,6 +1101,40 @@ def ordinate_pick(page, p, tol_mm=2.0):
         ends = [i for i in ends if i >= 0]
         return v, (ends[0] if ends else -1), (q.x, q.y)
     return v, None, None
+
+
+def _vertex_point(view, i, q):
+    """The geometry point of vertex i of view (q when it is not found)."""
+    try:
+        for j, p in DA.vertices(view):
+            if j == i:
+                return (p.x, p.y)
+    except Exception as _fw_err:
+        _fw_log("drawdimtools.py:vertex_point", _fw_err)
+    return q
+
+
+def _edge_run(view, p, tol_mm=2.0):
+    """'h' or 'v' when the sheet point p is on a straight horizontal or vertical edge of view (and not on a vertex
+    or a hole), else None."""
+    try:
+        g = DV.to_geometry(view, p)
+        tol = tol_mm / max(DV.view_scale(view), 1e-9)
+        if any(math.hypot(q.x - g[0], q.y - g[1]) <= tol for _i, q in DA.vertices(view)):
+            return None
+        hit = DA.edge_at(view, g, tol)
+        if hit is None or len(hit[1].Vertexes) != 2:
+            return None
+        a, b = hit[1].Vertexes[0].Point, hit[1].Vertexes[1].Point
+        if hit[1].Curve.TypeId != "Part::GeomLine":
+            return None
+        if abs(a.y - b.y) < 1e-6:
+            return "h"
+        if abs(a.x - b.x) < 1e-6:
+            return "v"
+    except Exception as _fw_err:
+        _fw_log("drawdimtools.py:edge_run", _fw_err)
+    return None
 
 
 def baseline(page, view, base, others, direction=None, from_model=None, between=None):
@@ -1447,7 +1546,7 @@ def display_as_linear(dim, kind="DistanceX"):
         return False
     for name, typ, doc in (("SWLinearOf", "App::PropertyString", "Display As Linear: the kind it was"),
                            ("SWLinearTags", "App::PropertyString", "Display As Linear: its points on the circle"),
-                           ("SWLinearCentre", "App::PropertyVector", "Display As Linear: the circle's centre")):
+                           ("SWLinearCentre", "App::PropertyVector", "Display As Linear: the circle's center")):
         if not hasattr(dim, name):
             dim.addProperty(typ, name, "FreeCAD", doc)
     was = dim.Type
@@ -1631,6 +1730,7 @@ class InferenceDrag(QtCore.QObject):
                 if pal is not None and pal.isVisible():
                     pal.hide()          # a click on the sheet sends the palette away (a new pick brings it back)
             if t == QtCore.QEvent.MouseButtonPress and ev.button() == QtCore.Qt.LeftButton:
+                settle_labels(page)     # before TechDraw takes the press: a click that deselects writes no step
                 self.start = D.to_sheet(gv.mapToScene(pos))
                 d = self._dim_under(page, self.start)
                 InferenceDrag.pressed = d.Name if d is not None else "-"
@@ -1920,7 +2020,7 @@ def refresh_angular_running(doc):
 class AngularRunningPanel(_PickPanel):
     TITLE = "Angular Running Dimension"
     PIXMAP = "TechDraw_AngleDimension"
-    HINT = "Click the centre (a vertex), then the vertex at 0\u00b0, then the vertices to dimension; OK places them."
+    HINT = "Click the center (a vertex), then the vertex at 0\u00b0, then the vertices to dimension; OK places them."
 
     def parameters(self):
         pass
@@ -1932,7 +2032,7 @@ class AngularRunningPanel(_PickPanel):
             return True
         if self.view is None:
             self.view, self.base, self.zero = v, (i, q), None
-            self.say("Centre set. Click the vertex at 0\u00b0.")
+            self.say("Center set. Click the vertex at 0\u00b0.")
         elif v is self.view and getattr(self, "zero", None) is None and i != self.base[0]:
             self.zero = (i, q)
             self.say("0\u00b0 set. Click the vertices to dimension; OK places them.")
@@ -1969,10 +2069,19 @@ class BaselinePanel(_PickPanel):
         if v is None or i is None or i < 0:
             self.say("Click a vertex, an edge end or a hole in a view.")
             return True
+        q = _vertex_point(v, i, q)          # usage run 11-27: the dimension measures the vertex, not the pointer
         if self.view is None:
             self.view, self.base = v, (i, q)
+
+            run = _edge_run(v, p)
+            if run and getattr(self, "_dir", None) is None:
+                self._dir = "h" if run == "v" else "v"
             self.say("Base set. Click each one to dimension.")
         elif v is self.view and i != self.base[0] and i not in [o[0] for o in self.others]:
+            ax = {"h": 0, "v": 1}.get(getattr(self, "_dir", None))
+            if ax is not None and self.GROUP and abs(q[ax] - self.base[1][ax]) < 1e-6:
+                self.say("That one is level with the base. Click a vertex, a hole or an edge across from it.")
+                return True
             self.others.append((i, q))
             self.redo()
         return True
@@ -2362,10 +2471,10 @@ def entity_at(page, p):
     k = max(DV.view_scale(v), 1e-9)
     g = DV.to_geometry(v, p)
     best = None
-    seams = _seams(v)
+    seams = set(_grid(sx, sy) for sx, sy in _seams(v))
     for i, q in DA.vertices(v):
         dist = math.hypot(q.x - g[0], q.y - g[1])
-        if any(abs(q.x - sx) < 1e-6 and abs(q.y - sy) < 1e-6 for sx, sy in seams):
+        if seams and _near_grid(q.x, q.y, seams):
             continue                 # a full circle's seam point: the circle is picked there, not a point
         if dist <= PICK_POINT / k and (best is None or dist < best[0]):
             best = (dist, i, (q.x, q.y))
@@ -2398,7 +2507,20 @@ def _seams(view):
             seams += [(q.Point.x, q.Point.y) for q in e.Vertexes]
         else:
             ends += [(q.Point.x, q.Point.y) for q in e.Vertexes]
-    return [s for s in seams if not any(abs(s[0] - a) < 1e-6 and abs(s[1] - b) < 1e-6 for a, b in ends)]
+    if not seams:
+        return seams
+    grid = set(_grid(a, b) for a, b in ends)      # a set, not a scan of every end per seam (0.12 s a click
+    return [s for s in seams if not _near_grid(s[0], s[1], grid)]      # on a 50-part view)
+
+
+def _grid(x, y):
+    return (int(round(x * 1e6)), int(round(y * 1e6)))
+
+
+def _near_grid(x, y, grid):
+    """True when point (x, y) is within 1e-6 of a point in grid (cells of _grid)."""
+    gx, gy = _grid(x, y)
+    return any((gx + i, gy + j) in grid for i in (-1, 0, 1) for j in (-1, 0, 1))
 
 
 def _corner(a, b):
@@ -2774,7 +2896,7 @@ def make_smart(page, view, picks, at):
             refs.append(_ref(view, e))
     x0, y0 = D.view_position(view)
     doc = page.Document
-    doc.openTransaction("Smart Dimension")
+    doc.openTransaction(TOOL_NAMES.get(FORCE[0], "Smart Dimension"))
     try:
         dim = DA.dimension(page, view, kind, refs, (at[0] - x0, at[1] - y0))
         try:
@@ -2787,7 +2909,45 @@ def make_smart(page, view, picks, at):
     finally:
         doc.commitTransaction()
     doc.recompute()
+    settle_labels(page)
+    for ms in (150, 500, 1200):         # the PM and the snapping that follow still move it a little
+        QtCore.QTimer.singleShot(ms, lambda: settle_labels(page))
     return dim
+
+
+
+TOOL_NAMES = {"DistanceX": "Horizontal Dimension", "DistanceY": "Vertical Dimension", "Angle": "Angular Dimension",
+              "Circle": "Radius/Diameter Dimension"}
+
+
+def settle_labels(page):
+    """A dimension placed or moved by code: FreeCAD's label counts any move as a drag and writes a "Drag
+    Dimension" undo step the first time it is deselected, so one Smart Dimension left two steps (and Esc after it
+    one more). The labels are told the move is over, signals held, so no step is written; what is picked stays
+    picked."""
+    try:
+        gv = D.page_view(page)
+        sc = gv.scene() if gv is not None else None
+        if sc is None:
+            return 0
+        n = 0
+        for item in sc.items():
+            go = item.toGraphicsObject()
+            if go is None or not go.metaObject().className().endswith("QGIDatumLabel"):
+                continue
+            held_scene, held = sc.blockSignals(True), go.blockSignals(True)
+            try:
+                was = go.isSelected()
+                go.setSelected(not was)
+                go.setSelected(was)
+            finally:
+                go.blockSignals(held)
+                sc.blockSignals(held_scene)
+            n += 1
+        return n
+    except Exception as _fw_err:
+        _fw_log("drawdimtools.py:settle_labels", _fw_err)
+        return 0
 
 
 SMART_EVENTS = (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseButtonRelease, QtCore.QEvent.MouseButtonDblClick,
@@ -3277,13 +3437,15 @@ COMMANDS = {
     "FreeWorks_DrawVerticalOrdinate": ("Vertical Ordinate Dimension", "TechDraw_ExtensionCreateVertCoordDimension",
                                        "Vertical ordinate dimensions from a zero."),
     "FreeWorks_DrawAngularRunning": ("Angular Running Dimension", "TechDraw_AngleDimension",
-                                     "Angles about a centre, measured from one zero, on one circle."),
+                                     "Angles about a center, measured from one zero, on one circle."),
     "FreeWorks_DrawBaselineDimension": ("Baseline Dimension", "TechDraw_ExtensionCreateHorizCoordDimension",
                                         "Dimensions from one base point, stacked."),
     "FreeWorks_DrawChamferDimension": ("Chamfer Dimension", "TechDraw_ExtensionCreateHorizChamferDimension",
                                        "Dimensions a chamfer: pick the chamfer edge and a lead-in edge."),
     "FreeWorks_DrawSymmetricDiameter": ("Symmetric Linear Diametric Dimension", "TechDraw_ExtensionInsertDiameter",
                                         "Dimensions an edge from its centerline as a diameter (twice the distance)."),
+    "FreeWorks_DrawPathLength": ("Path Length Dimension", "TechDraw_ExtensionArcLengthAnnotation",
+                                 "The total length of the picked edges of a view (a path)."),
     "FreeWorks_DrawHorizontalDimension": ("Horizontal Dimension", "TechDraw_HorizontalDimension",
                                           "A horizontal dimension between two items."),
     "FreeWorks_DrawVerticalDimension": ("Vertical Dimension", "TechDraw_VerticalDimension",
@@ -3305,6 +3467,21 @@ COMMANDS = {
     "FreeWorks_DrawDimBreakAlignment": ("Break Alignment", "TechDraw_Dimension",
                                         "Takes the picked dimensions out of their alignment group."),
 }
+PATH_LENGTH = "TechDraw_ExtensionArcLengthAnnotation"
+
+
+def path_edges_picked():
+    """Edges of a drawing view are picked (what Path Length Dimension measures)."""
+    try:
+        for s in Gui.Selection.getSelectionEx("", 0):
+            if s.Object.isDerivedFrom("TechDraw::DrawViewPart") and \
+                    any(n.startswith("Edge") for n in s.SubElementNames):
+                return True
+    except Exception as _fw_err:
+        _fw_log("drawdimtools.py:path edges", _fw_err)
+    return False
+
+
 FORCED = {"FreeWorks_DrawHorizontalDimension": "DistanceX", "FreeWorks_DrawVerticalDimension": "DistanceY",
           "FreeWorks_DrawAngularDimension": "Angle", "FreeWorks_DrawRadiusDimension": "Circle"}
 PANELS = {"FreeWorks_DrawChainDimension": ChainPanel, "FreeWorks_DrawAutodimension": AutodimensionPanel, "FreeWorks_DrawOrdinateDimension": OrdinatePanel,
@@ -3330,6 +3507,10 @@ class _Command:
         page = D.active_page()
         if page is None or not D.sheet_shown(page):
             return False
+        if self.name == "FreeWorks_DrawPathLength":
+            # live once edges of a view are picked; before, the CommandManager's tool-first page asks for them
+            # (TechDraw's own command is live on any sheet and answers an empty pick with an error box)
+            return path_edges_picked() and not D.busy()
         if self.name in ARRANGE:
             n = len(picked_dims())
             return n >= (1 if self.name in ("FreeWorks_DrawDimBreakAlignment", "FreeWorks_DrawDimAutoArrange") else 2)
@@ -3338,6 +3519,10 @@ class _Command:
     def Activated(self):
         page = D.active_page()
         if page is None:
+            return
+        if self.name == "FreeWorks_DrawPathLength":
+            if path_edges_picked():
+                Gui.runCommand(PATH_LENGTH, 0)
             return
         if self.name == "FreeWorks_DrawSmartDimension":
             smart_dimension()

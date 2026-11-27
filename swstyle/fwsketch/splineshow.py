@@ -60,7 +60,7 @@ def _params(curve, count):
     return [a + (b - a) * k / float(count) for k in range(count + 1)]
 
 
-def comb(curve, samples=SAMPLES, scale=None):
+def comb(curve, samples=SAMPLES, scale=None, factor=1.0):
     """[(base, tip)] of the comb's teeth and the scale used."""
     us = _params(curve, samples)
     rows = []
@@ -75,7 +75,7 @@ def comb(curve, samples=SAMPLES, scale=None):
         biggest = max((abs(k) for _, _, k in rows), default=0.0)
         box = curve.toShape().BoundBox
         size = max(box.DiagonalLength, 1e-6)
-        scale = 0.2 * size / biggest if biggest > 1e-12 else 0.0
+        scale = factor * 0.2 * size / biggest if biggest > 1e-12 else 0.0     # combs-1127: factor = Curvature Scale page's Scale
 
     teeth = [(p, (p[0] - n[0] * k * scale, p[1] - n[1] * k * scale)) for p, n, k in rows]
     return teeth, scale
@@ -192,6 +192,12 @@ def splines(sketch):
     return [i for i in range(sketch.GeometryCount) if E.is_spline(sketch, i)]
 
 
+def drawn_geos(sketch):
+    """combs-1127: the splines, and the arcs and circles (their curvature comb only, constant along them)."""
+    return [i for i in range(sketch.GeometryCount) if E.is_spline(sketch, i)
+            or type(sketch.Geometry[i]).__name__ in ("ArcOfCircle", "Circle")]
+
+
 def toggle(sketch, kind, geos=None):
     ""
 
@@ -201,6 +207,12 @@ def toggle(sketch, kind, geos=None):
     on = not any(kind in shown(sketch, g) for g in geos)
     for g in geos:
         set_shown(sketch, g, kind, on)
+    if kind == COMB:
+        try:
+            from .. import combpm
+            combpm.toggled(sketch, geos, on)
+        except Exception as _fw_err:
+            _fw_log("fwsketch/splineshow.py:comb page", _fw_err)
     return on
 
 
@@ -263,14 +275,21 @@ class Overlay(QtCore.QObject):
         root.addChild(pick)
         root.addChild(light)
         drawn = {}
-        for geo in splines(sketch):
+        for geo in drawn_geos(sketch):     # combs-1127: arcs and circles show their comb too
             kinds = shown(sketch, geo)
+            if kinds and not E.is_spline(sketch, geo):
+                kinds = [k for k in kinds if k == COMB]
             if not kinds:
                 continue
             curve = sketch.Geometry[geo]
             row = {}
             if COMB in kinds:
-                teeth, _ = comb(curve)
+                try:        # combs-1127: the Curvature Scale page's Scale and Density
+                    from .. import combpm
+                    count, factor = combpm.comb_args(sketch, geo, SAMPLES)
+                except Exception:
+                    count, factor = SAMPLES, 1.0
+                teeth, _ = comb(curve, samples=count, factor=factor)
                 lines = [list(t) for t in teeth]
                 from . import sysopts
                 if sysopts.on(sysopts.COMB_BOUNDING):     # Options > Sketch: the comb's outline

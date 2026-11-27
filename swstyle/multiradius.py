@@ -46,6 +46,39 @@ def _same_edge(a, b):
         return False
 
 
+def sharp_edges(shape, face):
+    ""
+
+
+    import Part
+    out = []
+    for e in face.Edges:
+        try:
+            if e.isSeam(face):
+                continue
+        except Exception:
+            pass
+        try:
+            others = [f for f in shape.ancestorsOfType(e, Part.Face) if not f.isSame(face)]
+            if len(others) == 1 and _smooth(face, others[0], e):
+                continue
+        except Exception as _fw_err:
+            _fw_log("multiradius.py:sharp_edges", _fw_err)
+        out.append(e)
+    return out
+
+
+def _smooth(f1, f2, edge, tol=1e-4):
+    """The two faces are tangent along the edge (checked at three points)."""
+    for s in (0.25, 0.5, 0.75):
+        p = edge.valueAt(edge.FirstParameter + s * (edge.LastParameter - edge.FirstParameter))
+        n1 = f1.normalAt(*f1.Surface.parameter(p))
+        n2 = f2.normalAt(*f2.Surface.parameter(p))
+        if abs(abs(n1.dot(n2)) - 1.0) > tol:
+            return False
+    return True
+
+
 def edge_radii(base, source, subs, radii, default):
     """[(edge index in base, 1-based, radius)] for the picked items, a later pick winning."""
     out = {}
@@ -58,7 +91,7 @@ def edge_radii(base, source, subs, radii, default):
                 picked = list(source.Edges)
             else:
                 g = source.getElement(name)
-                picked = list(g.Edges) if name.startswith("Face") else [g]
+                picked = sharp_edges(source, g) if name.startswith("Face") else [g]
         except Exception:
             continue
         for e in picked:

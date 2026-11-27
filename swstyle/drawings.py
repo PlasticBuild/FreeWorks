@@ -104,6 +104,23 @@ SKETCHER_TOOLS = ("Symmetry", "RectangularArray", "Copy", "Move", "Rotate", "Sca
                   "Translate")     # the Sketcher keeps these icons under tools/
 
 
+def real_pixmap(name):
+    """The resource path of a TechDraw (or FreeCAD) icon once TechDraw's GUI is loaded, else "" (never the blank
+    stand-in file _ahead gives at start-up)."""
+    if not name:
+        return ""
+    if name.startswith(":"):
+        return name if QtCore.QFile.exists(name) else ""
+    name = ICON_ALIASES.get(name, name)
+    if name.startswith("TechDraw") and "TechDrawGui" not in sys.modules:
+        try:
+            import TechDrawGui  # noqa: F401  (its icon resources)
+        except Exception:
+            return ""
+    path = _found(name)
+    return path if path.startswith(":") else ""
+
+
 def _found(name):
     for path in (":/icons/actions/%s.svg" % name, ":/icons/%s.svg" % name, ":/icons/geometry/%s.svg" % name,
                  ":/icons/tools/%s.svg" % name, ":/icons/constraints/%s.svg" % name):
@@ -826,7 +843,9 @@ def sheet_defaults(page):
 
 
 SHEET_FIELDS = {"sheet": 'SHEET $PRP:"FW-Current Sheet" OF $PRP:"FW-Total Sheets"',
-                "scale": 'SCALE $PRP:"FW-Sheet Scale"'}
+                "scale": 'SCALE $PRP:"FW-Sheet Scale"',
+                # FreeCAD's ISO 5457 / 7200 formats: "Sheet: n / m" (it showed TechDraw's "0 / 2")
+                "sheet_number": '$PRP:"FW-Current Sheet" / $PRP:"FW-Total Sheets"'}
 
 # model, $PRPSHEET) Description, Revision, Material and Weight, the drawing's file name and its DrawnBy/DrawnDate.
 # (role, link, the field names of FreeCAD's ANSI/ASME and ISO formats, lower case without spaces or _)
@@ -863,6 +882,34 @@ def field_role(k):
     return next((r for r, _l, names in FIELD_ROLES if key in names), "")
 
 
+
+# sheet formats show empty fields or linked values, never sample names (look audit DW-7)
+SAMPLE_TEXTS = {"A. Nemesis", "B. Hecate", "Component Drawing", "DN", "AAA", "ISO 2768-m",
+                "Stainless steel Mat.No. 1.4301", "YYYY-MM-DD", "X / Y", "ST1", "ST2", "RD", "In preparation",
+                "ISO 7200 titleblock", "ISO 5457 template", "AUTHOR NAME", "SUPERVISOR NAME", "CREATION DATE",
+                "CHECK DATE", "WEIGHT", "Weight", "NUMBER", "SUBTITLE", "COPYRIGHT", "COMPANY NAME", "Company Name",
+                "1234 Main St", "Drawing Title 1", "Drawing Title 2", "Drawing Title 3", "Drawing Number", "Rev",
+                "Drawn By", "Checked By", "Approved 1", "Approved 2", "Code", "TITLE", "_________",
+                "Editable Text", "Another Editable"}
+
+
+def clear_sample_texts(page, links=None):
+    """The title block's sample values blanked (fields not linked to a property or the sheet)."""
+    try:
+        from . import drawlayout
+        tpl = page.Template
+        texts = dict(getattr(tpl, "EditableTexts", {}) or {})
+        links = drawlayout.field_links(page) if links is None else links
+        hard = {k for k in links if k not in set(drawlayout.soft_fields(page))}
+        out = {k: ("" if str(v).strip() in SAMPLE_TEXTS and k not in hard else v) for k, v in texts.items()}
+        if out != texts:
+            tpl.EditableTexts = out
+            return True
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: sheet sample texts: %s\n" % error)
+    return False
+
+
 def default_field_links(page):
     ""
 
@@ -871,8 +918,9 @@ def default_field_links(page):
     try:
         from . import drawlayout
         tpl = page.Template
-        texts = dict(getattr(tpl, "EditableTexts", {}) or {})
         links = drawlayout.field_links(page)
+        clear_sample_texts(page, links)
+        texts = dict(getattr(tpl, "EditableTexts", {}) or {})
         add = {k: SHEET_FIELDS[k.lower()] for k in texts if k.lower() in SHEET_FIELDS and k not in links}
         roles = {r: l for r, l, _n in FIELD_ROLES}
         taken = {field_role(k) for k in links if k in texts}
@@ -1245,6 +1293,66 @@ def auxiliary_frame(view, edge_index, dx, dy):
 
 
 # --------------------------------------------------------------------------- clicks on the sheet
+GHOST_COLOR = "#1f6fd6"
+
+
+def ghost_size(shapes, d, x, scale=1.0):
+    """(width, height) on the sheet of shapes seen along d with x to the right, at scale: their box's outline."""
+    bb = None
+    for o in shapes or ():
+        try:
+            b = o.Shape.BoundBox if hasattr(o, "Shape") else o.BoundBox
+        except Exception:
+            continue
+        if b is None or not b.isValid():
+            continue
+        if bb is None:
+            bb = App.BoundBox(b)
+        else:
+            bb.add(b)
+    if bb is None:
+        return 40.0, 40.0
+    d, x = _unit(V(d)), _unit(V(x))
+    y = d.cross(x)
+    xs, ys = [], []
+    for i in range(8):
+        c = V(bb.XMax if i & 1 else bb.XMin, bb.YMax if i & 2 else bb.YMin, bb.ZMax if i & 4 else bb.ZMin)
+        xs.append(c.dot(x))
+        ys.append(c.dot(y))
+    k = float(scale or 1.0)
+    return (max(xs) - min(xs)) * k, (max(ys) - min(ys)) * k
+
+
+def placing_scale(page, shapes, scale=None):
+    """The scale a new view of shapes will get: scale (Use custom scale), else the sheet's, picked to fit
+    first when the view is the sheet's first (as new_view does)."""
+    if scale is not None:
+        return float(scale)
+    try:
+        if not [v for v in views_of(page) if v.TypeId == "TechDraw::DrawViewPart"] and auto_scale():
+            s = fit_scale(page, shapes)
+            if s:
+                return float(s)
+        return float(page.Scale)
+    except Exception:
+        return 1.0
+
+
+def view_scale(v):
+    return float(v.getScale()) if hasattr(v, "getScale") else float(v.Scale)
+
+
+def projected_ghost(clicks, parent, p, shapes=None, third=True):
+    """The Projected View preview at pointer p: the outline where the click puts the view (in line with
+    parent for a side, top or bottom view) and the alignment line to parent."""
+    bx, by = view_position(parent)
+    d, x, name = projected_frame(parent, p[0] - bx, p[1] - by, third)
+    at = aligned_place(name, p, (bx, by))
+    size = ghost_size(shapes if shapes is not None else (parent.XSource or parent.Source), d, x, view_scale(parent))
+    clicks.ghost(at, size, ((bx, by), at) if name != "Isometric" else None)
+    return at, size
+
+
 class SheetClicks(QtCore.QObject):
     """Feeds left clicks and moves on the sheet (in sheet mm) to a handler while a PropertyManager runs."""
 
@@ -1257,7 +1365,55 @@ class SheetClicks(QtCore.QObject):
             self.view.viewport().installEventFilter(self)
             self.view.viewport().setCursor(QtCore.Qt.CrossCursor)
 
+    def ghost(self, center=None, size=None, line=None):
+        ""
+
+
+        scene = self.view.scene() if self.view is not None else None
+        items = getattr(self, "_ghost", None)
+        if scene is None:
+            return None
+        if center is None or size is None:
+            for it in items or ():
+                try:
+                    scene.removeItem(it)
+                except Exception:
+                    pass
+            self._ghost = None
+            return None
+        if not items:
+            pen = QtGui.QPen(QtGui.QColor(GHOST_COLOR))
+            pen.setCosmetic(True)
+            pen.setWidthF(1.0)
+            pen.setStyle(QtCore.Qt.DashLine)
+            rect = QtWidgets.QGraphicsRectItem()
+            rect.setPen(pen)
+            rect.setBrush(QtCore.Qt.NoBrush)
+            lpen = QtGui.QPen(pen)
+            lpen.setStyle(QtCore.Qt.DashDotLine)
+            ln = QtWidgets.QGraphicsLineItem()
+            ln.setPen(lpen)
+            for it in (rect, ln):
+                it.setZValue(1e6)
+                it.setAcceptedMouseButtons(QtCore.Qt.NoButton)
+                scene.addItem(it)
+            items = self._ghost = [rect, ln]
+        w, h = max(1.0, size[0]), max(1.0, size[1])
+        tl = to_scene(center[0] - w / 2.0, center[1] + h / 2.0)
+        items[0].setRect(QtCore.QRectF(tl.x(), tl.y(), w * REZ, h * REZ))
+        if line:
+            a, b = to_scene(*line[0]), to_scene(*line[1])
+            items[1].setLine(a.x(), a.y(), b.x(), b.y())
+            items[1].setVisible(True)
+        else:
+            items[1].setVisible(False)
+        return items
+
     def stop(self):
+        try:
+            self.ghost(None)
+        except Exception as _fw_err:
+            _fw_log("drawings.py:ghost off", _fw_err)
         if self.view is not None:
             try:
                 self.view.viewport().removeEventFilter(self)
@@ -1830,7 +1986,12 @@ class _Panel:
 
         # (propertymanager hides the task box's own header row, PM pkg353)
         self.form.setProperty("swstyle_no_box_header", True)
-        self.form.setWindowIcon(QtGui.QIcon(pixmap(self.PIXMAP)))
+        real = real_pixmap(self.PIXMAP)
+        self.form.setWindowIcon(QtGui.QIcon(real or pixmap(self.PIXMAP)))
+        if real:
+
+            # command's own pixmap is a blank stand-in while TechDraw loads, so the header showed none: DR-1)
+            self.form.setProperty("swstyle_pm_icon", real)
         self.lay = QtWidgets.QVBoxLayout(self.form)
         self.message = QtWidgets.QLabel("", self.form)
         self.message.setObjectName("SWDrawMessage")
@@ -2023,12 +2184,43 @@ CROSS = {"Top": (0, 1), "Isometric": (0, 3), "Left": (1, 0), "Front": (1, 1), "R
 MORE_VIEWS = ("Trimetric", "Dimetric")
 
 
+def orient_frame(src, name):
+    ""
+
+    if name in ORIENTATIONS:
+        return ORIENTATIONS[name]
+    from . import drawpalette
+    return drawpalette.orientation(src, drawpalette.NAMED + name)
+
+
 def start_command_on_new():
     ""
     try:
         return App.ParamGet(MODEL_VIEW_PARAM).GetBool("StartModelView", True)
     except Exception:
         return True
+
+
+def _palette_for(name):
+    """Make Drawing from Part/Assembly: the View Palette shows that model. A palette already open (from the
+    drawing made before) kept the model it showed, so Make Drawing from Part after one from an assembly
+    offered the assembly's views."""
+    from . import drawpalette
+    try:
+        shown = [p for p in drawpalette._PALETTE if p is not None and p.isVisible()]
+    except Exception as _fw_err:
+        _fw_log("drawings.py:palette for", _fw_err)
+        shown = []
+    if not shown:
+        return _palette_shown()
+    doc = App.getDocument(name) if name in App.listDocuments() else None
+    for p in shown:
+        try:
+            if doc is not None and p.source.currentData() != doc.Name:
+                p.refresh(prefer=doc)
+        except Exception as _fw_err:
+            _fw_log("drawings.py:palette refresh", _fw_err)
+    return None
 
 
 def _palette_shown():
@@ -2072,6 +2264,7 @@ def start_model_view(page):
         App.Console.PrintWarning("FreeCAD: View Palette: %s\n" % error)
     if start_command_on_new():
         QtCore.QTimer.singleShot(800, lambda d=page.Document.Name, n=page.Name: _model_view_on_new(d, n))
+    fit_while_opening(page)
     return None
 
 
@@ -2239,6 +2432,7 @@ class ModelViewPanel(_SourcePick, _Panel):
         self.next_button.setVisible(n == 1)
         if n == 2:
             self.offer_flat_pattern()
+            self.offer_named_views()
             self.say("Please select a named view from the list below and then place the view.\n"
                      "Note that the list of orientations corresponds to the named views saved in the model.")
         else:
@@ -2268,7 +2462,8 @@ class ModelViewPanel(_SourcePick, _Panel):
             return
         try:
             from . import drawpalette
-            self.preview_pic.setPixmap(drawpalette.preview_icon(model_shapes(src), self.orientation(), 96)
+            self.preview_pic.setPixmap(drawpalette.preview_icon(model_shapes(src), self.orientation(), 96,
+                                                               orient_frame(src, self.orientation()))
                                        .pixmap(96, 96))
         except Exception as error:
             App.Console.PrintLog("FreeCAD: Model View preview: %s\n" % error)
@@ -2298,6 +2493,36 @@ class ModelViewPanel(_SourcePick, _Panel):
             self.more.addItem(item)
         if not have and item is not None:
             self.more.takeItem(self.more.row(item))
+
+    def offer_named_views(self):
+        ""
+        for i in reversed(range(self.more.count())):
+            if self.more.item(i).data(QtCore.Qt.UserRole) == "named":
+                self.more.takeItem(i)
+        for b in [b for b in self.orient.buttons() if b.property("swNamedView")]:
+            self.orient.removeButton(b)
+            b.deleteLater()
+        try:
+            from . import drawpalette
+            src = self.source()
+            names = [n for n, _c in drawpalette.named_views(src)] if src is not None else []
+        except Exception as _fw_err:
+            _fw_log("drawings.py:named views", _fw_err)
+            names = []
+        for name in names:
+            if name in ORIENTATIONS:
+                continue
+            b = QtWidgets.QToolButton(self.more.parentWidget())
+            b.setText(name)
+            b.setCheckable(True)
+            b.setProperty("swNamedView", True)
+            b.hide()
+            self.orient.addButton(b, len(self.orient.buttons()))
+            item = QtWidgets.QListWidgetItem(name)
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+            item.setCheckState(QtCore.Qt.Unchecked)
+            item.setData(QtCore.Qt.UserRole, "named")
+            self.more.addItem(item)
 
     def orientation(self):
         b = self.orient.checkedButton()
@@ -2351,7 +2576,7 @@ class ModelViewPanel(_SourcePick, _Panel):
         size = (box.DiagonalLength if box is not None else 50.0) * self._factor() * 0.8 + 15.0
         made = []
         for name in self.orientations():
-            d, x = ORIENTATIONS[name]
+            d, x = orient_frame(self.source(), name)
             i, j = self.MULTI_PLACES.get(name, (0, 0))
             s = 1.0 if third_angle(self.page) else -1.0
             if name in ("Top", "Bottom", "Right", "Left"):
@@ -2368,6 +2593,34 @@ class ModelViewPanel(_SourcePick, _Panel):
             s = parse_scale(self.scale_combo.currentText())
             return s if s and s > 0 else 1.0
         return None
+
+    def sheet_move(self, p):
+        ""
+
+        try:
+            if getattr(self, "current_page", 2) == 1 or self.multiple.isChecked() or \
+                    self.orientation() == "Flat pattern":
+                self.clicks.ghost(None)
+                return
+            src = self.source()
+            if src is None:
+                self.clicks.ghost(None)
+                return
+            key = (src.Name, self.orientation(), self._scale(), self.base is not None and self.projected.isChecked())
+            if getattr(self, "_ghost_key", None) != key:
+                self._ghost_key = key
+                self._ghost_shapes = model_shapes(src)
+                self._ghost_size = None
+            if self.base is not None and self.projected.isChecked():
+                projected_ghost(self.clicks, self.base, p, self._ghost_shapes, third_angle(self.page))
+                return
+            if self._ghost_size is None:
+                d, x = orient_frame(src, self.orientation())
+                self._ghost_size = ghost_size(self._ghost_shapes, d, x,
+                                              placing_scale(self.page, self._ghost_shapes, self._scale()))
+            self.clicks.ghost(p, self._ghost_size)
+        except Exception as _fw_err:
+            _fw_log("drawings.py:model view ghost", _fw_err)
 
     def _factor(self):
         s = self._scale()
@@ -2420,12 +2673,26 @@ class ModelViewPanel(_SourcePick, _Panel):
             self.say("Flat pattern placed. OK when done.")
             return True
         if self.base is None or not self.projected.isChecked():
-            d, x = ORIENTATIONS[self.orientation()]
+            d, x = orient_frame(src, self.orientation())
             v = new_view(self.page, shapes, _unit(d), _unit(x), p, self._scale(), self.style.currentText())
+            if self.orientation() not in ORIENTATIONS:
+                _name_orientation(v, self.orientation())     # a named view (a saved section view shows cut)
             self.dress(v)
             self.base = v
             self.made.append(v)
             self.say("Click to place projected views from %s; OK when done." % v.Label)
+            if self.projected.isChecked():
+
+                # the Projected View PM opens on it (Use parent style / scale, Arrow); each click places another
+
+                page, me = self.page, self
+
+                def _projected():
+                    if SHOWN and SHOWN[0] is me and Gui.Control.activeDialog():
+                        panel = ProjectedViewPanel(page, v)
+                        panel.keep_placing = True
+                        _show(panel)
+                QtCore.QTimer.singleShot(0, _projected)
         else:
             bx, by = view_position(self.base)
             d, x, name = projected_frame(self.base, p[0] - bx, p[1] - by, third_angle(self.page))
@@ -2705,6 +2972,12 @@ class ProjectedViewPanel(_Panel):
         if ref is not None and arrow is not None and self.lay.indexOf(ref) > self.lay.indexOf(arrow) >= 0:
             self.lay.removeWidget(ref)
             self.lay.insertWidget(self.lay.indexOf(arrow), ref)
+
+    def sheet_move(self, p):
+        try:
+            projected_ghost(self.clicks, self.parent, p, third=third_angle(self.page))
+        except Exception as _fw_err:
+            _fw_log("drawings.py:projected ghost", _fw_err)
 
     def sheet_click(self, p):
         bx, by = view_position(self.parent)
@@ -3205,6 +3478,55 @@ def save_model(source):
     return bool(source.FileName)
 
 
+class _FitWhileOpening(QtCore.QObject):
+    """A new drawing's sheet fitted again each time its window changes size while the drawing opens (the View
+    Palette and the PropertyManager open beside it after the first fit, which left the title block's right part
+    under the palette: look audit BB38 DR-A). Stops after a few seconds."""
+    LIVE = []
+
+    def __init__(self, page, seconds=6.0):
+        super().__init__()
+        self.page = page
+        self.view = page_view(page)
+        if self.view is None:
+            return
+        self.view.viewport().installEventFilter(self)
+        _FitWhileOpening.LIVE.append(self)
+        QtCore.QTimer.singleShot(int(seconds * 1000), self.stop)
+
+    def stop(self):
+        try:
+            if self.view is not None:
+                self.view.viewport().removeEventFilter(self)
+        except Exception as _fw_err:
+            _fw_log("drawings.py:fit stop", _fw_err)
+        self.view = None
+        if self in _FitWhileOpening.LIVE:
+            _FitWhileOpening.LIVE.remove(self)
+
+    def eventFilter(self, obj, event):
+        try:
+            if isinstance(event, QtCore.QEvent) and event.type() == QtCore.QEvent.Resize:
+                pg = self.page
+                QtCore.QTimer.singleShot(0, lambda: fit_page(pg))
+        except Exception as _fw_err:
+            _fw_log("drawings.py:fit resize", _fw_err)
+        return False
+
+
+def fit_while_opening(page):
+    """Fit the new sheet now and whenever its window is resized in the next seconds."""
+    def _go():
+        try:
+            if not any(f.page is page for f in _FitWhileOpening.LIVE):
+                _FitWhileOpening(page)
+            fit_page(page)
+        except Exception as _fw_err:
+            _fw_log("drawings.py:fit while opening", _fw_err)
+    for ms in (300, 1000, 2800):
+        QtCore.QTimer.singleShot(ms, _go)
+
+
 def fit_page(page):
     """Zoom to Fit on the sheet's own window, whichever window is active."""
     try:
@@ -3216,14 +3538,75 @@ def fit_page(page):
             except Exception as _fw_err:
                 _fw_log("drawings.py:2827", _fw_err)
             v.sendMessage("ViewFit")
+            clear_of_pane(page)
             return True
     except Exception as _fw_err:
         _fw_log("drawings.py:2831", _fw_err)
     try:
         Gui.SendMsgToActiveView("ViewFit")
+        clear_of_pane(page)
     except Exception as _fw_err:
         _fw_log("drawings.py:2835", _fw_err)
     return False
+
+
+def clear_of_pane(page):
+    ""
+
+
+    v = page_view(page)
+    if v is None:
+        return False
+    try:
+        pane = Gui.getMainWindow().findChild(QtWidgets.QFrame, "SWTaskPane")
+        if pane is None or not pane.isVisible() or getattr(pane, "floating", False):
+            return False
+        vp = v.viewport()
+        vg = QtCore.QRect(vp.mapToGlobal(QtCore.QPoint(0, 0)), vp.size())
+        pg = QtCore.QRect(pane.mapToGlobal(QtCore.QPoint(0, 0)), pane.size())
+        if not vg.intersects(pg):
+            return False
+        cover = vg.right() - pg.left() + 1
+        if cover <= 0 or cover > vg.width() * 0.6:
+            return False
+        sheet = v.scene().itemsBoundingRect()
+        seen = v.mapFromScene(sheet).boundingRect()
+        room = vg.width() - cover - 8
+        if seen.right() <= room:
+            return False
+        f = min(1.0, room / float(max(1, seen.width())))
+        if f < 1.0:
+            v.scale(f, f)
+        k = v.transform().m11() or 1.0
+        c = sheet.center()
+        v.centerOn(QtCore.QPointF(c.x() + (cover / 2.0) / k, c.y()))
+        return True
+    except Exception as _fw_err:
+        _fw_log("drawings.py:clear_of_pane", _fw_err)
+        return False
+
+
+def fill_template_views(doc, source):
+    ""
+
+
+    bases = []
+    for o in doc.Objects:
+        if not o.isDerivedFrom("TechDraw::DrawViewPart") or o.isDerivedFrom("TechDraw::DrawViewDetail"):
+            continue
+        if o.isDerivedFrom("TechDraw::DrawViewSection") or getattr(o, "BaseView", None) is not None:
+            continue
+        if (getattr(o, "SWParent", "") or "") and doc.getObject(o.SWParent) is not None:
+            continue
+        bases.append(o)
+    if not bases:
+        return []
+    try:
+        from . import drawlayout
+        return drawlayout.replace_model(bases, source)
+    except Exception as error:
+        App.Console.PrintWarning("FreeCAD: drawing template views: %s\n" % error)
+        return []
 
 
 def make_drawing(source=None, path=None, palette=True, template=None):
@@ -3266,6 +3649,8 @@ def make_drawing(source=None, path=None, palette=True, template=None):
     else:
         temp_save(doc)
     set_made_from(doc, source)
+    if template:
+        fill_template_views(doc, source)
     try:
         Gui.activateWorkbench("TechDrawWorkbench")
     except Exception as _fw_err:
@@ -3284,14 +3669,13 @@ def make_drawing(source=None, path=None, palette=True, template=None):
         _fw_log("drawings.py:2894", _fw_err)
     doc.recompute()
     newdoc.show_sheet(page)
-    for ms in (300, 1000, 2800):
-        QtCore.QTimer.singleShot(ms, lambda pg=page: fit_page(pg))
+    fit_while_opening(page)
     if palette:
         try:
             from . import drawpalette
             drawpalette.note_source(source)
             for ms in (400, 1200, 2500):
-                QtCore.QTimer.singleShot(ms, _palette_shown)
+                QtCore.QTimer.singleShot(ms, lambda n=source.Name: _palette_for(n))
         except Exception as error:
             App.Console.PrintWarning("FreeCAD: View Palette: %s\n" % error)
     if not path:

@@ -58,6 +58,13 @@ MODS = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
 HISTORY = 11
 SETTLE = 0.6         # s a view must stay put to count as a view
 ENTER = (Qt.Key_Return, Qt.Key_Enter)
+# fckeys-1126: FreeCAD's number keys for the standard views (0 Isometric, 1 Front, 2 Top, 3 Right, 4 Rear,
+
+# view commands, so Update Standard Views holds for them too
+DIGIT_VIEWS = {Qt.Key_0: "SWStyle_StandardIsometric", Qt.Key_1: "SWStyle_StandardFront", Qt.Key_2: "SWStyle_StandardTop",
+               Qt.Key_3: "SWStyle_StandardRight", Qt.Key_4: "SWStyle_StandardBack", Qt.Key_5: "SWStyle_StandardBottom",
+               Qt.Key_6: "SWStyle_StandardLeft"}
+ZOOM_KEYS = {Qt.Key_Plus: "Std_ViewZoomIn", Qt.Key_Equal: "Std_ViewZoomIn", Qt.Key_Minus: "Std_ViewZoomOut"}
 # Widgets that keep the keys when the pointer moves over the 3D view.
 TYPING = (QtWidgets.QLineEdit, QtWidgets.QAbstractSpinBox, QtWidgets.QTextEdit, QtWidgets.QPlainTextEdit)
 # Commands Enter does not repeat (name prefixes): files, undo, deleting, dialogs, switches.
@@ -204,6 +211,11 @@ class ViewHistory:
 
     def _entry(self, key):
         return self.docs.setdefault(key, {"views": [], "seen": None, "since": 0.0})
+
+    def prune(self, live):
+        """perf-1126: forget the documents that are closed (their views grew without limit)."""
+        for key in [k for k in self.docs if k not in live]:
+            del self.docs[key]
 
     def sample(self, key, text, now):
         """Called a few times a second with the current camera: a view that stays put for
@@ -434,6 +446,11 @@ class ViewKeys(QtCore.QObject):
     def _action(self, event):
         key = event.key()
         mods = event.modifiers() & MODS
+        try:        # filterkeys-1126: Enter (Repeat Last Command) and D follow Customize > Keyboard
+            from . import filterkeys
+            key, mods = filterkeys.logical(key, mods)
+        except Exception as _fw_err:
+            _fw_log("viewkeys.py:filterkeys", _fw_err)
         if key in ARROWS:
             if mods == Qt.NoModifier:
                 return "turn", key, wheelzoom.arrow_step()
@@ -450,6 +467,10 @@ class ViewKeys(QtCore.QObject):
             return "crumbs", key, 0.0      # D moves the breadcrumbs and the confirmation corner to the pointer
         if key in ENTER and mods == Qt.NoModifier:
             return self._enter()
+        if key in DIGIT_VIEWS and mods == Qt.NoModifier and not contextbar.tool_running(self.shell):
+            return "cmd", DIGIT_VIEWS[key], 0.0        # fckeys-1126 (a sketch tool keeps its typed numbers)
+        if key in ZOOM_KEYS and mods in (Qt.ControlModifier, Qt.ControlModifier | Qt.ShiftModifier):
+            return "cmd", ZOOM_KEYS[key], 0.0
         return None
 
     def _enter(self):
@@ -499,6 +520,14 @@ class ViewKeys(QtCore.QObject):
         if contextbar.sketch_in_edit() is not None:
             if self.shell.tasks_wanted():
                 return False         # a sketch tool's PropertyManager is up: its Esc
+            try:
+                from . import sketchtoolpm
+                if sketchtoolpm.current() is not None:
+
+
+                    return False
+            except Exception as _fw_err:
+                _fw_log("viewkeys.py:sketch page", _fw_err)
         elif contextbar.dialog_open():
             return False
         try:
@@ -559,6 +588,9 @@ class ViewKeys(QtCore.QObject):
             return True
         if kind == "repeat":
             QtCore.QTimer.singleShot(0, self.last.run)
+            return True
+        if kind == "cmd":           # fckeys-1126
+            QtCore.QTimer.singleShot(0, functools.partial(Gui.runCommand, key, 0))
             return True
         try:
             self.turn(key, angle, kind == "roll")

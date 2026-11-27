@@ -420,8 +420,10 @@ def _assembly_modes(saveas):
     try:
         kinds = saveas.MODES
         have = list(kinds.get("assembly", []))
-        kinds["assembly"] = [m for m in MODES if m in have or m == "Large Assembly Settings"] + \
-            [m for m in have if m not in MODES]
+        # Quick View first, where a part's list has it too (one place for it in both kinds)
+        kinds["assembly"] = [m for m in have if m not in MODES and m == "Quick View"] + \
+            [m for m in MODES if m in have or m == "Large Assembly Settings"] + \
+            [m for m in have if m not in MODES and m != "Quick View"]
     except Exception as error:
         App.Console.PrintLog("FreeCAD: Open Mode list: %s\n" % error)
 

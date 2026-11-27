@@ -18,6 +18,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -517,7 +518,7 @@ class SketcherConfirmDelete(QtWidgets.QDialog):
 def _editing_sketch():
     try:
         vp = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument is not None else None
-        obj = vp.Object if vp is not None else None
+        obj = editobj.of(vp) if vp is not None else None
         return obj if obj is not None and obj.TypeId == SKETCH else None
     except Exception:
         return None

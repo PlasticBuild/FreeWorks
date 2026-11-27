@@ -476,7 +476,7 @@ if Gui is not None:
 
     class Command:
         def GetResources(self):
-            return {"MenuText": TITLE, "Pixmap": "Assembly_CreateAssembly",
+            return {"MenuText": TITLE, "Pixmap": "Geoassembly",     # asmpkg349: FreeCAD 1.1's own name for it
                     "ToolTip": "Saves the part's bodies as parts and makes an assembly of them."}
 
         def IsActive(self):

@@ -76,6 +76,121 @@ def _open_in_context(ctx, obj):
     return asmincontext.open_edit(ctx[0], ctx[1], obj)
 
 
+_DELETE_KEYS = (0x01000007, 0x01000003)     # Qt.Key_Delete, Qt.Key_Backspace
+
+
+def _keycode(event):
+    k = event.key()
+    return getattr(k, "value", k)
+
+
+class PointGrid(QtWidgets.QTableWidget):
+    ""
+
+
+    textChanged = QtCore.Signal()
+
+    def __init__(self, text, columns):
+        super().__init__(0, 1 + len(columns))
+        self.setObjectName("SWPatternPointTable")
+        self.setHorizontalHeaderLabels(["Point"] + columns)
+        self.verticalHeader().setVisible(False)
+        self.horizontalHeader().setStretchLastSection(True)
+        self.setMinimumHeight(150)
+        self.setMaximumHeight(240)
+        self._filling = False
+        self.setPlainText(text)
+        self.itemChanged.connect(self._edited)
+
+    def _cell(self, text, editable):
+        item = QtWidgets.QTableWidgetItem(text)
+        flags = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+        item.setFlags(flags | QtCore.Qt.ItemIsEditable if editable else flags)
+        return item
+
+    def setPlainText(self, text):
+        rows = [line.split() for line in str(text).replace(";", "\n").splitlines() if line.strip()] or [["0", "0"]]
+        self._filling = True
+        try:
+            self.setRowCount(len(rows) + 1)
+            for r, values in enumerate(rows + [[]]):
+                last = r == len(rows)
+                self.setItem(r, 0, self._cell("" if last else str(r), False))
+                for c in range(1, self.columnCount()):
+                    self.setItem(r, c, self._cell(values[c - 1] if c - 1 < len(values) else "", r != 0))
+        finally:
+            self._filling = False
+
+    def toPlainText(self):
+        lines = []
+        for r in range(self.rowCount()):
+            values = [(self.item(r, c).text().strip() if self.item(r, c) else "") for c in range(1, self.columnCount())]
+            if not any(values):
+                continue
+            lines.append(" ".join(v or "0" for v in values))
+        return "\n".join(lines)
+
+    def refresh(self, text):
+        if text.strip() != self.toPlainText().strip():
+            self.setPlainText(text)
+
+    def _renumber(self):
+        self._filling = True
+        try:
+            for r in range(self.rowCount()):
+                filled = any(self.item(r, c) and self.item(r, c).text().strip() for c in range(1, self.columnCount()))
+                self.setItem(r, 0, self._cell(str(r) if filled or r == 0 else "", False))
+        finally:
+            self._filling = False
+
+    def _edited(self, item):
+        if self._filling:
+            return
+        if item.row() == self.rowCount() - 1 and item.text().strip():
+            self._filling = True
+            try:
+                r = self.rowCount()
+                self.insertRow(r)
+                for c in range(self.columnCount()):
+                    self.setItem(r, c, self._cell("", c > 0))
+            finally:
+                self._filling = False
+        self._renumber()
+        self.textChanged.emit()
+
+    def event(self, event):
+        # Delete / Backspace belong to the table (not FreeCAD's Delete command) while it has focus
+        if event.type() == QtCore.QEvent.ShortcutOverride and _keycode(event) in _DELETE_KEYS:
+            event.accept()
+            return True
+        return super().event(event)
+
+    def keyPressEvent(self, event):
+        if _keycode(event) in _DELETE_KEYS and self.state() == QtWidgets.QAbstractItemView.State.NoState:
+            rows = sorted({i.row() for i in self.selectedItems() if 0 < i.row() < self.rowCount() - 1}, reverse=True)
+            if rows:
+                for r in rows:
+                    self.removeRow(r)
+                self._renumber()
+                self.textChanged.emit()
+                return
+        super().keyPressEvent(event)
+
+
+def _face_maker(holder, element, own):
+    ""
+
+    try:
+        from . import contextbar
+        maker = contextbar.owner_feature(holder, element)
+    except Exception as _fw_err:
+        _fw_log("simplefeature.py:face-maker", _fw_err)
+        return holder
+    if maker is None or maker is own or not maker.isDerivedFrom("PartDesign::Feature"):
+        return holder
+    return maker
+
+
 class Field:
     ""
 
@@ -105,7 +220,7 @@ class Field:
         self.values, self.what, self.many = values or [], what, many
         self.low, self.high, self.shown, self.box = low, high, shown, box
 
-    PROPERTY = {"int": "App::PropertyInteger", "text": "App::PropertyString", "info": "App::PropertyString", "length": "App::PropertyLength", "distance": "App::PropertyDistance", "float": "App::PropertyFloat",
+    PROPERTY = {"int": "App::PropertyInteger", "text": "App::PropertyString", "skip": "App::PropertyString", "info": "App::PropertyString", "length": "App::PropertyLength", "distance": "App::PropertyDistance", "float": "App::PropertyFloat",
                 "angle": "App::PropertyAngle", "bool": "App::PropertyBool", "enum": "App::PropertyEnumeration",
                 "icons": "App::PropertyEnumeration", "radio": "App::PropertyEnumeration",
                 "vector": "App::PropertyVector"}
@@ -116,6 +231,13 @@ class Field:
             return "App::PropertyLinkSubListGlobal" if self.what not in WHOLE else (
                 "App::PropertyLinkListGlobal" if self.many else "App::PropertyLinkGlobal")
         return self.PROPERTY[self.kind]
+
+
+def _kind_ok(field, holder):
+    """Whole-object boxes may name the kinds they take: field.kinds, TypeId prefixes (Wrap's Source
+    Sketch takes sketches only; a click on a solid's edge left "Mounting Boss1" in it)."""
+    kinds = getattr(field, "kinds", None)
+    return not kinds or getattr(holder, "TypeId", "").startswith(tuple(kinds))
 
 
 class Spec:
@@ -304,6 +426,12 @@ class Feature:
     def onDocumentRestored(self, obj):
         self.setup(obj, restoring=True)
         obj.Proxy = self
+        hook = getattr(SPECS.get(getattr(obj, "SWStyleKind", "")), "restored", None)
+        if hook is not None:        # a feature that settles links once the whole file is read
+            try:
+                hook(obj)
+            except Exception as _fw_err:
+                _fw_log("simplefeature.py:restored", _fw_err)
 
     def dumps(self):
         return None
@@ -609,6 +737,12 @@ def _fw_retyped(spin):
 
 
 _made = set()       # (doc, name) of features a page made and has not OK'd yet
+_focus_next = [None]    # the box the next page starts in (a button on another page that opened it)
+
+
+def focus_next(name):
+    """The next page opened starts with its box name taking the picks (once)."""
+    _focus_next[0] = name
 
 
 def drop_made(doc, name):
@@ -670,7 +804,17 @@ class Panel:
         if self.spec.command == "SWStyle_ExtendSurface":
             for box in order:
                 box.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
-        order[0].setProperty("swstyle_pm_title", self.spec.title)
+        # a group the page starts with that is not a field (the Fillet Type tiles of the fillet kinds)
+        self.head = None
+        maker = getattr(self.spec, "head_box", None)
+        if maker is not None:
+            try:
+                self.head = maker(obj)
+            except Exception as _fw_err:
+                _fw_log("simplefeature.py:head_box", _fw_err)
+            if self.head is not None:
+                order.insert(0, self.head)
+        order[0].setProperty("swstyle_pm_title", getattr(self.spec, "pm_title", None) or self.spec.title)
         order[0].setProperty("swstyle_pm_icon", self.spec.icon)
         self.form = order if len(order) > 1 else order[0]
         self.busy = False
@@ -682,6 +826,9 @@ class Panel:
                           and _on(f, obj)), first)
         if first is not None and not _on([f for f in self.spec.fields if f.name == first][0], obj):
             first = next((f.name for f in self.spec.fields if f.kind == "pick" and _on(f, obj)), None)
+        wanted, _focus_next[0] = _focus_next[0], None
+        if wanted and any(f.name == wanted and f.kind == "pick" and _on(f, obj) for f in self.spec.fields):
+            first = wanted
         if first is not None:
             self._activate(first)
         self._show()
@@ -767,6 +914,27 @@ class Panel:
             widget.setKeyboardTracking(False)
             widget.valueChanged.connect(self._changed)
             form.addRow(field.label, widget)
+        elif field.kind == "skip":
+
+            # pink dot marks every instance in the graphics area and a click on one skips it (or brings
+            # it back). The feature keeps the list as text, "(2,1) (5,1)"
+            widget = QtWidgets.QListWidget()
+            widget.setMaximumHeight(60)
+            widget.setToolTip(field.tip or "Click the pink dots in the graphics area to skip instances")
+            widget.setObjectName("SWStyle_%s" % field.name)
+            widget.installEventFilter(self._focus_filter(field.name))
+            widget.viewport().installEventFilter(self._focus_filter(field.name, click=True))
+            pmboxes.bind(widget, lambda row, n=field.name: self.remove_item(n, row), lambda n=field.name: self.clear_items(n))
+            if not (field.box and field.label == field.box):
+                form.addRow(QtWidgets.QLabel(field.label))
+            form.addRow(widget)
+            self.lists[field.name] = widget
+        elif field.kind == "text" and getattr(field, "grid", None):
+
+            widget = PointGrid(str(value), list(field.grid))
+            widget.setToolTip(field.tip or field.label)
+            widget.textChanged.connect(self._text_later)
+            form.addRow(widget)
         elif field.kind == "text":
             widget = QtWidgets.QPlainTextEdit(str(value))
             widget.setMaximumHeight(110)
@@ -838,14 +1006,14 @@ class Panel:
         spin.setToolTip(field.tip or field.label)
         return spin
 
-    def _focus_filter(self, name):
+    def _focus_filter(self, name, click=False):
         panel = self
 
         class Filter(QtCore.QObject):
             def eventFilter(self, watched, event):
                 if not isinstance(event, QtCore.QEvent):
                     return False        # a stale PySide wrapper (QLayoutItem etc.) can arrive here
-                if event.type() == QtCore.QEvent.FocusIn:
+                if event.type() == QtCore.QEvent.FocusIn or (click and event.type() == QtCore.QEvent.MouseButtonPress):
                     panel._activate(name)
                 return False
         self._keep = getattr(self, "_keep", []) + [Filter()]
@@ -855,10 +1023,104 @@ class Panel:
         self.active = name
         for other, widget in self.lists.items():
             pmboxes.mark(widget, other == name)
+        self._skip_dots()
+
+    # --- Instances to Skip (a "skip" field): the pink dots
+    def _skip_field(self):
+        return next((f for f in self.spec.fields if f.kind == "skip" and f.name == self.active), None)
+
+    def _skip_set(self, field):
+        from . import patterns
+        return patterns.parse_skip(getattr(self.obj, field.name, "") or "")
+
+    def _skip_sites(self):
+        field = self._skip_field()
+        sites = getattr(self.spec, "skip_sites", None)
+        if field is None or sites is None:
+            return []
+        gone = self._skip_set(field)
+        return [(key, point, key in gone) for key, point in sites(self.obj)]
+
+    def _skip_dots(self):
+        dots = getattr(self, "_dots", None)
+        try:
+            if dots is None:
+                if self._skip_field() is None:
+                    return
+                from .patternpm import SkipDots
+                dots = self._dots = SkipDots(self._skip_sites, self._skip_toggle)
+            dots.show(self._skip_field() is not None and "Invalid" not in self.obj.State)
+        except Exception as _fw_err:
+            _fw_log("simplefeature.py:skip-dots", _fw_err)
+
+    def _skip_toggle(self, key):
+        field = self._skip_field()
+        if field is None or self._alive() is None:
+            return
+        from . import patterns
+        gone = self._skip_set(field)
+        gone ^= {key}
+        setattr(self.obj, field.name, patterns.format_skip(gone))
+        self._changed()
+
+    def _skip_hit(self, name, sub, point):
+        """True when a click in the graphics area is on the edited pattern itself: the pattern
+        picked as itself, or its body picked as Body + "Pattern.Face12" with the point on the
+        pattern's shape. A click on any other body or feature is not a skip (the skip dots take
+        their own clicks before this)."""
+        try:
+            doc = self.obj.Document
+            holder = doc.getObject(name)
+            if holder is None:
+                return False
+            for part in (sub or "").split(".")[:-1]:
+                found = doc.getObject(part)
+                if found is not None:
+                    holder = found
+            if holder is self.obj:
+                return True
+            body = next((p for p in self.obj.InList if p.TypeId == "PartDesign::Body"), None)
+            if body is None or holder is not body or body.Tip is not self.obj:
+                return False
+            shape = self.obj.Shape
+            if shape.isNull():
+                return False
+            reach = 1e-3 * max(1.0, shape.BoundBox.DiagonalLength)
+            return shape.distToShape(Part.Vertex(point))[0] <= reach
+        except Exception as _fw_err:
+            _fw_log("simplefeature.py:skip-hit", _fw_err)
+            return False
+
+    def _skip_near(self, point):
+        """A click on the part while Instances to Skip is active: the instance nearest the point
+        (not the seed), when the point is nearer to it than to any other instance or the seed."""
+        sites = getattr(self.spec, "skip_sites", None)
+        if sites is None:
+            return None
+        found = [(key, p) for key, p in sites(self.obj)]
+        if not found:
+            return None
+        seed = getattr(self.spec, "skip_seed", None)
+        best = min(found, key=lambda kp: (kp[1] - point).Length)
+        if seed is not None:
+            try:
+                if (seed(self.obj) - point).Length < (best[1] - point).Length:
+                    return None
+            except Exception as _fw_err:
+                _fw_log("simplefeature.py:skip-seed", _fw_err)
+        return best[0]
 
     def remove_item(self, name, row):
         ""
         field = [f for f in self.spec.fields if f.name == name][0]
+        if field.kind == "skip":
+            from . import patterns
+            keys = sorted(patterns.parse_skip(getattr(self.obj, name, "") or ""))
+            if 0 <= row < len(keys):
+                setattr(self.obj, name, patterns.format_skip(set(keys) - {keys[row]}))
+            self._activate(name)
+            self._changed()
+            return
         current = getattr(self.obj, name)
         if field.what in WHOLE:
             if field.many:
@@ -887,6 +1149,11 @@ class Panel:
     def clear_items(self, name):
         """Clear Selections in a pick box."""
         field = [f for f in self.spec.fields if f.name == name][0]
+        if field.kind == "skip":
+            setattr(self.obj, name, "")
+            self._activate(name)
+            self._changed()
+            return
         setattr(self.obj, name, [] if (field.many or field.what not in WHOLE) else None)
         self._activate(name)
         self._changed()
@@ -931,6 +1198,22 @@ class Panel:
         if own is not None and self.active is not None and doc != own and self._context_pick(doc, name, sub):
             return
         if own is None or doc != own or self.active is None:
+            return
+        if self._skip_field() is not None:
+            # Instances to Skip active: a click on an instance skips it (or brings it back)
+            if point is not None:
+                at = App.Vector(*point)
+
+                def skip_here():
+                    if self._alive() is None:
+                        return
+                    Gui.Selection.clearSelection()
+                    if not self._skip_hit(name, sub, at):
+                        return      # a click on another body or feature skips nothing (Codex review b9)
+                    key = self._skip_near(at)
+                    if key is not None:
+                        self._skip_toggle(key)
+                QtCore.QTimer.singleShot(0, skip_here)
             return
         QtCore.QTimer.singleShot(0, lambda: self._alive() and self._picked(doc, name, sub))
 
@@ -1017,6 +1300,10 @@ class Panel:
                 and "" in field.what and _surface_only(holder)):
             element = ""
         if field.what in WHOLE:
+            if field.what == "Feature" and field.name == "Features" and element.startswith(("Face", "Edge")):
+                holder = _face_maker(holder, element, self.obj)     # pkg464
+            if not _kind_ok(field, holder):
+                return
             if field.what == "Object" and holder.TypeId.startswith("PartDesign::") and holder.TypeId != "PartDesign::Body":
                 holder = holder.getParentGeoFeatureGroup() or holder
             current = getattr(self.obj, field.name)
@@ -1025,7 +1312,10 @@ class Panel:
                 items = [i for i in items if i != holder] if holder in items else items + [holder]
                 setattr(self.obj, field.name, items)
             else:
-                setattr(self.obj, field.name, None if current == holder else holder)
+                taken = None if current == holder else holder
+                setattr(self.obj, field.name, taken)
+                if taken is not None:
+                    self._advance(field)     # pkg433: a one-item sketch or body box hands on too (Split Line, Wrap)
         else:
             if not _accepts(field, element, holder):
                 return
@@ -1071,10 +1361,22 @@ class Panel:
             self._text_timer.timeout.connect(self._changed)
         self._text_timer.start(600)
 
+    def _sync_grids(self):
+        """pkg465: the point tables show what the feature holds (point 0 is worked out on rebuild, Read a
+        file fills the table)."""
+        for field in self.spec.fields:
+            w = self.widgets.get(field.name)
+            if isinstance(w, PointGrid):
+                try:
+                    w.refresh(str(getattr(self.obj, field.name)))
+                except (RuntimeError, AttributeError) as _fw_err:
+                    _fw_log("simplefeature.py:grid", _fw_err)
+
     def _run(self, field):
         try:
             if field.action is not None:
                 field.action(self.obj)
+                self._sync_grids()
         except Exception as error:
             App.Console.PrintWarning("FreeCAD: %s: %s\n" % (field.label, error))
 
@@ -1107,7 +1409,7 @@ class Panel:
         obj = self.obj
         for field in self.spec.fields:
             widget = self.widgets[field.name]
-            if field.kind in ("pick", "info", "button"):
+            if field.kind in ("pick", "info", "button", "skip"):
                 continue
             if field.kind == "bool":
                 setattr(obj, field.name, widget.isChecked())
@@ -1122,6 +1424,7 @@ class Panel:
             else:
                 put_value(obj, field.name, widget.value())
         obj.Document.recompute()
+        self._sync_grids()
         if getattr(self, "_fw_closed", False) or not _widgets_alive(self):
             return      # a slow rebuild (Tooling Split) let the page's own Enter = OK close it meanwhile
         self._preview()
@@ -1131,6 +1434,12 @@ class Panel:
         obj = self.obj
         for field in self.spec.fields:
             widget = self.widgets[field.name]
+            if field.kind == "skip":
+                from . import patterns
+                keys = sorted(patterns.parse_skip(getattr(obj, field.name, "") or ""))
+                pairs = getattr(self.spec, "skip_pairs", False)
+                widget.clear()
+                widget.addItems(["(%d, %d)" % ij if pairs else "(%d)" % ij[0] for ij in keys])
             if field.kind == "pick":
                 widget.blockSignals(True)
                 widget.clear()
@@ -1174,6 +1483,8 @@ class Panel:
         bad = "Invalid" in obj.State
         self.error.setText(why_failed(obj) if bad else "")
         self.error.setVisible(bad)
+        if getattr(self, "_dots", None) is not None:
+            self._skip_dots()
 
     def getStandardButtons(self):
         return QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
@@ -1203,6 +1514,12 @@ class Panel:
     def _close(self):
         self._fw_closed = True          # a rebuild still queued from the last typed value must not run now
         self._fw_change_due = False
+        if getattr(self, "_dots", None) is not None:
+            try:
+                self._dots.remove()
+            except Exception as _fw_err:
+                _fw_log("simplefeature.py:skip-dots-close", _fw_err)
+            self._dots = None
         try:
             Gui.Selection.removeObserver(self)
         except Exception as _fw_err:
@@ -1238,9 +1555,17 @@ class Panel:
         doc.recompute()
         missing = [f.label for f in self.spec.fields if f.kind == "pick" and not f.optional
                    and _on(f, self.obj) and not getattr(self.obj, f.name)]
-        if "Invalid" in self.obj.State or missing:
+        # pkg453: a page whose picks are each optional but not all at once (Table Driven Pattern: features,
+        # faces or bodies) says what it still needs; OK with nothing picked made a feature that did nothing
+        need = None
+        if not missing and getattr(self.spec, "need", None) is not None:
+            try:
+                need = self.spec.need(self.obj)
+            except Exception as _fw_err:
+                App.Console.PrintLog("FreeCAD: need: %r\n" % (_fw_err,))
+        if "Invalid" in self.obj.State or missing or need:
             self.error.setText(why_failed(self.obj) if "Invalid" in self.obj.State
-                               else "Pick: %s" % ", ".join(missing))
+                               else ("Pick: %s" % ", ".join(missing)) if missing else need)
             self.error.setVisible(True)
             try:
 
@@ -1249,7 +1574,7 @@ class Panel:
                 while w is not None and not isinstance(w, QtWidgets.QScrollArea):
                     w = w.parentWidget()
                 if w is not None:
-                    QtCore.QTimer.singleShot(0, lambda a=w, e=self.error: a.ensureWidgetVisible(e))
+                    from . import safe_later as _sl; _sl.later(0, lambda a=w, e=self.error: a.ensureWidgetVisible(e), self, "error")
             except Exception as _fw_err:
                 App.Console.PrintLog("FreeCAD: message: %r\n" % (_fw_err,))
             return False
@@ -1271,6 +1596,16 @@ class Panel:
         adopted = _adopted.pop((doc.Name, name), None)
         if made and body is not None and adopted == body.Name and _undo_adopt(doc, body, name):
             body = None
+        elif made and adopted is None and doc.getObject(name) is not None:
+            # pkg441: the page's own step was closed on the way (Wrap, Flex, Split, Intersect, Scale), so
+
+            # Cancel leaves nothing to undo, so the page's own step is undone instead
+            try:
+                names = list(doc.UndoNames)
+                if names and names[0] == self.spec.title:
+                    doc.undo()
+            except Exception as _fw_err:
+                _fw_log("simplefeature.py:cancel-undo", _fw_err)
 
         # opening transaction early (Full Round Fillet: Esc kept the feature), so a feature this page
         # made and the abort did not take out is taken out here
@@ -1532,6 +1867,8 @@ def _preselected(spec):
                     seeds.append(holder)
                 continue
             if field.what in WHOLE:
+                if not _kind_ok(field, holder):
+                    continue
                 if field.what == "Feature" and holder.TypeId == "PartDesign::Body" and spec.needs_body:
                     continue    # the part picked first (Scale with the body selected): the body is not a feature pick, and a link to it from inside it would never rebuild
                 if field.what == "Object" and holder.TypeId.startswith("PartDesign::") and holder.TypeId != "PartDesign::Body":

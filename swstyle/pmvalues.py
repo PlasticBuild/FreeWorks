@@ -17,6 +17,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -236,7 +237,7 @@ def _edited_object():
     try:
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
-        return edit.Object if edit is not None else None
+        return editobj.of(edit) if edit is not None else None
     except Exception:
         return None
 

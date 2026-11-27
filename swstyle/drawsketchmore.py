@@ -251,7 +251,7 @@ class ThreePointCenterRectPanel(_MorePoly):
     TITLE = "3 Point Center Rectangle"
     PIXMAP = "Sketcher_CreateRectangle_Center"
     POINTS = 3
-    HINT = "Click the centre, the middle of one side, then a corner."
+    HINT = "Click the center, the middle of one side, then a corner."
 
     def points(self, pts):
         return three_point_center_rect(*pts)
@@ -271,7 +271,7 @@ class CenterSlotPanel(_MorePoly):
     TITLE = "Centerpoint Straight Slot"
     PIXMAP = "Sketcher_CreateSlot"
     POINTS = 3
-    HINT = "Click the centre, the end of the slot, then its width."
+    HINT = "Click the center, the end of the slot, then its width."
 
     def points(self, pts):
         return center_slot(*pts)
@@ -291,7 +291,7 @@ class CenterArcSlotPanel(_MorePoly):
     TITLE = "Centerpoint Arc Slot"
     PIXMAP = "Sketcher_CreateSlot"
     POINTS = 4
-    HINT = "Click the centre, the start, the end, then the slot's width."
+    HINT = "Click the center, the start, the end, then the slot's width."
 
     def points(self, pts):
         return centerpoint_arc_slot(*pts)
@@ -303,7 +303,7 @@ class PartialEllipsePanel(_MorePoly):
     CLOSED = False
     KIND = "Polyline"
     POINTS = 4
-    HINT = "Click the centre, the end of the major axis, the start of the arc (it sets the minor axis), then its end."
+    HINT = "Click the center, the end of the major axis, the start of the arc (it sets the minor axis), then its end."
 
     def points(self, pts):
         return partial_ellipse(*pts)
@@ -961,13 +961,13 @@ COMMANDS = {
     "FreeWorks_DrawSketch3PointCornerRect": ("3 Point Corner Rectangle", "Sketcher_CreateRectangle",
                                              "Sketches a rectangle at an angle from three points."),
     "FreeWorks_DrawSketch3PointCenterRect": ("3 Point Center Rectangle", "Sketcher_CreateRectangle_Center",
-                                             "Sketches a rectangle at an angle about its centre."),
+                                             "Sketches a rectangle at an angle about its center."),
     "FreeWorks_DrawSketchParallelogram": ("Parallelogram", "Sketcher_CreateRectangle", "Sketches a parallelogram."),
     "FreeWorks_DrawSketchCenterSlot": ("Centerpoint Straight Slot", "Sketcher_CreateSlot",
-                                       "Sketches a straight slot from its centre."),
+                                       "Sketches a straight slot from its center."),
     "FreeWorks_DrawSketchArcSlot": ("3 Point Arc Slot", "Sketcher_CreateSlot", "Sketches a slot along a 3 point arc."),
     "FreeWorks_DrawSketchCenterArcSlot": ("Centerpoint Arc Slot", "Sketcher_CreateSlot",
-                                          "Sketches a slot along an arc about its centre."),
+                                          "Sketches a slot along an arc about its center."),
     "FreeWorks_DrawSketchTangentArc": ("Tangent Arc", "Sketcher_CreateArc", "Sketches an arc on from the end of a line or arc."),
     "FreeWorks_DrawSketchPartialEllipse": ("Partial Ellipse", ":/icons/geometry/Sketcher_CreateElliptical_Arc.svg", "Sketches part of an ellipse."),
     "FreeWorks_DrawSketchParabola": ("Parabola", ":/icons/geometry/Sketcher_CreateParabolic_Arc.svg", "Sketches a parabola."),
@@ -1008,7 +1008,9 @@ NEEDS_PICK = ("FreeWorks_DrawConstructionGeometry", "FreeWorks_DrawMakePath", "F
 NEEDS_SKETCH = ("FreeWorks_DrawSegment", "FreeWorks_DrawExtend", "FreeWorks_DrawSplitEntities",
                 "FreeWorks_DrawJogLine", "FreeWorks_DrawStretchEntities", "FreeWorks_DrawEditPolygon",
                 "FreeWorks_DrawInsertSplinePoint", "FreeWorks_DrawScanEqual", "FreeWorks_DrawConstrainAll",
-                "FreeWorks_DrawSectionProperties", "FreeWorks_DrawSketchTangentArc")
+                "FreeWorks_DrawSketchTangentArc")
+# Section Properties is never greyed on a sheet (NO DEAD CONTROLS, View/display 11-27: Tools > Evaluate >
+# Section Properties... sat greyed): with no closed outline to measure it says what to pick
 
 
 class _Command(SK._Command):

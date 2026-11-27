@@ -36,27 +36,29 @@ Qt = QtCore.Qt
 
 PART_TYPES = (
     ("FreeCAD Part (*.FCStd)", ("FCStd",), "native"),
-    ("Part (*.sldprt)", ("sldprt",), "cad"),         # saveasname-1120: no product name in the UI
+    ("SOLIDWORKS Part (*.sldprt)", ("sldprt",), "cad"),     # fh248: the product name only as the format's name
     ("IGES (*.igs)", ("igs", "iges"), "iges"),
     ("STEP AP203 (*.step;*.stp)", ("step", "stp"), "step203"),
     ("STEP AP214 (*.step;*.stp)", ("step", "stp"), "step214"),
     ("STEP AP242 (*.step;*.stp)", ("step", "stp"), "step242"),
-    ("Dxf (*.dxf)", ("dxf",), "partdxf"),
+
     ("IFC 4 (*.ifc)", ("ifc",), "ifc"),
     ("VRML (*.wrl)", ("wrl",), "vrml"),
     ("STL (*.stl)", ("stl",), "stl"),
     ("3D Manufacturing Format (*.3mf)", ("3mf",), "3mf"),
     ("Additive Manufacturing File (*.amf)", ("amf",), "mesh"),
+    ("Dxf (*.dxf)", ("dxf",), "partdxf"),
+    ("Dwg (*.dwg)", ("dwg",), "partdwg"),
+    ("Adobe Portable Document Format (*.pdf)", ("pdf",), "partpdf"),
     ("JPEG (*.jpg)", ("jpg", "jpeg"), "image"),
     ("Portable Network Graphics (*.png)", ("png",), "image"),
-    ("Adobe Portable Document Format (*.pdf)", ("pdf",), "partpdf"),
     ("Tif (*.tif)", ("tif", "tiff"), "image"),
     ("Wavefront OBJ (*.obj)", ("obj",), "mesh"),
     ("glTF (*.glb;*.gltf)", ("glb", "gltf"), "gltf"),
     ("Rhino (*.3dm)", ("3dm",), "cad"),
 )
 ASSEMBLY_TYPES = (("FreeCAD Assembly (*.FCStd)", ("FCStd",), "native"),
-                  ("Assembly (*.sldasm)", ("sldasm",), "cad")) + PART_TYPES[1:]    # saveasname-1120
+                  ("SOLIDWORKS Assembly (*.sldasm)", ("sldasm",), "cad")) + PART_TYPES[1:]    # fh248
 DRAWING_TYPES = (
     ("FreeCAD Drawing (*.FCStd)", ("FCStd",), "native"),
     ("Dxf (*.dxf)", ("dxf",), "dxf"),
@@ -72,25 +74,29 @@ DRAWING_TYPES = (
 
 OPEN_TYPES = (
     ("FreeCAD Files (*.FCStd)", ("FCStd",)),
-    ("Part and Assembly (*.sldprt;*.sldasm)", ("sldprt", "sldasm")),     # saveasname-1120
-    ("Part (*.sldprt)", ("sldprt",)),
-    ("Assembly (*.sldasm)", ("sldasm",)),
-    ("Parasolid (*.x_t;*.x_b)", ("x_t", "x_b")),
-    ("ACIS (*.sat;*.sab)", ("sat", "sab")),
-    ("Autodesk Inventor (*.ipt;*.iam)", ("ipt", "iam")),
-    ("CATIA V5 (*.CATPart)", ("CATPart",)),
-    ("Fusion 360 (*.f3d)", ("f3d",)),
-    ("Rhino (*.3dm)", ("3dm",)),
-    ("Creo View (*.pvz)", ("pvz",)),
+
+    # "FreeCAD Part" read as the same kind of file
+    ("SOLIDWORKS Files (*.sldprt;*.sldasm)", ("sldprt", "sldasm")),
+    ("SOLIDWORKS Part (*.sldprt)", ("sldprt",)),
+    ("SOLIDWORKS Assembly (*.sldasm)", ("sldasm",)),
+
+    # then the other CAD programs' types and the mesh files
     ("Dxf (*.dxf)", ("dxf",)),
     ("Dwg (*.dwg)", ("dwg",)),
+    ("Parasolid (*.x_t;*.x_b)", ("x_t", "x_b")),
     ("IGES (*.igs;*.iges)", ("igs", "iges")),
     ("STEP AP203/214/242 (*.step;*.stp)", ("step", "stp")),
     ("IFC (*.ifc)", ("ifc",)),
+    ("ACIS (*.sat;*.sab)", ("sat", "sab")),
     ("VRML (*.wrl)", ("wrl",)),
     ("STL (*.stl)", ("stl",)),
-    ("Mesh Files (*.stl;*.obj;*.off;*.ply;*.3mf;*.amf)", ("stl", "obj", "off", "ply", "3mf", "amf")),
     ("3D Manufacturing Format (*.3mf)", ("3mf",)),
+    ("CATIA V5 (*.CATPart)", ("CATPart",)),
+    ("Creo View (*.pvz)", ("pvz",)),
+    ("Autodesk Inventor (*.ipt;*.iam)", ("ipt", "iam")),
+    ("Rhino (*.3dm)", ("3dm",)),
+    ("Fusion 360 (*.f3d)", ("f3d",)),
+    ("Mesh Files (*.stl;*.obj;*.off;*.ply;*.3mf;*.amf)", ("stl", "obj", "off", "ply", "3mf", "amf")),
     ("BREP (*.brep;*.brp)", ("brep", "brp")),
 )
 
@@ -133,7 +139,8 @@ def _have_dwg():
             fn = getattr(importDWG, name, None)
             if fn is not None:
                 try:
-                    if fn():
+                    # fh265: FreeCAD 1.1's LibreDWG finder takes the tool's name (it was called without, so failed)
+                    if (fn("dxf2dwg") if name == "get_libredwg_converter" else fn()):
                         return True
                 except Exception as _fw_err:
                     _fw_log("saveas.py:115", _fw_err)
@@ -233,8 +240,7 @@ def save_types(doc):
     types = {"Part": PART_TYPES, "Assembly": ASSEMBLY_TYPES, "Drawing": DRAWING_TYPES}[kind]
     out = []
     for t in types:
-        if t[2] == "dwg" and not _have_dwg():
-            continue
+
         if t[2] == "ifc" and not _have_ifc():
             continue
         if t[2] in ("step203", "step242") and not _have_ap203():
@@ -289,7 +295,7 @@ def _solids(doc, writer=None):
         if writer not in ("step203", "step214", "step242", "partpdf") and export_option("Flatten assembly hierarchy", True):
             # x123: every instance where it sits (temporary copies, removed after the export); the dxf panel keeps
             # its objects while it is open, so it still gets the bodies themselves
-            flat = (_flatten_placed(doc, tops[0]) if writer not in (None, "partdxf") else None) or _flatten(tops[0])
+            flat = (_flatten_placed(doc, tops[0]) if writer not in (None, "partdxf", "partdwg") else None) or _flatten(tops[0])
             if flat:
                 out = flat
     else:
@@ -298,8 +304,9 @@ def _solids(doc, writer=None):
             out = [b for b in bodies if b.Visibility] or bodies
         else:
             # sv107: a parent counts in this document only (an assembly linking the part is not one)
+            # fh201: a sketch (a Part::Feature too) only with Export sketch entities, below (it was always written)
             out = [o for o in doc.Objects if o.isDerivedFrom("Part::Feature") and not _parents(o) and o.Visibility
-                   and not _is_curve_feature(o)]
+                   and not _is_curve_feature(o) and not o.isDerivedFrom("Sketcher::SketchObject")]
             # parts grouped in App::Part containers (an imported STEP assembly): the top containers,
             # so a STEP export keeps the structure
             out += [o for o in doc.Objects if o.TypeId == "App::Part" and not _parents(o) and o.Visibility]
@@ -595,8 +602,32 @@ def _part_dxf(doc, objs, path):
         importDXF.export([tmp], path)
     finally:
         doc.removeObject(tmp.Name)
+    _part_dxf_options(path, size)
     if units != 4:
         _set_insunits(path, units)
+
+
+def _part_dxf_options(path, size=1.0):
+    ""
+
+    try:
+        from . import drawdxf, drawexport
+        o = drawexport.options()
+        ver = o.get("version") or drawdxf.TECHDRAW_VERSION
+        merge = float(o.get("merge_distance") or 0.0) if o.get("merge") else 0.0
+        splines = o.get("splines") != "Polylines"
+        if ver == drawdxf.TECHDRAW_VERSION and merge <= 0 and splines:
+            return
+        src = path + ".fw.dxf"
+        os.replace(path, src)
+        try:
+            drawdxf.convert(src, path, version=ver, splines=splines, merge=merge / (size or 1.0))
+        except Exception:
+            os.replace(src, path)           # the file as FreeCAD wrote it, rather than none
+            raise
+        os.remove(src)
+    except Exception as _fw_err:
+        _fw_log("saveas.py:part_dxf_options", _fw_err)
 
 
 def _set_insunits(path, units):
@@ -612,14 +643,135 @@ def _set_insunits(path, units):
         _fw_log("saveas.py:_set_insunits", _fw_err)
 
 
-def _part_dxf_panel(doc, path):
+def _part_dxf_panel(doc, path, dwg=False):
     ""
+
+
 
     objs = _solids(doc, "partdxf")
     if not objs:
         return False
     from . import smdxf
-    return smdxf.start_part(doc, path, objs) is not None
+    if not dwg:
+        return smdxf.start_part(doc, path, objs) is not None
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="fw_dwg_")
+    stem = os.path.splitext(os.path.basename(path))[0]
+    panel = smdxf.start_part(doc, os.path.join(tmp, stem + ".dxf"), objs)
+    if panel is None:
+        return False
+    folder = os.path.dirname(path)
+    accept = panel.accept
+
+    def converted(cleanup):
+        failed = []
+        try:
+            for src in list(getattr(cleanup, "saved", None) or []):
+                dst = os.path.join(folder, os.path.splitext(os.path.basename(src))[0] + ".dwg")
+                try:
+                    to_dwg(src, dst)
+                    remember_folder(dst)
+                except Exception as error:
+                    failed.append("%s: %s" % (os.path.basename(dst), error))
+        finally:
+            _drop_folder(tmp)
+        if failed:
+            QtWidgets.QMessageBox.warning(Gui.getMainWindow(), "Save As", (
+                "%s was not saved. Check that the folder can be written to and that the file is not open in "
+                "another program.\n\n%s" % (os.path.basename(path), "\n".join(failed))))
+
+    reject = panel.reject
+
+    def accept_then_convert():
+        done = accept()
+        cleanup = getattr(panel, "cleanup", None)
+        if done and cleanup is not None:
+            cleanup.accepted.connect(lambda c=cleanup: _safe_call(converted, c))
+            cleanup.rejected.connect(lambda: _drop_folder(tmp))
+        return done
+
+    def reject_and_drop():
+        try:
+            return reject()
+        finally:
+            _drop_folder(tmp)
+    panel.accept = accept_then_convert
+    panel.reject = reject_and_drop
+    return True
+
+
+def _drop_folder(folder):
+    """The temporary folder a Dwg save wrote its DXF in, removed (only ever a fw_dwg_ folder of our own)."""
+    try:
+        import shutil
+        if folder and os.path.basename(folder).startswith("fw_dwg_"):
+            shutil.rmtree(folder, ignore_errors=True)
+    except Exception as _fw_err:
+        _fw_log("saveas.py:drop_folder", _fw_err)
+
+
+def _safe_call(fn, *args):
+    try:
+        return fn(*args)
+    except Exception as _fw_err:
+        _fw_log("saveas.py:%s" % getattr(fn, "__name__", "call"), _fw_err)
+
+
+def to_dwg(dxf, dwg):
+    """fh265: a DXF file made into a DWG by FreeCAD's DWG converter (ODA, LibreDWG or QCAD, as Preferences >
+    Import-Export > DWG picks), as drawexport does for a drawing."""
+    import importDWG
+    convert = getattr(importDWG, "convertToDwg", None)
+    # written beside the DXF first (ODA names its file after the DXF), so a file already at dwg is only
+    # replaced once the converter has made the new one
+    out = os.path.splitext(dxf)[0] + ".dwg"
+    if os.path.exists(out):
+        os.remove(out)
+    if convert is None or not convert(dxf, out) or not os.path.isfile(out):
+        raise RuntimeError("the DWG converter did not write the file")
+    os.replace(out, dwg)
+    return dwg
+
+
+def _part_dwg(doc, objs, path):
+    """fh265: a part's Dwg written straight away (checks, macros): its Dxf, then the DWG converter."""
+    import tempfile
+    folder = tempfile.mkdtemp(prefix="fw_dwg_")
+    try:
+        tmp = os.path.join(folder, "part.dxf")
+        _part_dxf(doc, objs, tmp)
+        to_dwg(tmp, path)
+    finally:
+        _drop_folder(folder)
+
+
+def no_dwg_converter(path):
+    """fh265: Dwg picked with no DWG converter installed: what to do first (no type that fails without a word).
+    Returns the Dxf path to save instead, or None (DWG Settings... or Cancel)."""
+    box = QtWidgets.QMessageBox(Gui.getMainWindow())
+    box.setObjectName("FW_NoDwgConverter")
+    box.setWindowTitle("Save As")
+    box.setIcon(QtWidgets.QMessageBox.Information)
+    box.setText("%s cannot be saved as Dwg yet: FreeCAD needs a DWG converter for this file type."
+                % os.path.basename(path))
+    box.setInformativeText("Install the ODA File Converter or LibreDWG, then pick it under DWG Settings. "
+                           "Or save as Dxf now: programs that open DWG files open DXF files too.")
+    settings = box.addButton("DWG Settings...", QtWidgets.QMessageBox.ActionRole)
+    dxf = box.addButton("Save as Dxf", QtWidgets.QMessageBox.AcceptRole)
+    box.addButton(QtWidgets.QMessageBox.Cancel)
+    box.setDefaultButton(dxf)
+    box.exec_()
+    clicked = box.clickedButton()
+    box.deleteLater()           # a parented box kept after it closed piles up (Reviewer)
+    if clicked is settings:
+        try:
+            Gui.showPreferences("Import-Export")
+        except Exception:
+            Gui.runCommand("Std_DlgPreferences", 0)
+        return None
+    if clicked is dxf:
+        return os.path.splitext(path)[0] + ".dxf"
+    return None
 
 
 STEP_WRITERS = {"step203": "AP203", "step214": "AP214IS", "step242": "AP242DIS"}
@@ -743,7 +895,40 @@ def _unname_products(done):
         QtCore.QTimer.singleShot(1500, unchanged)
 
 
-def _unit_links(doc, objs, size, labels=None):
+OUTPUT_CS = "ExportOutputCS"        # fh237: Export > Output coordinate system (a coordinate system's label, "" default)
+CS_DEFAULT = "-- default --"
+
+
+def coordinate_systems(doc):
+    """The document's own coordinate systems (not the origins), for Output coordinate system."""
+    return [o for o in (doc.Objects if doc is not None else [])
+            if o.TypeId.endswith("CoordinateSystem") and o.TypeId != "App::Origin"]
+
+
+def output_cs(doc):
+    ""
+
+    label = paths.params().GetString(OUTPUT_CS, "")
+    if not label or doc is None:
+        return None
+    cs = next((o for o in coordinate_systems(doc) if o.Label == label), None)
+    if cs is None:
+        return None
+    try:
+        g = cs.getGlobalPlacement() if hasattr(cs, "getGlobalPlacement") else cs.Placement
+        return g.inverse()
+    except Exception as _fw_err:
+        _fw_log("saveas.py:output_cs", _fw_err)
+        return None
+
+
+def _placed(obj, cs=None):
+    """The object's placement in the model, or in the output coordinate system cs."""
+    g = obj.getGlobalPlacement() if hasattr(obj, "getGlobalPlacement") else obj.Placement
+    return cs.multiply(g) if cs is not None else g
+
+
+def _unit_links(doc, objs, size, labels=None, cs=None):
     """Temporary links to objs scaled 1/size: OpenCASCADE 7.8 labels a STEP file with write.step.unit but
     keeps the millimetre numbers, so the shapes are handed over already in the document's units.
     The links keep the objects' names (or labels), colours and assembly structure, and are removed after
@@ -756,6 +941,11 @@ def _unit_links(doc, objs, size, labels=None):
             link.LinkedObject = o
             if abs(size - 1.0) > 1e-12:
                 link.ScaleVector = App.Vector(1, 1, 1) * (1.0 / size)
+            if cs is not None:
+                # fh237: the link stands where the object stands in the output coordinate system (a link's
+                # placement replaces the object's, and its offset is not scaled)
+                pl = _placed(o, cs)
+                link.Placement = App.Placement(pl.Base * (1.0 / size), pl.Rotation)
             link.Label = labels[i] if labels and i < len(labels) else o.Label
             try:
                 link.ViewObject.Visibility = False
@@ -778,6 +968,34 @@ def _remove_links(doc, links):
             _fw_log("saveas.py:_remove_links", _fw_err)
 
 
+def _curves_object(doc, objs):
+    """fh236: both IGES boxes ticked: the edges go in the same file as the solids/surfaces, from a
+    temporary object taken out again after the export."""
+    import Part
+    edges = _bspline_edges(objs, output_cs(doc))
+    if not edges:
+        return None
+    o = doc.addObject("Part::Feature", "IGESCurves")
+    o.Shape = Part.makeCompound(edges)
+    return o
+
+
+def _keep_placement(fn):
+    ""
+
+    g = App.ParamGet("User parameter:BaseApp/Preferences/Mod/Import")
+    had = "ExportKeepPlacement" in (g.GetBools() or [])
+    old = g.GetBool("ExportKeepPlacement", False)
+    g.SetBool("ExportKeepPlacement", True)
+    try:
+        return fn()
+    finally:
+        if had:
+            g.SetBool("ExportKeepPlacement", old)
+        else:
+            g.RemBool("ExportKeepPlacement")
+
+
 def _solid_export(doc, objs, path, writer):
     ""
 
@@ -794,27 +1012,36 @@ def _solid_export(doc, objs, path, writer):
         unit = export_unit(doc)
         named = _part_product_name(doc, objs)
         renamed = _name_products(doc) if writer in STEP_WRITERS else []
+        cs = output_cs(doc)     # fh237: Output coordinate system
 
         def go():
             for p, group in groups:
                 if writer in STEP_WRITERS:
                     labels = [named] if named and len(group) == 1 else None
-                    links = _unit_links(doc, group, unit[1] if unit else 1.0, labels) if unit or labels else []
+                    # fh237: always through links placed where each object sits (in the output coordinate system when
+                    # one is picked): FreeCAD's STEP writer drops a single object's own placement
+                    links = _unit_links(doc, group, unit[1] if unit else 1.0, labels, cs or App.Placement())
                     try:
                         _with_static(b"write.step.unit", unit and unit[0],
                                      lambda: _step(links or group, p, STEP_WRITERS[writer]))
                     finally:
                         _remove_links(doc, links)
-                elif writer == "iges" and iges_wireframe():
+                elif writer == "iges" and iges_wireframe() and not iges_surfaces():
                     _with_static(b"write.iges.unit", unit and unit[0], lambda: _iges_wireframe(group, p))
                 else:
                     import Import
+                    curves = _curves_object(doc, group) if writer == "iges" and iges_wireframe() else None
+                    moved = _unit_links(doc, group, 1.0, None, cs) if cs is not None else []
                     # imp144: Output as (Manifold Solid 186 / Trimmed Surface 144): FreeCAD reads its own IGES setting
                     # only when it starts, so the choice is set on OpenCASCADE for this export
-                    _with_static(b"write.iges.brep.mode", iges_brep_mode(),
-                                 lambda: _with_static(b"write.iges.unit", unit and unit[0], lambda: Import.export(group, p)))
+                    try:
+                        _with_static(b"write.iges.brep.mode", iges_brep_mode(),
+                                     lambda: _with_static(b"write.iges.unit", unit and unit[0],
+                                                          lambda: Import.export((moved or group) + ([curves] if curves else []), p)))
+                    finally:
+                        _remove_links(doc, ([curves] if curves else []) + moved)
         try:
-            _with_precision(go)
+            _with_precision(lambda: _keep_placement(go))
         finally:
             _unname_products(renamed)
     finally:
@@ -832,18 +1059,39 @@ def iges_brep_mode():
 
 
 def iges_wireframe():
-    """System Options > Export > IGES > Output as: Wireframe (type 110)."""
+    """System Options > Export > IGES > Output as: IGES wireframe (3D curves) ticked."""
     return App.ParamGet("User parameter:BaseApp/Preferences/Mod/FreeWorks").GetBool("IGESWireframe", False)
+
+
+def iges_surfaces():
+    """fh236: Output as: IGES solid/surface entities ticked (with neither ticked the solids are written)."""
+    fw = App.ParamGet("User parameter:BaseApp/Preferences/Mod/FreeWorks")
+    return fw.GetBool("IGESSurfaces", True) or not fw.GetBool("IGESWireframe", False)
+
+
+def _bspline_edges(objs, cs=None):
+    ""
+
+    edges = []
+    for o in objs:
+        shape = getattr(o, "Shape", None)
+        if shape is None or shape.isNull():
+            continue
+        for e in shape.Edges:
+            try:
+                n = e.toNurbs().Edges[0]
+            except Exception:
+                n = e.copy()
+            if cs is not None:
+                n.Placement = cs.multiply(n.Placement)
+            edges.append(n)
+    return edges
 
 
 def _iges_wireframe(objs, path):
     """IGES as wireframe: the model's edges only (lines and curves, no surfaces or solids)."""
     import Part
-    edges = []
-    for o in objs:
-        shape = getattr(o, "Shape", None)
-        if shape is not None and not shape.isNull():
-            edges.extend(e.copy() for e in shape.Edges)
+    edges = _bspline_edges(objs, output_cs(objs[0].Document) if objs else None)
     if not edges:
         raise RuntimeError("Nothing to write as IGES wireframe")
     Part.makeCompound(edges).exportIges(path)
@@ -870,9 +1118,10 @@ def _stl_mesh(objs, dev, ang):
     import Mesh
     import MeshPart
     mesh = Mesh.Mesh()
+    cs = output_cs(objs[0].Document) if objs else None      # fh237: Output coordinate system
     for o in objs:
         shape = o.Shape.copy(False)
-        shape.Placement = o.getGlobalPlacement() if hasattr(o, "getGlobalPlacement") else shape.Placement
+        shape.Placement = _placed(o, cs) if hasattr(o, "getGlobalPlacement") or cs is not None else shape.Placement
         mesh.addMesh(MeshPart.meshFromShape(Shape=shape, LinearDeflection=dev, AngularDeflection=ang * 3.14159265 / 180,
                                             Relative=False))
     return mesh
@@ -990,9 +1239,10 @@ def _3mf(doc, objs, path):
                                                                   _colour_of(o) if with_app else "#B4B4B4"))
         out.append('  </basematerials>')
     ids = []
+    cs = output_cs(doc)         # fh237: Output coordinate system
     for i, o in enumerate(objs):
         shape = o.Shape.copy(False)
-        shape.Placement = o.getGlobalPlacement() if hasattr(o, "getGlobalPlacement") else shape.Placement
+        shape.Placement = _placed(o, cs) if hasattr(o, "getGlobalPlacement") or cs is not None else shape.Placement
         mesh = MeshPart.meshFromShape(Shape=shape, LinearDeflection=dev, AngularDeflection=ang * 3.14159265 / 180,
                                       Relative=False)
         pts, tris = mesh.Topology
@@ -1303,6 +1553,8 @@ def _write_objs(doc, objs, path, writer):
         raise RuntimeError("nothing to export")     # open128: an empty Body counted as something
     if writer == "partdxf":
         _part_dxf(doc, objs, path)
+    elif writer == "partdwg":
+        _part_dwg(doc, objs, path)
     elif writer in ("step203", "step214", "step242", "iges"):
         _solid_export(doc, objs, path, writer)
     elif writer == "stl":
@@ -1627,7 +1879,7 @@ DRAWING_WRITERS = ("pdf", "dxf", "dwg", "svg")
 
 FORMATS = (("IGES 5.3", ("iges",)), ("STEP", ("step203", "step214", "step242")), ("VRML", ("vrml",)),
            ("STL/3MF/AMF", ("stl", "3mf", "mesh")), ("PDF", ("partpdf",)), ("TIF/JPG/PNG", ("image", "drawimage")),
-           ("DXF/DWG", ("partdxf",)))
+           ("DXF/DWG", ("partdxf", "partdwg")))
 FORMAT_ALIASES = {"IGES": "IGES 5.3", "STL": "STL/3MF/AMF", "3MF": "STL/3MF/AMF", "AMF": "STL/3MF/AMF"}
 STEP_SCHEMES = (("AP203", "step203"), ("AP214", "step214"), ("AP242", "step242"))
 
@@ -1744,6 +1996,7 @@ class ExportOptions(QtWidgets.QDialog):
         bl.addWidget(self.tmf_materials, 1, 0, 1, 2)
         bl.addWidget(self.tmf_appearances, 2, 0, 1, 2)
         lay.addWidget(box)
+        self._cs_row(lay, "STL/3MF/AMF")
         lay.addStretch(1)
         return pane
 
@@ -1811,20 +2064,32 @@ class ExportOptions(QtWidgets.QDialog):
     def _iges(self):
         pane = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(pane)
+
+        # shows them (fh236). The box had one list with "Wireframe (type 110)", so solids and curves could not
+        # be written together from Save As > Options, and the two places disagreed
         box = QtWidgets.QGroupBox("IGES solid/surface features")
-        bl = QtWidgets.QHBoxLayout(box)
-        bl.addWidget(QtWidgets.QLabel("Output as"))
+        bl = QtWidgets.QGridLayout(box)
+        fw = paths.params()
+        self.iges_surf = QtWidgets.QCheckBox("IGES solid/surface entities:")
+        self.iges_surf.setObjectName("FW_ExportIgesSurfaces")
+        self.iges_surf.setChecked(fw.GetBool("IGESSurfaces", True))
         self.iges_out = QtWidgets.QComboBox()
         self.iges_out.setObjectName("FW_ExportIgesOutput")
-        for text, value in (("Manifold Solid (type 186)", 1), ("Trimmed Surface (type 144)", 0),
-                            ("Wireframe (type 110)", 2)):
+        for text, value in (("Manifold Solid (type 186)", 1), ("Trimmed Surface (type 144)", 0)):
             self.iges_out.addItem(text, value)
-        try:
-            from . import optionspages
-            self.iges_out.setCurrentIndex(max(0, self.iges_out.findData(optionspages._iges_output_read())))
-        except Exception as _fw_err:
-            _fw_log("saveas.py:iges_out", _fw_err)
-        bl.addWidget(self.iges_out, 1)
+        mode = App.ParamGet("User parameter:BaseApp/Preferences/Mod/Part/IGES").GetInt("BrepMode", 0)
+        self.iges_out.setCurrentIndex(max(0, self.iges_out.findData(1 if mode == 1 else 0)))
+        self.iges_wire = QtWidgets.QCheckBox("IGES wireframe (3D curves):")
+        self.iges_wire.setObjectName("FW_ExportIgesWireframe")
+        self.iges_wire.setChecked(fw.GetBool("IGESWireframe", False))
+        wire_type = QtWidgets.QComboBox()
+        wire_type.setObjectName("FW_ExportIgesWireType")
+        wire_type.addItem("B-Splines (type 126)", 126)
+        bl.addWidget(self.iges_surf, 0, 0)
+        bl.addWidget(self.iges_out, 0, 1)
+        bl.addWidget(self.iges_wire, 1, 0)
+        bl.addWidget(wire_type, 1, 1)
+        bl.setColumnStretch(1, 1)
         lay.addWidget(box)
         self._shared(lay, "IGES")
         asm = QtWidgets.QGroupBox("IGES assembly structure")
@@ -1832,8 +2097,32 @@ class ExportOptions(QtWidgets.QDialog):
         self._check(al, "IGES", "Save all components of an assembly in one file", True)
         self._check(al, "IGES", "Flatten assembly hierarchy", True)
         lay.addWidget(asm)
+        self._cs_row(lay, "IGES 5.3")
         lay.addStretch(1)
         return pane
+
+    def _cs_row(self, layout, fmt):
+        ""
+
+
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(QtWidgets.QLabel("Output coordinate system:"))
+        combo = QtWidgets.QComboBox()
+        combo.setObjectName("FW_ExportOutputCS")
+        combo.addItem(CS_DEFAULT, "")
+        try:
+            for o in coordinate_systems(App.ActiveDocument):
+                combo.addItem(o.Label, o.Label)
+        except Exception as _fw_err:
+            _fw_log("saveas.py:cs_row", _fw_err)
+        have = paths.params().GetString(OUTPUT_CS, "")
+        combo.setCurrentIndex(max(0, combo.findData(have)))
+        row.addWidget(combo, 1)
+        layout.addLayout(row)
+        if not hasattr(self, "cs_combos"):
+            self.cs_combos = {}
+        self.cs_combos[fmt] = combo
+        return combo
 
     def _step(self, writer, schemes):
         pane = QtWidgets.QWidget()
@@ -1854,6 +2143,7 @@ class ExportOptions(QtWidgets.QDialog):
         lay.addWidget(box)
         self._check(lay, "STEP", "Export face/edge properties", True)
         self._shared(lay, "STEP")
+        self._cs_row(lay, "STEP")
         lay.addStretch(1)
         return pane
 
@@ -1875,11 +2165,11 @@ class ExportOptions(QtWidgets.QDialog):
         for text, c in self.checks.get({"IGES 5.3": "IGES"}.get(fmt, fmt), {}).items():
             _store_export(text, c.isChecked())
         if fmt == "IGES 5.3":
-            try:
-                from . import optionspages
-                optionspages._iges_output_write(self.iges_out.currentData())
-            except Exception as _fw_err:
-                _fw_log("saveas.py:iges_write", _fw_err)
+            fw = paths.params()          # fh253: the same settings System Options > Export keeps (fh236)
+            fw.SetBool("IGESSurfaces", self.iges_surf.isChecked())
+            fw.SetBool("IGESWireframe", self.iges_wire.isChecked())
+            App.ParamGet("User parameter:BaseApp/Preferences/Mod/Part/IGES").SetInt("BrepMode",
+                                                                                   int(self.iges_out.currentData()))
         elif fmt == "STEP" and self.schemes:
             set_step_scheme(self.scheme())
         elif fmt == "STL/3MF/AMF":
@@ -1888,6 +2178,9 @@ class ExportOptions(QtWidgets.QDialog):
             p.SetString(TMF_UNIT, self.tmf_unit.currentText())
             p.SetBool(TMF_MATERIALS, self.tmf_materials.isChecked())
             p.SetBool(TMF_APPEARANCES, self.tmf_appearances.isChecked())
+        cs = getattr(self, "cs_combos", {}).get(fmt)
+        if cs is not None:
+            paths.params().SetString(OUTPUT_CS, cs.currentData() or "")
         for st in self.rows.get(fmt, []):
             st.save()
         super().accept()
@@ -2155,11 +2448,20 @@ def save_as(doc=None, path=None, label=None, mode="save", refs=None):
         except Exception as _fw_err:
             _fw_log("saveas.py:open-elsewhere", _fw_err)
         return None
+    if entry[2] in ("dwg", "partdwg") and not _have_dwg():
+
+        if not interactive:
+            App.Console.PrintWarning("FreeCAD: Save As: %s not saved: no DWG converter is installed\n" % path)
+            return None
+        path = no_dwg_converter(path)
+        if path is None:
+            return None
+        entry = next((t for t in types if t[1][0] == "dxf"), entry)
     old_file = doc.FileName
     try:
-        if mode in ("copy", "copy_open") and entry[2] == "native":
-            doc.saveCopy(path)
-        elif entry[2] == "partdxf" and interactive and _part_dxf_panel(doc, path):
+        if mode in ("copy", "copy_open") and (entry[2] == "native" or entry[2] in TEMPLATE_WRITERS):
+            doc.saveCopy(path)          # fh212: a template saved as a copy left the document on the template file
+        elif entry[2] in ("partdxf", "partdwg") and interactive and _part_dxf_panel(doc, path, entry[2] == "partdwg"):
             return path         # dxf90: written by the DXF / DWG Output PropertyManager's Cleanup > Save
         else:
             write(doc, path, entry[2])
@@ -2182,7 +2484,7 @@ def save_as(doc=None, path=None, label=None, mode="save", refs=None):
                 _fw_log("saveas.py:save_as read-only", _fw_err)
         remember_folder(path)
         if mode == "copy_open":
-            if entry[2] == "native":
+            if entry[2] == "native" or entry[2] in TEMPLATE_WRITERS:
                 App.openDocument(path)
             else:
                 _open_export(path)
@@ -2228,7 +2530,8 @@ def _open_export(path):
 
 
 # er102: writers whose file is looked for after Save As (an assembly's components may each get "<name>-<part>.ext")
-WRITERS_CHECKED = ("native", "step203", "step214", "step242", "iges", "partpdf", "pdf", "3mf", "gltf", "stl", "vrml")
+WRITERS_CHECKED = ("native", "step203", "step214", "step242", "iges", "partpdf", "pdf", "3mf", "gltf", "stl", "vrml",
+                   "partdwg", "dwg")
 
 
 def _written(path):
@@ -2306,6 +2609,19 @@ def _reopen(doc, path):
         return None
 
 
+def _replace_ok(target):
+    ""
+    try:
+        answer = QtWidgets.QMessageBox.question(
+            Gui.getMainWindow(), "Save As",
+            "%s already exists in %s.\nDo you want to replace it?" % (os.path.basename(target), os.path.dirname(target)),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.No)
+        return answer == QtWidgets.QMessageBox.Yes
+    except Exception as _fw_err:
+        _fw_log("saveas.py:replace", _fw_err)
+        return False
+
+
 def save_referenced(doc, folder, prefix="", suffix=""):
     """Include all referenced components: a copy of each referenced document beside the file, with
     the prefix and suffix on its name. Returns the paths written."""
@@ -2315,6 +2631,8 @@ def save_referenced(doc, folder, prefix="", suffix=""):
         target = os.path.join(folder, name + ".FCStd")
         if ref.FileName and os.path.normpath(ref.FileName) == os.path.normpath(target):
             continue        # no prefix or suffix and the same folder: the file itself
+        if os.path.exists(target) and not _replace_ok(target):
+            continue        # fh232: a file of that name already there is replaced only when the user says so
         try:
             ref.saveCopy(target)
             written.append((ref, ref.FileName, target))
@@ -2540,9 +2858,11 @@ def open_dialog():
     box.setLabelText(QtWidgets.QFileDialog.FileType, "File type:")
     types = open_types()
     every = sorted({e for _l, exts in types for e in exts})
-    filters = ["All Files (*.*)", "All readable files (%s)" % " ".join("*." + e for e in every)] + [t[0] for t in types]
+
+    # Files; the type picked last is kept after that (open124)
+    filters = [t[0] for t in types] + ["All readable files (%s)" % " ".join("*." + e for e in every), "All Files (*.*)"]
     box.setNameFilters(filters)
-    box.selectNameFilter(filters[1])
+    box.selectNameFilter(next((f for f in filters if f.startswith("FreeCAD Files")), filters[0]))
 
     try:
         last = paths.params().GetString(OPEN_FILTER, "")
@@ -2703,7 +3023,7 @@ def open_dialog():
 OPEN_SIZE = "OpenDialogSize"
 
 # opendlg92: the System Options > Import File Format each file type's Options... opens
-IMPORT_FORMAT_OF = {e: "STEP/IGES/ACIS" for e in ("step", "stp", "igs", "iges", "sat", "sab", "x_t", "x_b")}
+IMPORT_FORMAT_OF = {e: "General" for e in ("step", "stp", "igs", "iges", "sat", "sab", "x_t", "x_b")}
 IMPORT_FORMAT_OF.update({e: "Mesh" for e in ("stl", "obj", "off", "ply", "3mf", "amf", "wrl")})
 
 
@@ -2890,6 +3210,16 @@ class OpenPreview((_preview_base() or QtWidgets.QLabel)):
             self.setText("")
         return self.live
 
+    def set_path(self, path):
+        """fh260: the saved meshes, thinned to what the preview draws before the first draw (a file saved with
+        1.5 million triangles took 1.2 s per drag to turn), then drawn at the isometric view."""
+        from . import tessave
+        self.items = tessave.read(path) if path else []
+        _thin_preview(self)
+        self.yaw, self.pitch = tessave.ISO_YAW, tessave.ISO_PITCH
+        self.redraw()
+        return bool(self.items)
+
     def mousePressEvent(self, event):
         if self.live:
             super().mousePressEvent(event)
@@ -2901,6 +3231,37 @@ class OpenPreview((_preview_base() or QtWidgets.QLabel)):
     def mouseDoubleClickEvent(self, event):
         if self.live:
             super().mouseDoubleClickEvent(event)
+
+
+def _thin_preview(widget, most=None):
+    """fh260: thins widget.items to most triangles (tessave.MAX_TRIANGLES), keeping only the points they use.
+    Files saved since features-472 are already thinned on write: nothing to do for them. True when thinned."""
+    try:
+        from . import tessave
+        most = most or tessave.MAX_TRIANGLES
+        items = getattr(widget, "items", None) or []
+        total = sum(len(m["triangles"]) for m in items)
+        if total <= most:
+            return False
+        if hasattr(tessave, "thin"):         # features-472: the same rule its saved meshes are thinned with
+            widget.items = tessave.thin(items, most)
+            return True
+        step = -(-total // most)             # else the rule render() draws with: every step-th triangle
+        thin = []
+        for m in items:
+            tris = m["triangles"][::step]
+            if not tris:
+                continue
+            used = sorted({i for t in tris for i in t})
+            where = {old: new for new, old in enumerate(used)}
+            pts = m["points"]
+            thin.append(dict(m, points=[pts[i] for i in used],
+                             triangles=[(where[a], where[b], where[c]) for a, b, c in tris]))
+        widget.items = thin
+        return True
+    except Exception as _fw_err:
+        _fw_log("saveas.py:thin_preview", _fw_err)
+        return False
 
 
 def _open_file_picked(box, path):
@@ -3085,6 +3446,53 @@ class ReferencesDialog(QtWidgets.QDialog):
         super().accept()
 
 
+def _apply_redirects(doc, path, before):
+    """fh234: References... (Edit Referenced File Locations): the components of the opened document use the file picked
+    there. Opening the new file first was not enough: a link finds its document by the file name it stored, so the old
+    file was loaded and used (or the component was missing when that file had gone). The old file, when it was only
+    loaded for this, is closed again."""
+    try:
+        from . import fcstdinfo
+        moves = {}
+        for ref in (fcstdinfo.info(path) or {}).get("references", []):
+            new = ReferencesDialog.redirects.get(ref)
+            if new and os.path.isfile(new):
+                moves[os.path.normcase(os.path.normpath(ref))] = new
+        if not moves:
+            return 0
+        from . import asmhealth, asmrefopts
+        base = os.path.dirname(path)
+        norm = lambda f: os.path.normcase(os.path.normpath(f if os.path.isabs(f) else os.path.join(base, f)))
+        done, old_docs = 0, set()
+        for link, fname, objname in asmrefopts.missing_links(doc):      # the old file has gone
+            new = moves.get(norm(fname))
+            if new and asmhealth.relink(link, new, objname):
+                done += 1
+        for o in doc.Objects:                                            # the old file is still there
+            if o.TypeId not in ("App::Link", "Assembly::AssemblyLink"):
+                continue
+            target = getattr(o, "LinkedObject", None)
+            tdoc = getattr(target, "Document", None)
+            if tdoc is None or tdoc is doc or not tdoc.FileName:
+                continue
+            new = moves.get(os.path.normcase(os.path.normpath(tdoc.FileName)))
+            if new and asmhealth.relink(o, new, target.Name):
+                done += 1
+                old_docs.add(tdoc.Name)
+        for name in old_docs:
+            d = App.listDocuments().get(name)
+            if d is None or name in before:
+                continue
+            if not any(x.Document is not d for o in d.Objects for x in o.InList):
+                App.closeDocument(name)
+        if done:
+            doc.recompute()
+        return done
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: references: %s\n" % error)
+        return 0
+
+
 def _native(path):
     """save116: a FreeCAD file: .FCStd, and its backups (.FCBak, .FCStd1...), which are FreeCAD files too."""
     low = path.lower()
@@ -3199,6 +3607,14 @@ def _opened_newer(doc, path):
     newer = newer_version(path)
     if not newer:
         return
+    try:
+        # fh194: FreeCAD's own examples (Start page) are shipped with this FreeCAD, some saved by a newer build
+        # (1.1.4's AssemblyExample says 1.2): stock FreeCAD opens them to edit, so they are not made read-only
+        own = os.path.normcase(os.path.abspath(os.path.join(App.getResourceDir(), "examples")))
+        if os.path.normcase(os.path.abspath(path)).startswith(own + os.sep):
+            return
+    except Exception as _fw_err:
+        _fw_log("saveas.py:own examples", _fw_err)
     try:
         from . import filecmds
         filecmds.set_read_only(doc, True)
@@ -3356,12 +3772,19 @@ def _open_file(path, mode="Resolved", speedpak=False, skip_hidden=False):
                 return drawdocprops.open_detailing(path)
             except Exception as error:
                 App.Console.PrintLog("FreeCAD: Detailing mode: %s\n" % error)
+        before = set(App.listDocuments())
         doc = App.openDocument(path)
+        _apply_redirects(doc, path, before)
         if mode in ("Lightweight", "Large Design Review") or speedpak or skip_hidden:
             _open_as(doc, mode, speedpak, skip_hidden)
         return doc
     import importlib
     ext = os.path.splitext(path)[1][1:]
+    if ext.lower() in ("dxf", "dwg") and App.GuiUp and DXF_WIZARD:
+
+        # position on origin) in place of FreeCAD's DXF Import box; Cancel opens nothing
+        from . import dxfimport
+        return dxfimport.open_wizard(path)
     mods = App.getImportType(ext) or App.getImportType(ext.lower()) or []
     if not mods:
         raise RuntimeError(NO_READER.get(ext.lower(), "FreeCAD has no reader for .%s files") % ext)
@@ -3410,7 +3833,7 @@ def _open_file(path, mode="Resolved", speedpak=False, skip_hidden=False):
         doc.Label = os.path.splitext(os.path.basename(path))[0]
         doc.recompute()
         if ext.lower() in ("igs", "iges", "step", "stp"):
-            _file_units(doc, path)
+            _file_units(doc, path)          # imp144/fh236: Import > Unit (file or document template)
         if ext.lower() in ("step", "stp"):
             try:
                 if as_assembly(doc):        # imp144: a STEP assembly opens as an assembly of its parts
@@ -3421,6 +3844,9 @@ def _open_file(path, mode="Resolved", speedpak=False, skip_hidden=False):
         Gui.SendMsgToActiveView("ViewFit")
         return doc
     raise RuntimeError(str(error or "nothing was read from the file"))
+
+
+DXF_WIZARD = True       # fh254: False reads a DXF / DWG with FreeCAD's own DXF Import box
 
 
 def _dxf_box_glitch(error):
@@ -3442,10 +3868,10 @@ def _close_import_step(title):
 # sw158: files made by other CAD programs that FreeCAD cannot read, with what to do instead
 _AS_STEP = "Save it as STEP (*.step) or IGES (*.igs) in the program that made it, then open that file here"
 NO_READER = {
-    "sldprt": "FreeCAD cannot read .%s part files. " + _AS_STEP,
-    "sldasm": "FreeCAD cannot read .%s assembly files. Save the assembly as STEP (*.step) in the program that made "
+    "sldprt": "FreeCAD cannot read SOLIDWORKS part (.%s) files. " + _AS_STEP,
+    "sldasm": "FreeCAD cannot read SOLIDWORKS assembly (.%s) files. Save the assembly as STEP (*.step) in the program that made "
               "it (one file with all its parts), then open that file here",
-    "slddrw": "FreeCAD cannot read .%s drawing files. Save the drawing as DXF (*.dxf) or PDF (*.pdf), and its model "
+    "slddrw": "FreeCAD cannot read SOLIDWORKS drawing (.%s) files. Save the drawing as DXF (*.dxf) or PDF (*.pdf), and its model "
               "as STEP (*.step), in the program that made them; open the STEP file here, or the DXF with File > Open",
     "x_t": "FreeCAD cannot read Parasolid (.%s) files. " + _AS_STEP,
     "x_b": "FreeCAD cannot read Parasolid (.%s) files. " + _AS_STEP,
@@ -3525,6 +3951,13 @@ def file_length_unit(path):
 def _file_units(doc, path):
     ""
 
+
+    try:
+        from . import optionspages
+        if optionspages.import_unit() != "File specified unit":
+            return
+    except Exception as _fw_err:
+        _fw_log("saveas.py:_file_units import_unit", _fw_err)
     unit = file_length_unit(path)
     schema = FILE_UNIT_SCHEMA.get(unit)
     if schema is None or not hasattr(doc, "UnitSystem"):
@@ -4180,8 +4613,18 @@ class _DropOpens(QtCore.QObject):
             if not isinstance(obj, QtWidgets.QWidget) or not _over_documents(obj):
                 return False
             paths_ = _dropped(event)
-            if not paths_ or _assembly_active():
+            if not paths_:
                 return False
+            if _assembly_active() and all(os.path.splitext(p)[1][1:].lower() in DROP_COMPONENTS for p in paths_):
+
+                # as a component where it is dropped; FreeCAD opened it as a document of its own (and put a
+                # dropped mesh into the assembly as a loose object: a mesh still opens as its own document)
+                event.setDropAction(QtCore.Qt.CopyAction)
+                event.accept()
+                if t == QtCore.QEvent.Drop:
+                    pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
+                    QtCore.QTimer.singleShot(0, lambda p=list(paths_), w=obj, q=pos: _drop_components(p, w, q))
+                return True
             event.setDropAction(QtCore.Qt.CopyAction)
             event.accept()
             if t == QtCore.QEvent.Drop:
@@ -4190,6 +4633,36 @@ class _DropOpens(QtCore.QObject):
         except Exception as _fw_err:
             _fw_log("saveas.py:drop", _fw_err)
             return False
+
+
+DROP_COMPONENTS = {"fcstd", "step", "stp", "igs", "iges", "brep", "brp"}
+
+
+def _drop_components(paths_, widget, pos):
+    ""
+
+    from . import designlib
+    doc = App.ActiveDocument
+    point = None
+    try:
+        if widget.inherits("QOpenGLWidget"):
+            _pick, point = designlib.drop_target(widget, pos)
+    except Exception as _fw_err:
+        _fw_log("saveas.py:drop point", _fw_err)
+    for i, p in enumerate(paths_):
+        try:
+            at = App.Vector(point) + App.Vector(20.0 * i, 0, 0) if point is not None else None
+            designlib.insert(p, doc, point=at, pm=False)
+        except Exception as error:
+            App.Console.PrintWarning("FreeCAD: %s: %s\n" % (os.path.basename(p), error))
+        finally:
+            # the part opened hidden for the link became the active document: the assembly stays in front
+            try:
+                if doc is not None and App.ActiveDocument is not doc:
+                    App.setActiveDocument(doc.Name)
+                    Gui.ActiveDocument = Gui.getDocument(doc.Name)
+            except Exception as _fw_err:
+                _fw_log("saveas.py:drop active", _fw_err)
 
 
 _DROP = []

@@ -200,8 +200,13 @@ def dim_text(doc, value, kind="Distance", prefix=""):
         text = prefix + main
         if st["dual"]:
             dual_symbol, dual_size = dual_unit(doc)
-            dual = number(value / dual_size, st["dual_precision"], st["leading"], "Show", how)
-            dual = "[%s%s]" % (dual, dual_symbol if st["dual_units"] else "")
+            if st["dual_precision"] == 0 and dual_symbol in ("in", "ft"):
+
+                dual = fraction(value / INCH, doc, row="Dual dimension", feet=dual_symbol == "ft")
+                dual = "[%s]" % (dual if st["dual_units"] else dual.rstrip('"'))
+            else:
+                dual = number(value / dual_size, st["dual_precision"], st["leading"], "Show", how)
+                dual = "[%s%s]" % (dual, dual_symbol if st["dual_units"] else "")
             pos = st["dual_position"]
             text = {"Top": text + "\n" + dual, "Bottom": dual + "\n" + text,
                     "Left": dual + " " + text}.get(pos, text + " " + dual)
@@ -225,20 +230,38 @@ def fractional(doc):
 FRACTION_SLASH = {"Stacked": "\u2044", "Diagonal": "/", "Horizontal": "/", "Diagonal stacked": "\u2044"}
 
 
-def fraction(inches, doc=None, denominator=64):
-    """Dimensions > Fractional display: style, and Include leading zero for values less than 1"."""
+def fraction(inches, doc=None, denominator=None, row="Length", feet=True):
+    """Dimensions > Fractional display: style, and Include leading zero for values less than 1". The denominator
+    is Units > Fractions; Units > More: Round to nearest fraction (off: a length that is no such fraction stays a
+    decimal) and Convert from 2" to 1'-2" (feet & inches over 12")."""
     from fractions import Fraction
+    rounding_on, to_feet = True, False
+    try:
+        from . import unitspage
+        if denominator is None:
+            denominator = unitspage.fractions(doc, row)
+        rounding_on, to_feet = unitspage.more(doc, row)
+    except Exception:
+        denominator = denominator or 64
+    denominator = max(1, int(denominator))
     neg = inches < 0
-    f = Fraction(abs(inches)).limit_denominator(denominator)
+    f = Fraction(int(round(abs(inches) * denominator)), denominator)     # the nearest 1/denominator
+    if not rounding_on and abs(float(f) - abs(inches)) > 1e-9:
+        return ("-" if neg else "") + number(abs(inches), _units_decimals(doc) if doc is not None else 2,
+                                             trailing="Show") + '"'
+    head = ""
+    if feet and to_feet and f >= 12:
+        ft, f = divmod(f, 12)
+        head = "%d'-" % ft
     whole, rest = divmod(f.numerator, f.denominator)
     style = str(_v(doc, "Dimensions", "Fraction style", "Stacked")) if doc is not None else "Stacked"
     lead = bool(_v(doc, "Dimensions", "Include leading zero for values less than 1\"", False)) if doc else False
     parts = []
-    if whole or lead or not rest:
+    if whole or lead or not rest or head:
         parts.append(str(whole))
     if rest:
         parts.append("%d%s%d" % (rest, FRACTION_SLASH.get(style, "/"), f.denominator))
-    text = (" " if style == "Horizontal" else " ").join(parts) + '"'
+    text = head + (" " if style == "Horizontal" else " ").join(parts) + '"'
     return ("-" if neg else "") + text
 
 

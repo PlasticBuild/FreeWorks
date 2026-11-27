@@ -59,6 +59,7 @@ class Indicator(QtWidgets.QLabel):
     def __init__(self, parent=None):
         super().__init__(TEXT, parent)
         self.setObjectName("SWSimplifiedInterface")
+        self.setFocusPolicy(QtCore.Qt.ClickFocus)      # statusfocus-1127
         try:
             from .chrome import ui_font
             self.setFont(ui_font())

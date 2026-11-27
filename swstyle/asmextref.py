@@ -131,9 +131,80 @@ def dependents(binder):
     return [o for o in binder.InList if o.Document is binder.Document and o.TypeId != "PartDesign::Body"]
 
 
+def derived(doc):
+    ""
+
+    out = []
+    for o in getattr(doc, "Objects", []):
+        try:
+            props = o.PropertiesList
+            if "File" in props and "BreakLink" in props and "SolidBodies" in props and (o.File or "").strip():
+                out.append(o)
+        except Exception as _fw_err:
+            _fw_log("asmextref.py:derived", _fw_err)
+    return out
+
+
+def _parent_path(feat):
+    path = (feat.File or "").strip()
+    if not os.path.isabs(path) and feat.Document.FileName:
+        path = os.path.join(os.path.dirname(feat.Document.FileName), path)
+    return os.path.normpath(path)
+
+
+def derived_status(feat):
+    """Insert Part's reference: Broken (Break link), Locked (Lock All), Out of context (the parent
+    file not found, '->?'), else In context: it is read again from the file on each rebuild."""
+    if feat.BreakLink:
+        return "Broken"
+    if getattr(feat, "FwRefLocked", False):
+        return "Locked"
+    return "In context" if os.path.isfile(_parent_path(feat)) else "Out of context"
+
+
+def references(doc):
+    """Everything List External References lists for doc: in-context references and derived features."""
+    return binders(doc) + derived(doc)
+
+
+def _plain_label(label):
+    for m in ("->?", "->*", "->x", "->"):
+        if label.endswith(m):
+            return label[:-len(m)]
+    return label
+
+
+def _derived_mode(feat, mode):
+    """Lock All / Unlock All / Break All on an Insert Part feature, with its tree mark."""
+    if feat.BreakLink:
+        return 0                    # broken for good
+    from . import asmrefopts
+    base = _plain_label(feat.Label or "")
+    if mode == "Detached":
+        if "Cached" in feat.PropertiesList and feat.Cached.isNull():
+            return 0                # nothing read yet: nothing to keep
+        feat.BreakLink = True
+        feat.Label = base + ("->x" if asmrefopts.on(asmrefopts.SHOW_X) else "")
+        return 1
+    locked = mode == "Frozen"
+    if bool(getattr(feat, "FwRefLocked", False)) == locked:
+        return 0
+    if "FwRefLocked" not in feat.PropertiesList:
+        feat.addProperty("App::PropertyBool", "FwRefLocked", "Insert Part", "Locked: not read again from the part file")
+        feat.setEditorMode("FwRefLocked", 2)
+    feat.FwRefLocked = locked
+    feat.Label = base + ("->*" if locked else ("->" if os.path.isfile(_parent_path(feat)) else "->?"))
+    if not locked:
+        feat.touch()                # unlocked: read the part file again now
+    return 1
+
+
 def rows(doc):
     """[(feature, data, status, referenced entity, binder)] for List External References."""
     out = []
+    for f in derived(doc):
+        path = _parent_path(f)
+        out.append((f.Label, os.path.basename(path), derived_status(f), path, f))
     for b in binders(doc):
         feats = []
         for f in dependents(b) or [b]:
@@ -194,6 +265,10 @@ def component_mark(comp):
         if st == "Broken" and not show_x:
             continue
         found.append(st)
+    for f in derived(body.Document):
+        st = derived_status(f)
+        if st != "Broken" or show_x:
+            found.append(st)
     for st in ("In context", "Out of context", "Locked", "Broken"):
         if st in found:
             return MARKS[st]
@@ -213,6 +288,8 @@ def set_mode(doc, mode):
                 b.FwReferenced = referenced_entity(b)
             b.BindMode = mode
             n += 1
+    for f in derived(doc):
+        n += _derived_mode(f, mode)
     doc.recompute()
     return n
 
@@ -300,8 +377,29 @@ def note_context(binder, asm):
 
 
     path = asm.Document.FileName or ""
-    if path and getattr(binder, "FwContext", None) not in (None, path):
+    was = getattr(binder, "FwContext", None)
+    if not path or was in (None, path):
+        return
+
+    # assembly it was made in): only a context with no file yet, or its own assembly saved under a new name
+    if not was or _norm(path) in RENAMED.get(_norm(was), ()):
         binder.FwContext = path
+
+
+RENAMED = {}        # assembly file -> {the files it was saved as since} (asmrefopts: Save / Save As)
+
+
+def _norm(path):
+    return os.path.normcase(os.path.normpath(path)) if path else ""
+
+
+def saved_as(old, new):
+    """An assembly saved from file old (or its holding file) to new: its parts' references follow it."""
+    if old and new and _norm(old) != _norm(new):
+        RENAMED.setdefault(_norm(old), set()).add(_norm(new))
+        for k, v in list(RENAMED.items()):     # saved again later: the first name follows too
+            if _norm(old) in v:
+                v.add(_norm(new))
 
 
 def note_contexts(asm_doc):
@@ -518,7 +616,8 @@ class ExternalRefsDialog(QtWidgets.QDialog):
         self.lock.clicked.connect(self._lock)
         self.brk = QtWidgets.QPushButton("Break All")
         self.brk.setObjectName("FW_ExternalRefsBreak")
-        self.brk.clicked.connect(self._break)
+        # clicked(bool) would pass checked=False as ask: Break All always asks first (it cannot be undone)
+        self.brk.clicked.connect(lambda _checked=False: self._break())
         self.ok = QtWidgets.QPushButton("OK")
         self.ok.clicked.connect(self.accept)
         row.addWidget(self.lock)

@@ -128,6 +128,30 @@ def meshes(doc):
     return out
 
 
+def thin(items, cap=None):
+    """items with each mesh thinned by the rule render() draws with (every step-th triangle, step from the
+    total over cap), keeping only the points those triangles use. A file then stores no more than its
+    preview draws, so picking it in the Open box stays quick."""
+    cap = cap or MAX_TRIANGLES
+    total = sum(len(m["triangles"]) for m in items)
+    step = max(1, int(math.ceil(total / float(cap))))
+    if step == 1:
+        return items
+    out = []
+    for m in items:
+        keep = [t for k, t in enumerate(m["triangles"]) if not k % step]
+        used, pts = {}, []
+        for t in keep:
+            for i in t:
+                if i not in used:
+                    used[i] = len(pts)
+                    pts.append(m["points"][i])
+        if not keep:
+            continue
+        out.append(dict(m, points=pts, triangles=[tuple(used[i] for i in t) for t in keep]))
+    return out
+
+
 def _pack(items):
     index, blob = [], bytearray()
     for m in items:
@@ -145,7 +169,7 @@ def write(doc, path=None):
     path = path or doc.FileName
     if not path or not os.path.isfile(path):
         return False
-    items = meshes(doc)
+    items = thin(meshes(doc))
     if not items:
         return False
     index, blob = _pack(items)

@@ -102,7 +102,7 @@ SPEC = sf.Spec(
      Field("AngleTolerance", "angle", "Angle tolerance", 1.0, low=0.0, high=45.0, box="Heal Edges",
            tip="Edges that meet at less than this are merged into one"),
      Field("EdgeLength", "length", "Edge length tolerance", 0.1, box="Heal Edges",
-           tip="Edges shorter than this are merged with a neighbour whatever the angle"),
+           tip="Edges shorter than this are merged with a neighbor whatever the angle"),
      Field("Healed", "info", "Result", "", box="Heal Edges")],
     _compute, refine=False)
 

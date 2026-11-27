@@ -89,7 +89,7 @@ PAGES = {
     "pvsetup": ("Pressure Vessel Setup", "Pick the static studies to combine (one load case each, on one mesh) and "
                 "their factors: a linear combination, or the square root of the sum of their squares.", (),
                 ("#pv_setup",)),
-    "goals": ("Goals and Constraints", "Say what the optimisation aims at and how much mass to take away, and which "
+    "goals": ("Goals and Constraints", "Say what the optimization aims at and how much mass to take away, and which "
               "regions must keep their material.", (), ("#topology_goals",)),
     "connections": ("Connections Advisor", "Where faces touch, say how they meet: bonded, or in contact so that they "
                     "can slide apart. A single body needs none.", CONNECT_WORDS,

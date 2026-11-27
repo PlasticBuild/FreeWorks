@@ -173,7 +173,7 @@ SKETCH = ("Sketch", [
         Bool(SKETCHER, "ShowDialogOnDistanceConstraint", True, "Input dimension value",
              "Open the value box when a dimension is placed"),
         Bool(SKETCHER, "KeepDimensionOnCancel", True,
-             "Keep a new dimension when its value box is cancelled",
+             "Keep a new dimension when its value box is canceled",
              "It keeps the measured size. Off: Cancel removes the dimension",
              needs="ShowDialogOnDistanceConstraint", indent=True),
     ]),

@@ -1140,6 +1140,7 @@ class _EntityList:
         g = self.group(title)
         self.list = QtWidgets.QListWidget(g.body)
         self.list.setObjectName("SWBlockEntities")
+        self.list.setProperty("swpickbox", True)
         self.list.setFixedHeight(100)
         g.content.addWidget(self.list)
         self.geos = list(dict.fromkeys(geos))
@@ -1207,11 +1208,7 @@ def _make_page_class():
 
         def build(self):
             self.setProperty("swstyle_pm_title", self.TITLE)
-            g = self.group("Message")
-            label = QtWidgets.QLabel("Select the sketch entities for the block. The insertion point is "
-                                     "where the block is placed from.", g.body)
-            label.setWordWrap(True)
-            g.content.addWidget(label)
+
             picked = []
             for i in _picked_indices(self.sketch):
                 if self._nestable(i):
@@ -1230,6 +1227,8 @@ def _make_page_class():
                 box.setSuffix(" mm")
                 row.addRow("%s:" % name, box)
             g.content.addLayout(row)
+            g.body.setHidden(True)
+            g._update_fold()
             self.moved = False
             self.x.valueChanged.connect(self._typed)
             self.y.valueChanged.connect(self._typed)
@@ -1373,12 +1372,10 @@ def _insert_page_class():
         def build(self):
             self.setProperty("swstyle_pm_title", self.TITLE)
             self.sources = {}       # list text -> block data
-            g = self.group("Message")
-            label = QtWidgets.QLabel("Pick a block, or Browse for a block file, then click in the graphics area "
-                                     "to place it. Each click places another.", g.body)
-            label.setWordWrap(True)
-            g.content.addWidget(label)
+
+            # (codex-receipts sw-reads/insert-and-edit-block-1.md); the placing hint is in the status bar
             g = self.group("Blocks to Insert")
+            g.content.addWidget(QtWidgets.QLabel("Open Blocks", g.body))
             self.list = QtWidgets.QListWidget(g.body)
             self.list.setObjectName("SWBlockOpenBlocks")
             self.list.setFixedHeight(90)
@@ -1388,7 +1385,7 @@ def _insert_page_class():
             browse.clicked.connect(self.browse)
             g.content.addWidget(browse)
             self.paths = {}         # list text -> the block file it came from
-            self.link = QtWidgets.QCheckBox("Link to file", g.body)
+            self.link = QtWidgets.QCheckBox("Link to file:", g.body)
             self.link.setObjectName("SWBlockLinkToFile")
             self.link.setToolTip("The placed blocks stay tied to the block file: Rebuild brings in its changes")
             self.link.setEnabled(False)
@@ -1410,8 +1407,8 @@ def _insert_page_class():
             self.scale.setRange(0.001, 1000)
             self.scale.setDecimals(3)
             self.scale.setValue(1.0)
-            form.addRow("Angle", self.angle)
-            form.addRow("Scale", self.scale)
+            form.addRow("Block Scale", self.scale)
+            form.addRow("Block Rotation", self.angle)
             g.content.addLayout(form)
             self.inserted = []
             self.view = None

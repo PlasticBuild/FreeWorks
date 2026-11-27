@@ -14,6 +14,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -150,9 +151,9 @@ QLabel[swMessage="warn"], QFrame[swMessage="warn"] {
 }
 QLineEdit[swInvalid="true"], QAbstractSpinBox[swInvalid="true"] { background: #ffd9d9; color: #a00000; }
 QAbstractSpinBox[swInvalid="true"] QLineEdit { background: #ffd9d9; color: #a00000; }
-QListWidget[swstrip="1"], QLineEdit[swstrip="1"] { border-left: 14px solid #50a8ff; }
-QListWidget[swstrip="2"], QLineEdit[swstrip="2"] { border-left: 14px solid #f57ec0; }
-QListWidget[swstrip="3"], QLineEdit[swstrip="3"] { border-left: 14px solid #7f00fc; }
+QListWidget[swstrip="1"], QLineEdit[swstrip="1"] { border-left: 14px solid #53a9ff; }
+QListWidget[swstrip="2"], QLineEdit[swstrip="2"] { border-left: 14px solid #ff80c0; }
+QListWidget[swstrip="3"], QLineEdit[swstrip="3"] { border-left: 14px solid #8000ff; }
 QListWidget[swstrip="4"], QLineEdit[swstrip="4"] { border-left: 14px solid #5fbf5f; }
 QListWidget[swstrip="5"], QLineEdit[swstrip="5"] { border-left: 14px solid #3fbfbf; }
 QListWidget[swstrip="6"], QLineEdit[swstrip="6"] { border-left: 14px solid #e04fd0; }
@@ -165,6 +166,7 @@ QLineEdit, QAbstractSpinBox, QComboBox {
     selection-background-color: #0078d7;
     selection-color: #ffffff;
 }
+QAbstractSpinBox:hover, QComboBox:hover { border: 1px solid #6fa8dc; }   /* statehover-1127 */
 QLineEdit:focus, QAbstractSpinBox:focus, QComboBox:focus { border: 1px solid ${accent}; }
 QLineEdit:disabled, QAbstractSpinBox:disabled, QComboBox:disabled { background: ${hover}; color: ${text_disabled}; }
 QComboBox QAbstractItemView { background: ${field}; color: ${field_text}; }
@@ -204,7 +206,11 @@ QRadioButton::indicator {
     border: 1px solid ${arrow};
     border-radius: 7px;
 }
+QRadioButton::indicator:hover { border-color: #0078d7; }
+QCheckBox::indicator:focus, QRadioButton::indicator:focus { border-color: #0078d7; background: ${menu_hover}; }
+QCheckBox::indicator:checked:focus { background: #005499; border-color: #005499; }
 QRadioButton::indicator:checked { background: ${base}; border: 4px solid #0078d7; width: 7px; height: 7px; }
+QRadioButton::indicator:checked:hover, QRadioButton::indicator:checked:focus { border-color: #005499; }
 QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {
     background: ${field}; border: none; width: 14px;
 }
@@ -602,6 +608,14 @@ class _TabCycle(QtCore.QObject):
             # not past the page to the status bar (Mirror Body)
             view.installEventFilter(cycle)
             cycle.on_view = True
+        # pkg454: a click on the page's empty part gives the focus to its scroll area, not the view: Tab
+        # from there went past the page too (to the status bar's buttons)
+        cycle.areas = []
+        for area in view.findChildren(QtWidgets.QAbstractScrollArea):
+            if isinstance(area, (QtWidgets.QAbstractItemView, QtWidgets.QTextEdit, QtWidgets.QPlainTextEdit)):
+                continue
+            area.installEventFilter(cycle)      # installing again moves it first, no second copy
+            cycle.areas.append(area)
 
     def _ends(self):
         alive = []
@@ -624,7 +638,7 @@ class _TabCycle(QtCore.QObject):
         first, last = self._ends()
         if first is None:
             return False
-        if obj is self.parent() and obj not in self.widgets:
+        if (obj is self.parent() or obj in getattr(self, "areas", ())) and obj not in self.widgets:
             if event.modifiers() & QtCore.Qt.ShiftModifier or key == QtCore.Qt.Key_Backtab:
                 last.setFocus(QtCore.Qt.BacktabFocusReason)
             else:
@@ -762,13 +776,22 @@ def _first_box_title(view):
     return ""
 
 
+def _editing_existing(obj):
+    """True when the in-edit object is an existing feature opened by Edit Feature (pkg444)."""
+    try:
+        tx = App.getActiveTransaction()
+    except Exception:
+        return False
+    return bool(tx) and tx[0] == "Edit " + obj.Label
+
+
 def _title(view):
     ""
     obj = None
     try:
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
-        obj = edit.Object if edit is not None else None
+        obj = editobj.of(edit) if edit is not None else None
     except Exception:
         obj = None
     box_title = _first_box_title(view)
@@ -777,6 +800,8 @@ def _title(view):
         if obj.TypeId == "Sketcher::SketchObject" and box_title:
             # A sketch tool's own panel: "Circle parameters" -> "Circle"
             title = box_title.replace(" parameters", "").replace(" Parameters", "")
+        elif obj.TypeId != "Sketcher::SketchObject" and _editing_existing(obj):
+            title = obj.Label        # pkg444: Edit Feature titles the page "Boss-Extrude1", a new one "Boss-Extrude"
         icon = icons.family(family)
         return title, icon if not icon.isNull() else _command_icon(title)
     # Addon panels name themselves (sketchstart's "Edit Sketch", the Rib).
@@ -980,6 +1005,46 @@ WORDS = {
 }
 _ORIGINAL = "swstyle_pm_original"
 
+# FreeCAD's PartDesign panels in the user's language: the table above is keyed by FreeCAD's English text,
+# which a translated FreeCAD does not show. native_variants(text) is the English text and what FreeCAD's own
+# translation contexts make of it (found on the bench in Italian: every key of the table translates under
+# one of these contexts).
+NATIVE_CONTEXTS = ['PartDesignGui::DlgActiveBody', 'PartDesignGui::DlgPrimitives', 'PartDesignGui::DlgReference', 'PartDesignGui::TaskBooleanParameters', 'PartDesignGui::TaskBoxPrimitives', 'PartDesignGui::TaskChamferParameters', 'PartDesignGui::TaskDatumParameters', 'PartDesignGui::TaskDlgBooleanParameters', 'PartDesignGui::TaskDlgChamferParameters', 'PartDesignGui::TaskDlgDatumParameters', 'PartDesignGui::TaskDlgDraftParameters', 'PartDesignGui::TaskDlgDressUpParameters', 'PartDesignGui::TaskDlgExtrudeParameters', 'PartDesignGui::TaskDlgFeatureParameters', 'PartDesignGui::TaskDlgFeaturePick', 'PartDesignGui::TaskDlgFilletParameters', 'PartDesignGui::TaskDlgGrooveParameters', 'PartDesignGui::TaskDlgHelixParameters', 'PartDesignGui::TaskDlgHoleParameters', 'PartDesignGui::TaskDlgLinearPatternParameters', 'PartDesignGui::TaskDlgLoftParameters', 'PartDesignGui::TaskDlgMirroredParameters', 'PartDesignGui::TaskDlgMultiTransformParameters', 'PartDesignGui::TaskDlgPadParameters', 'PartDesignGui::TaskDlgPipeParameters', 'PartDesignGui::TaskDlgPocketParameters', 'PartDesignGui::TaskDlgPrimitiveParameters', 'PartDesignGui::TaskDlgRevolutionParameters', 'PartDesignGui::TaskDlgScaledParameters', 'PartDesignGui::TaskDlgShapeBinder', 'PartDesignGui::TaskDlgSketchBasedParameters', 'PartDesignGui::TaskDlgThicknessParameters', 'PartDesignGui::TaskDlgTransformedParameters', 'PartDesignGui::TaskDraftParameters', 'PartDesignGui::TaskDressUpParameters', 'PartDesignGui::TaskExtrudeParameters', 'PartDesignGui::TaskExtrudeParameters::Side', 'PartDesignGui::TaskFeatureParameters', 'PartDesignGui::TaskFeaturePick', 'PartDesignGui::TaskFilletParameters', 'PartDesignGui::TaskHelixParameters', 'PartDesignGui::TaskHoleParameters', 'PartDesignGui::TaskLoftParameters', 'PartDesignGui::TaskMirroredParameters', 'PartDesignGui::TaskMultiTransformParameters', 'PartDesignGui::TaskPadParameters', 'PartDesignGui::TaskPadPocketParameters', 'PartDesignGui::TaskPatternParameters', 'PartDesignGui::TaskPipeOrientation', 'PartDesignGui::TaskPipeParameters', 'PartDesignGui::TaskPipeScaling', 'PartDesignGui::TaskPocketParameters', 'PartDesignGui::TaskPreviewParameters', 'PartDesignGui::TaskRevolutionParameters', 'PartDesignGui::TaskScaledParameters', 'PartDesignGui::TaskShapeBinder', 'PartDesignGui::TaskSketchBasedParameters', 'PartDesignGui::TaskThicknessParameters', 'PartDesignGui::TaskTransformedMessages', 'PartDesignGui::TaskTransformedParameters', 'PartDesignGui::ViewProvider', 'PartDesignGui::ViewProviderBase', 'PartDesignGui::ViewProviderBody', 'PartDesignGui::ViewProviderBoolean', 'PartDesignGui::ViewProviderChamfer', 'PartDesignGui::ViewProviderDatum', 'PartDesignGui::ViewProviderDatumCoordinateSystem', 'PartDesignGui::ViewProviderDatumLine', 'PartDesignGui::ViewProviderDatumPlane', 'PartDesignGui::ViewProviderDatumPoint', 'PartDesignGui::ViewProviderDraft', 'PartDesignGui::ViewProviderDressUp', 'PartDesignGui::ViewProviderExtrude', 'PartDesignGui::ViewProviderFillet', 'PartDesignGui::ViewProviderGroove', 'PartDesignGui::ViewProviderHelix', 'PartDesignGui::ViewProviderHole', 'PartDesignGui::ViewProviderLinearPattern', 'PartDesignGui::ViewProviderLoft', 'PartDesignGui::ViewProviderMirrored', 'PartDesignGui::ViewProviderMultiTransform', 'PartDesignGui::ViewProviderPad', 'PartDesignGui::ViewProviderPipe', 'PartDesignGui::ViewProviderPocket', 'PartDesignGui::ViewProviderPolarPattern', 'PartDesignGui::ViewProviderPrimitive', 'PartDesignGui::ViewProviderPython', 'PartDesignGui::ViewProviderRevolution', 'PartDesignGui::ViewProviderScaled', 'PartDesignGui::ViewProviderShapeBinder', 'PartDesignGui::ViewProviderSketchBased', 'PartDesignGui::ViewProviderSubShapeBinder', 'PartDesignGui::ViewProviderSubShapeBinderPython', 'PartDesignGui::ViewProviderThickness', 'PartDesignGui::ViewProviderTransformed', 'PartDesignGui::Workbench', 'TaskHoleParameters']
+_VARIANTS = {}
+
+
+def native_variants(text):
+    """{text} plus its translations under FreeCAD's PartDesign contexts (cached)."""
+    got = _VARIANTS.get(text)
+    if got is None:
+        got = {text}
+        try:
+            translate = QtCore.QCoreApplication.translate
+            for context in NATIVE_CONTEXTS:
+                shown = translate(context, text)
+                if shown:
+                    got.add(shown)
+        except Exception as _fw_err:
+            _fw_log("propertymanager.py:native_variants", _fw_err)
+        _VARIANTS[text] = got
+    return got
+
+
+_LOCALIZED = {}
+
+
+def localized(words):
+    ""
+    got = _LOCALIZED.get(id(words))
+    if got is None:
+        got = dict(words)
+        for english, sw in words.items():
+            for shown in native_variants(english):
+                got.setdefault(shown, sw)
+        _LOCALIZED[id(words)] = got
+    return got
+
+
 
 # (reference geometry, mates, dimensions, measure); a feature page has none (2024 shots:
 # Boss-Extrude, Cut-Extrude, Fillet, Shell, Hole Wizard, Rectangle).
@@ -997,7 +1062,8 @@ KEEP_VISIBLE_COMMANDS = {"Plane": "SWStyle_RefPlane", "Axis": "SWStyle_RefAxis",
 
 
 # left of each box, in the order the boxes come on the page.
-STRIPS = ("#50a8ff", "#f57ec0", "#7f00fc", "#5fbf5f", "#3fbfbf", "#e04fd0")
+
+STRIPS = ("#53a9ff", "#ff80c0", "#8000ff", "#5fbf5f", "#3fbfbf", "#e04fd0")
 STRIP = "swstrip"
 
 
@@ -1048,6 +1114,65 @@ def _group_open(group):
     return content is not None and not content.isHidden()
 
 
+FOLD_SETTLE_S = 5.0     # longest a code fold may take to finish (slow PC, page still building)
+
+
+def settle_fold(group):
+    ""
+
+
+
+    try:
+        import time
+        group.setProperty("swfold_settle", time.time() + FOLD_SETTLE_S)
+        group.setProperty("swfold_target", not _group_open(group))     # the state the fold ends in
+    except Exception as _fw_err:
+        _fw_log("propertymanager.py:settle_fold", _fw_err)
+
+
+def _settling(group):
+    try:
+        import time
+        until = group.property("swfold_settle")
+        if not until:
+            return False
+        if time.time() >= float(until) or _group_open(group) == bool(group.property("swfold_target")):
+            group.setProperty("swfold_settle", 0.0)     # the fold has ended: later changes are the user's
+            return False
+        return True
+    except Exception:
+        return False
+
+
+class _FoldWatch(QtCore.QObject):
+    """pkg446: a group's fold is noted the moment its rows show or hide. Noting it only on the page's
+    sync lost a fold or unfold the user made just before closing the page (Mirror, one run in three)."""
+
+    @classmethod
+    def watch(cls, group):
+        frames = [c for c in group.children() if isinstance(c, QtWidgets.QFrame) and not c.inherits("QSint::TaskHeader")]
+        if frames and not getattr(frames[-1], "_sw_fold_watch", None):
+            frames[-1]._sw_fold_watch = cls(group, frames[-1])
+
+    def __init__(self, group, content):
+        super().__init__(content)
+        self.group_id = id(group)
+        content.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        try:
+            if event.type() in (QtCore.QEvent.Show, QtCore.QEvent.Hide):
+                seen = _FOLD_SEEN.get(self.group_id)
+                open_ = not obj.isHidden()       # a page closing hides its parents, not the rows themselves
+                if isinstance(seen, tuple) and seen[1] != open_:
+                    FOLDS[seen[0]] = open_
+                    _FOLD_SEEN[self.group_id] = (seen[0], open_)
+                    _save_fold(seen[0], open_)
+        except Exception:
+            pass
+        return False
+
+
 def _fold_memory(view, page):
     """Each sync: a group folded or opened by the user is remembered for the page; a page that
     opens gets its groups folded as they were left."""
@@ -1066,16 +1191,20 @@ def _fold_memory(view, page):
             # first sight of this group under this page and group title: apply the memory (a FreeCAD
             # page is seen first under its own titles, Pad, and renamed Boss-Extrude a moment later)
             want = FOLDS.get(key)
-            if want is not None and want != open_:
+            if want is not None and want != open_ and not _settling(group):
                 try:
+                    settle_fold(group)
                     QtCore.QMetaObject.invokeMethod(group, "showHide")
                     open_ = want
                 except Exception as _fw_err:
                     _fw_log("propertymanager.py:959", _fw_err)
             if seen is None:
                 group.destroyed.connect(lambda *a, k=id(group): _FOLD_SEEN.pop(k, None))
+                _FoldWatch.watch(group)      # pkg446
             _FOLD_SEEN[id(group)] = (key, open_)
         elif seen[1] != open_:
+            if _settling(group):
+                continue            # a fold made by code still animating, not the user's click
             FOLDS[key] = open_
             _FOLD_SEEN[id(group)] = (key, open_)
             _save_fold(key, open_)
@@ -1348,7 +1477,7 @@ def _editing_type():
     try:
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
-        return edit.Object.TypeId if edit is not None else None
+        return editobj.type_id(edit) if edit is not None else None
     except Exception:
         return None
 
@@ -1358,6 +1487,7 @@ def _reword(view):
     words = WORDS.get(_editing_type())
     if not words:
         return
+    words = localized(words)
     header = view.findChild(QtWidgets.QWidget, HEADER)
     inside = set(id(w) for w in _children(header)) if header is not None else set()     # pkg97: one walk, not a parent walk per widget
     for widget in _children(view):
@@ -1440,7 +1570,7 @@ def pm_comment():
             return ""
         gdoc = Gui.ActiveDocument
         edit = gdoc.getInEdit() if gdoc is not None else None
-        obj = edit.Object if edit is not None else None
+        obj = editobj.of(edit) if edit is not None else None
         return (getattr(obj, "Comment", "") or "").strip() if obj is not None else ""
     except Exception:
         return ""
@@ -1857,7 +1987,7 @@ def _feature_command(kind):
 def _editing_command():
     try:
         edit = Gui.ActiveDocument.getInEdit()
-        obj = edit.Object if edit is not None else None
+        obj = editobj.of(edit) if edit is not None else None
     except Exception:
         return None
     command = _feature_command(obj.TypeId) if obj is not None else None

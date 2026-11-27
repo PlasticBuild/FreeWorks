@@ -185,7 +185,7 @@ def suggest(shape, threshold=45.0, count=4):
 
 
 def describe(normal):
-    names = {(0, 0, -1): "As modelled (bottom down)", (0, 0, 1): "Top down", (1, 0, 0): "Right side down",
+    names = {(0, 0, -1): "As modeled (bottom down)", (0, 0, 1): "Top down", (1, 0, 0): "Right side down",
              (-1, 0, 0): "Left side down", (0, 1, 0): "Back down", (0, -1, 0): "Front down"}
     key = tuple(int(round(c)) if abs(abs(c) - round(abs(c))) < 1e-6 else None for c in (normal.x, normal.y, normal.z))
     return names.get(key, "Face (%.2f, %.2f, %.2f) down" % (normal.x, normal.y, normal.z))
@@ -647,7 +647,7 @@ class Print3DPanel:
                 self.apply_profile(prof)
         Print3DPanel.current = self
         Gui.Selection.addObserver(self)
-        QtCore.QTimer.singleShot(0, self.update)
+        from . import safe_later as _sl; _sl.later(0, self.update, self, "fit_label")
 
     # ---------------------------------------------------------------- boxes
     def _printer_box(self):
@@ -722,7 +722,7 @@ class Print3DPanel:
         self.suggest_button.setToolTip("Find the orientations needing the least support")
         self.suggest_button.clicked.connect(self.suggest)
         row.addWidget(self.suggest_button)
-        self.reset_button = QtWidgets.QPushButton("As Modelled")
+        self.reset_button = QtWidgets.QPushButton("As Modeled")
         self.reset_button.setToolTip("Print the part the way it stands in the model")
         self.reset_button.clicked.connect(self.reset_orientation)
         row.addWidget(self.reset_button)
@@ -776,14 +776,14 @@ class Print3DPanel:
         w = _group("Analysis", "SWStyle_Print3DAnalysis")
         lay = QtWidgets.QFormLayout(w)
         self.show_support = QtWidgets.QCheckBox("Show overhang areas that need support")
-        self.show_support.setToolTip("Colour the faces that overhang more than the threshold angle (red)")
+        self.show_support.setToolTip("Color the faces that overhang more than the threshold angle (red)")
         lay.addRow(self.show_support)
         self.threshold = _spin(5, 85, params().GetFloat(P_OVERHANG, 45.0), " deg", 0, 5)
         self.threshold.setToolTip("Overhangs flatter than this angle from the horizontal need support "
                                   "(typing one shows them)")
         lay.addRow("Threshold angle:", self.threshold)
         self.show_thin = QtWidgets.QCheckBox("Show areas too thin to print")
-        self.show_thin.setToolTip("Colour the faces whose wall is thinner than the minimum (yellow)")
+        self.show_thin.setToolTip("Color the faces whose wall is thinner than the minimum (yellow)")
         lay.addRow(self.show_thin)
         self.min_thick = _spin(0.1, 20, params().GetFloat(P_THIN, 0.8), " mm", 2, 0.1)
         self.min_thick.setToolTip("Walls thinner than this do not print well: about two line widths of the nozzle "
@@ -1395,7 +1395,7 @@ def save_file(rows, path, deviation=None, angle=None):
             return True, "Saved %s (%d triangles)." % (os.path.basename(path), mesh.CountFacets)
         n = write_3mf(rows, path, dev, ang)
         cols = len({c for _n, _s, c in rows if c})
-        return True, "Saved %s (%d objects, %d colours, %d triangles)." % (os.path.basename(path), len(rows), cols, n)
+        return True, "Saved %s (%d objects, %d colors, %d triangles)." % (os.path.basename(path), len(rows), cols, n)
     except Exception as error:
         return False, "Could not save %s: %s" % (os.path.basename(path), error)
 

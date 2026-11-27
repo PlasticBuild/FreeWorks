@@ -267,11 +267,42 @@ def distance_type_for(pnt1, pnt2, pos):
     x, y = pos
     inside_x = min_x < x < max_x
     inside_y = min_y < y < max_y
-    if inside_x and not inside_y:
-        return "DistanceX"
-    if inside_y and not inside_x:
-        return "DistanceY"
-    if (not inside_x and not inside_y) or (inside_x and inside_y):
+    if inside_x != inside_y:
+        kind = "DistanceX" if inside_x else "DistanceY"
+
+        # while the pointer is out square to it, and the horizontal / vertical one while it is out straight up
+        # or down / to the side: whichever way is nearer the pointer's way out from the middle.
+        # FreeCAD's box rule alone made a DistanceX square below a 22 deg line.
+        dx, dy = pnt2[0] - pnt1[0], pnt2[1] - pnt1[1]
+        angle = math.degrees(math.atan2(dy, dx)) % 180.0
+        if dx * dx + dy * dy > 1e-12 and 1.0 < angle % 90.0 < 89.0:
+            mx, my = (pnt1[0] + pnt2[0]) / 2.0, (pnt1[1] + pnt2[1]) / 2.0
+            way = math.degrees(math.atan2(y - my, x - mx)) % 180.0
+
+            def apart(a, b):
+                d = abs(a - b) % 180.0
+                return min(d, 180.0 - d)
+            square = apart(way, angle + 90.0)
+            if square < apart(way, 90.0 if inside_x else 0.0):
+                return "Distance"
+        return kind
+    if not inside_x and not inside_y:
+
+        # dimension whose way out is nearest the pointer's way out from the middle: to the side the vertical
+        # one, straight up or down the horizontal one, square to the pair the aligned one.
+        dx, dy = pnt2[0] - pnt1[0], pnt2[1] - pnt1[1]
+        angle = math.degrees(math.atan2(dy, dx)) % 180.0
+        if dx * dx + dy * dy > 1e-12 and 1.0 < angle % 90.0 < 89.0:
+            mx, my = (pnt1[0] + pnt2[0]) / 2.0, (pnt1[1] + pnt2[1]) / 2.0
+            way = math.degrees(math.atan2(y - my, x - mx)) % 180.0
+
+            def apart(a, b):
+                d = abs(a - b) % 180.0
+                return min(d, 180.0 - d)
+            ways = ((apart(way, angle + 90.0), "Distance"), (apart(way, 0.0), "DistanceY"), (apart(way, 90.0), "DistanceX"))
+            return min(ways)[1]
+        return "Distance"
+    if inside_x and inside_y:
         return "Distance"
     return None
 
@@ -547,6 +578,7 @@ class DimensionTool(SketchTool):
         self.initial = list(initial)
         self.placed = []             # (type, value, driving) per placed dimension, for tests
         self.events = []             # for tests
+        self.forced = None           # fix285: "DistanceX" / "DistanceY": Horizontal / Vertical Dimension
 
     def icon_name(self):
         return "Sketcher_Crosshair"
@@ -555,7 +587,7 @@ class DimensionTool(SketchTool):
         return "Constraint_Dimension"
 
     def title(self):
-        return "Smart Dimension"
+        return {"DistanceX": "Horizontal Dimension", "DistanceY": "Vertical Dimension"}.get(self.forced, "Smart Dimension")
 
     def is_first_state(self):
         return self.empty()
@@ -565,7 +597,24 @@ class DimensionTool(SketchTool):
         super().begin()
         _close_tool_page()
         self.open_command("Dimension")
+        if self.initial:
+            # fix294: a line picked before Smart Dimension: the dimension is made once the command has
+            # returned. Made inside it, FreeCAD committed it as "Add length constraint" with the command,
+
+            QtCore.QTimer.singleShot(0, self._initial_later)
+        else:
+            self.handle_initial_selection()
+
+    def _initial_later(self):
+        if TB.active() is not self:
+            return
+        self.ensure_open()
         self.handle_initial_selection()
+        try:
+            if self.indexes and self.last_pos is not None:
+                self.move_constraints(self.last_pos)
+        except Exception as _fw_err:
+            _fw_log("fwsketch/dimension.py:initial-later", _fw_err)
 
     def end(self):
         self.clear_hover()
@@ -817,16 +866,17 @@ class DimensionTool(SketchTool):
                 kept.append(pick)
             self.picks[k] = kept
 
-    def release(self, p):
-        """releaseButton: a pick, an unpick, the placing click, or a click on nothing."""
+    def release(self, p, forced_pick=None):
+        """releaseButton: a pick, an unpick, the placing click, or a click on nothing.
+        forced_pick (dragdim-1127): the element pressed at the start of a click-drag, picked as if clicked."""
         self.ensure_open()
-        if self.pick_count() >= 2 and self.indexes and not self.arc_other_end(preselected(self.sketch)) \
-                and not self.arc_three_points(preselected(self.sketch)):
+        if forced_pick is None and self.pick_count() >= 2 and self.indexes and \
+                not self.arc_other_end(preselected(self.sketch)) and not self.arc_three_points(preselected(self.sketch)):
             self.clear_hover()
             self.finalize()
             return
         self.mode = FIRST
-        pick = preselected(self.sketch)
+        pick = forced_pick if forced_pick is not None else preselected(self.sketch)
         new_reference = False
         if pick is None:
             subs = TB.preselected_subs(self.sketch)
@@ -868,6 +918,8 @@ class DimensionTool(SketchTool):
         if not self.selected_yet(pick):
             self.picks[kind].append(pick)
             if self.make_constraint(p):
+                if self.forced and self.indexes:
+                    self.update_distance_type(p)        # fix285: only the horizontal / vertical distance
                 if pick.name:
                     try:
                         Gui.Selection.addSelection(self.doc.Name, self.sketch.Name, pick.name)
@@ -1679,7 +1731,7 @@ class DimensionTool(SketchTool):
             if lns or any(q.shift for q in cir) or len(pts) + len(cir) != 2:
                 return
             ends = [(q.geo, q.pos) for q in pts] + [(q.geo, I.MID) for q in cir]
-            wanted = distance_type_for(point_of(sk, *ends[0]), point_of(sk, *ends[1]), p)
+            wanted = self.forced or distance_type_for(point_of(sk, *ends[0]), point_of(sk, *ends[1]), p)
             if wanted is None or wanted == current:
                 return
             self.restart("Add Distance constraint" if wanted == "Distance" else "Add %s constraint" % wanted)
@@ -1689,6 +1741,19 @@ class DimensionTool(SketchTool):
                 self.special = LINE_OR_POINTS_DISTANCE
                 self.create_distance_xy(wanted, ends[0][0], ends[0][1], ends[1][0], ends[1][1], p)
             return
+        if self.forced and len(lns) == 1 and len(pts) == 1:
+            # fix286: Horizontal / Vertical Dimension on a line and a point measures the horizontal /
+
+            q = point_of(sk, pts[0].geo, pts[0].pos)
+            a, b = point_of(sk, lns[0].geo, I.START), point_of(sk, lns[0].geo, I.END)
+            end = I.START if math.hypot(q[0] - a[0], q[1] - a[1]) <= math.hypot(q[0] - b[0], q[1] - b[1]) else I.END
+            last = sk.Constraints[sk.ConstraintCount - 1]
+            if current == self.forced and pts[0].geo in (last.First, last.Second, getattr(last, "Third", None)):
+                return
+            self.restart("Add %s constraint" % self.forced)
+            self.special = LINE_OR_POINTS_DISTANCE
+            self.create_distance_xy(self.forced, pts[0].geo, pts[0].pos, lns[0].geo, end, p)
+            return
         if len(lns) == 1:
             pnt1, pnt2 = point_of(sk, lns[0].geo, I.START), point_of(sk, lns[0].geo, I.END)
         elif len(pts) == 1:
@@ -1697,7 +1762,7 @@ class DimensionTool(SketchTool):
             pnt1, pnt2 = point_of(sk, pts[0].geo, pts[0].pos), point_of(sk, pts[1].geo, pts[1].pos)
         else:
             return
-        wanted = distance_type_for(pnt1, pnt2, p)
+        wanted = self.forced or distance_type_for(pnt1, pnt2, p)
         if wanted is None or wanted == current:
             return
         if wanted == "Distance":
@@ -1775,8 +1840,10 @@ class DimensionTool(SketchTool):
             self.end()
 
 
-def start_dimension():
-    """Smart Dimension on the sketch being edited; picked elements of the sketch come along."""
+def start_dimension(forced=None):
+    ""
+
+
     gdoc, sketch = TB.edited_sketch()
     names = []
     try:
@@ -1786,5 +1853,6 @@ def start_dimension():
     except Exception as _fw_err:
         _fw_log("fwsketch/dimension.py:1738", _fw_err)
     tool = DimensionTool(gdoc, sketch, names)
+    tool.forced = forced
     tool.begin()
     return tool

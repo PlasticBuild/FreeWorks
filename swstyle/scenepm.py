@@ -55,6 +55,24 @@ LARGEST = 1e7
 V = App.Vector
 
 
+class _WordLabel(QtWidgets.QLabel):
+    """A form label that stays a word (pkg173): the PM layout turns some label words into pictures."""
+
+    def __init__(self, word):
+        super().__init__(word)
+        self._word = word
+        self.setObjectName("SWWordLabel")
+
+    def setPixmap(self, *_a):
+        return None
+
+    def setText(self, text):
+        super().setText(text or self._word)
+
+    def setFixedWidth(self, *_a):
+        return None
+
+
 def params():
     return App.ParamGet(PARAMS)
 
@@ -84,6 +102,7 @@ def settings():
     return {"background": p.GetString("Background", "Use Environment"),
             "top": p.GetUnsigned("Top", 0xFFFFFFFF), "bottom": p.GetUnsigned("Bottom", 0xC8C8C8FF),
             "image": p.GetString("Image", ""),
+            "stretch": p.GetBool("StretchImage", True), "keep": p.GetBool("KeepBackground", False),
             "reflections": scene_reflections(),
             "lock": True,
             "align": p.GetString("Align", "Bottom View Plane"),
@@ -99,6 +118,9 @@ def store(values):
     p.SetUnsigned("Top", int(values["top"]) & 0xFFFFFFFF)
     p.SetUnsigned("Bottom", int(values["bottom"]) & 0xFFFFFFFF)
     p.SetString("Image", values["image"] or "")
+    if "stretch" in values:
+        p.SetBool("StretchImage", bool(values["stretch"]))
+        p.SetBool("KeepBackground", bool(values["keep"]))
     p.SetBool(_reflections_key()[0], bool(values["reflections"]))
     p.SetBool("LockEnvironment", bool(values.get("lock", True)))
     p.SetString("Align", values["align"])
@@ -737,13 +759,101 @@ def apply(values=None):
 
 
 def scene_changed(scene=None):
-    """A scene picked (Apply Scene, the Task Pane, Edit Scene): its floor reflects the model or not,
-    as that scene keeps it."""
+    ""
+
+
     try:
         if _active_view() is not None:
             set_reflections(scene_reflections(scene))
     except Exception as _fw_err:
         _fw_log("scenepm.py:scene", _fw_err)
+    try:
+        values = settings()
+        if values["background"] != "Use Environment":
+            if values["keep"]:
+                apply_background(values)
+            else:
+                params().SetString("Background", "Use Environment")
+    except Exception as _fw_err:
+        _fw_log("scenepm.py:keep", _fw_err)
+
+
+def background_image():
+    """(path, stretch) of the picture drawn behind the model for Background > Image, or None."""
+    import os
+    values = settings()
+    if values["background"] != "Image" or not values["image"] or not os.path.isfile(values["image"]):
+        return None
+    return values["image"], values["stretch"]
+
+
+def offset_to_geometry(doc, values=None):
+    ""
+
+    values = dict(values or settings())
+    box = model_box(doc) if doc is not None else None
+    if box is None:
+        return None
+    values["offset"] = 0.0
+    n, d0 = floor_plane(doc, values)
+    low = min(n.dot(V(x, y, z)) for x in (box.XMin, box.XMax) for y in (box.YMin, box.YMax)
+              for z in (box.ZMin, box.ZMax))
+    return d0 - low
+
+
+SCENE_FILTER = "Scene files (*.fcscene)"
+
+
+def save_scene(path, values=None):
+    """The scene and its Edit Scene settings in a file (Advanced > Scene File > Save Scene...)."""
+    import json
+    from . import style
+    out = dict(values or settings())
+    i = style.current_scene()
+    out["scene"] = style.SCENES[i][0] if 0 <= i < len(style.SCENES) else ""
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=1)
+    return out
+
+
+def load_scene(path):
+    """The settings kept in a scene file, with "scene" the index of its scene (-1: the theme's own)."""
+    import json
+    from . import style
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    names = [sc[0] for sc in style.SCENES]
+    data["scene"] = names.index(data["scene"]) if data.get("scene") in names else -1
+    return data
+
+
+def environment_folder():
+    ""
+
+
+    import json
+    import os
+    from . import style
+    folder = os.path.join(App.getUserAppDataDir(), "FreeWorks", "Scenes")
+    os.makedirs(folder, exist_ok=True)
+    names = [sc[0] for sc in style.SCENES] + ["Theme Background"]
+    for name in names:
+        path = os.path.join(folder, name + ".fcscene")
+        if not os.path.isfile(path):
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump({"scene": name}, f)
+            except OSError as _fw_err:
+                _fw_log("scenepm.py:envfolder", _fw_err)
+    return folder
+
+
+def environment_file(index):
+    """The scene file shown in Edit Scene > Environment for scene index (-1: the theme's own)."""
+    import os
+    from . import style
+    name = style.SCENES[index][0] if index is not None and 0 <= index < len(style.SCENES) else "Theme Background"
+    return os.path.join(environment_folder(), name + ".fcscene")
 
 
 # ------------------------------------------------------------------ the PropertyManager
@@ -809,9 +919,24 @@ class EditScenePanel:
         for i in style.SCENE_MENU + style.SCENE_EXTRAS:
             self.scene.addItem(style.SCENES[i][0], i)
         self.scene.addItem("Theme Background", -1)
-        self.scene.setCurrentIndex(max(0, self.scene.findData(self.before_scene)))
+        # the theme's own scene shows as 3 Point Faded where it is that (picking it again changes nothing)
+        self.scene.setCurrentIndex(max(0, self.scene.findData(style.shown_scene())))
         self.scene.currentIndexChanged.connect(self._scene)
         el.addWidget(self.scene)
+
+        # through Browse...'s folder (environment_folder), and the Task Pane's Scenes as before
+        self.scene.hide()
+        env_row = QtWidgets.QHBoxLayout()
+        self.env_path = QtWidgets.QLineEdit()
+        self.env_path.setObjectName("SWSceneEnvironmentPath")
+        self.env_path.setReadOnly(True)
+        self.env_browse = QtWidgets.QPushButton("Browse...")
+        self.env_browse.setObjectName("SWSceneEnvironmentBrowse")
+        self.env_browse.clicked.connect(self._browse_environment)
+        env_row.addWidget(self.env_path, 1)
+        env_row.addWidget(self.env_browse)
+        el.addLayout(env_row)
+        self._show_environment()
 
         bg = QtWidgets.QGroupBox("Background")
         bl = QtWidgets.QFormLayout(bg)
@@ -839,6 +964,17 @@ class EditScenePanel:
         self.image_row = QtWidgets.QWidget()
         self.image_row.setLayout(row)
         bl.addRow(self.image_row)
+        self.stretch = QtWidgets.QCheckBox("Stretch image to fit window")
+        self.stretch.setObjectName("SWSceneStretch")
+        self.stretch.setChecked(v["stretch"])
+        self.stretch.toggled.connect(self.changed)
+        bl.addRow(self.stretch)
+        self.keep = QtWidgets.QCheckBox("Keep background")
+        self.keep.setObjectName("SWSceneKeep")
+        self.keep.setToolTip("Keeps this background when another scene is applied")
+        self.keep.setChecked(v["keep"])
+        self.keep.toggled.connect(self.changed)
+        bl.addRow(self.keep)
         lay.addWidget(bg)
         lay.addWidget(env)
 
@@ -872,6 +1008,11 @@ class EditScenePanel:
         self.offset.setValue(v["offset"])
         self.offset.valueChanged.connect(self.changed)
         ff.addRow("Floor offset:", self.offset)
+        self.to_geometry = QtWidgets.QPushButton("Offset to Geometry")
+        self.to_geometry.setObjectName("SWSceneOffsetToGeometry")
+        self.to_geometry.setToolTip("Moves the floor onto the model")
+        self.to_geometry.clicked.connect(self._to_geometry)
+        ff.addRow(self.to_geometry)
         lay.addWidget(fl)
         lay.addStretch(1)
         self._advanced(v)
@@ -905,7 +1046,9 @@ class EditScenePanel:
         self.width.valueChanged.connect(lambda value: self._size_typed(self.width, value))
         self.depth.valueChanged.connect(lambda value: self._size_typed(self.depth, value))
         fl.addRow("Width", self.width)
-        fl.addRow("Depth", self.depth)
+
+        # Depth -> D1) are for feature depths, so this label keeps its word
+        fl.addRow(_WordLabel("Depth"), self.depth)
         self.ratio_label = QtWidgets.QLabel()
         self.ratio_label.setObjectName("SWSceneAspectRatio")
         fl.addRow("Aspect ratio:", self.ratio_label)
@@ -938,6 +1081,23 @@ class EditScenePanel:
         el.addWidget(self.env_slider, 1)
         el.addWidget(self.env_turn)
         lay.addWidget(er)
+        sf = QtWidgets.QGroupBox("Scene File")
+        sl = QtWidgets.QVBoxLayout(sf)
+        row = QtWidgets.QHBoxLayout()
+        self.scene_file = QtWidgets.QLineEdit(params().GetString("SceneFile", ""))
+        self.scene_file.setObjectName("SWSceneFile")
+        self.scene_file.setReadOnly(True)
+        row.addWidget(self.scene_file, 1)
+        open_file = QtWidgets.QPushButton("Browse...")
+        open_file.setObjectName("SWSceneFileBrowse")
+        open_file.clicked.connect(self._open_scene)
+        row.addWidget(open_file)
+        sl.addLayout(row)
+        save = QtWidgets.QPushButton("Save Scene...")
+        save.setObjectName("SWSceneFileSave")
+        save.clicked.connect(self._save_scene)
+        sl.addWidget(save)
+        lay.addWidget(sf)
         lay.addStretch(1)
 
     def _length(self, name, value):
@@ -1002,6 +1162,7 @@ class EditScenePanel:
     def values(self):
         out = {"background": self.background.currentText(), "top": self.top.value, "bottom": self.bottom.value,
                "image": self.image.text().strip(), "reflections": self.reflections.isChecked(),
+               "stretch": self.stretch.isChecked(), "keep": self.keep.isChecked(),
                "lock": True,
                "align": self.align.currentText(), "flip": self.flip.isChecked(), "offset": self.offset.value()}
         if hasattr(self, "env_turn"):
@@ -1022,17 +1183,104 @@ class EditScenePanel:
         self.bottom.setVisible(kind == "Gradient")
         self.bottom_label.setVisible(kind == "Gradient")
         self.image_row.setVisible(kind == "Image")
+        self.stretch.setVisible(kind == "Image")
+        self.keep.setVisible(kind != "Use Environment")
+
+    def _show_environment(self):
+        try:
+            path = environment_file(self.scene.currentData())
+        except Exception as _fw_err:
+            _fw_log("scenepm.py:envshow", _fw_err)
+            path = ""
+        self.env_path.setText(path)
+        self.env_path.setToolTip(path)
+        self.env_path.setCursorPosition(0)
+
+    def _browse_environment(self, _checked=False, path=None):
+        """Environment > Browse...: a scene file; only its environment is taken (the Scene File group loads the rest)."""
+        if path is None:
+            try:
+                start = environment_folder()
+            except Exception as _fw_err:
+                _fw_log("scenepm.py:envbrowse", _fw_err)
+                start = ""
+            path = QtWidgets.QFileDialog.getOpenFileName(self.form, "Environment", start, SCENE_FILTER)[0]
+        if not path:
+            return
+        try:
+            data = load_scene(path)
+        except Exception as error:
+            QtWidgets.QMessageBox.warning(self.form, "Environment", "The scene file could not be read:\n%s" % error)
+            return
+        i = self.scene.findData(data["scene"])
+        if i >= 0:
+            self.scene.setCurrentIndex(i)
+        self._show_environment()
 
     def _scene(self):
         from . import style
         style.apply_scene(self.scene.currentData())
+        self._show_environment()
         self.reflections.blockSignals(True)          # the new scene's own Floor reflections choice
         self.reflections.setChecked(scene_reflections())
         self.reflections.blockSignals(False)
-        if self.background.currentText() != "Use Environment":
+        if self.background.currentText() != "Use Environment" and not self.keep.isChecked():
             self.background.setCurrentIndex(0)
         else:
             self.changed()
+
+    def _to_geometry(self):
+        gdoc = Gui.ActiveDocument
+        got = offset_to_geometry(gdoc.Document if gdoc is not None else None, self.values())
+        if got is not None:
+            self.offset.setValue(got)
+
+    def _open_scene(self, path=None):
+        path = path or QtWidgets.QFileDialog.getOpenFileName(self.form, "Scene File", "", SCENE_FILTER)[0]
+        if not path:
+            return
+        try:
+            data = load_scene(path)
+        except Exception as error:
+            QtWidgets.QMessageBox.warning(self.form, "Scene File", "The scene file could not be read:\n%s" % error)
+            return
+        i = self.scene.findData(data["scene"])
+        if i >= 0 and i != self.scene.currentIndex():
+            self.scene.setCurrentIndex(i)           # the scene first: it resets the background
+        sets = ((self.background, "background"), (self.align, "align"))
+        for box, key in sets:
+            if key in data and box.findText(data[key]) >= 0:
+                box.setCurrentIndex(box.findText(data[key]))
+        for box, key in ((self.stretch, "stretch"), (self.keep, "keep"), (self.reflections, "reflections"),
+                         (self.flip, "flip"), (self.aspect, "aspect"), (self.autosize, "autosize")):
+            if key in data:
+                box.setChecked(bool(data[key]))
+        for box, key in ((self.offset, "offset"), (self.floor_turn, "floor_turn"), (self.env_turn, "env_turn")):
+            if key in data:
+                box.setValue(float(data[key]))
+        if not data.get("autosize", True):
+            for box, key in ((self.width, "width"), (self.depth, "depth")):
+                if data.get(key):
+                    self._set_quiet(box, float(data[key]))
+        for button, key in ((self.top, "top"), (self.bottom, "bottom")):
+            if key in data:
+                button.value = int(data[key])
+                button._paint()
+        if "image" in data:
+            self.image.setText(data["image"])
+        self.scene_file.setText(path)
+        params().SetString("SceneFile", path)
+        self.changed()
+
+    def _save_scene(self, path=None):
+        path = path or QtWidgets.QFileDialog.getSaveFileName(self.form, "Save Scene", "", SCENE_FILTER)[0]
+        if not path:
+            return
+        if not path.lower().endswith(".fcscene"):
+            path += ".fcscene"
+        save_scene(path, self.values())
+        self.scene_file.setText(path)
+        params().SetString("SceneFile", path)
 
     def _browse(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self.form, "Background image", "",

@@ -239,8 +239,12 @@ def replace(asm, comps, target, all_instances=False, reattach_mates=True, config
     for c in todo:
         c.LinkedObject = target
         if rename:
+
+            # replaced by Bracket, with Bracket<1> and <2> there, is Bracket<3> (the old number gave
+            # "Bracket<1>001")
             base, _, inst = c.Label.rpartition("<")
-            c.Label = "%s<%s" % (ac.part_name(c), inst) if base else ac.part_name(c)
+            c.Label = "FwReplacing"
+            c.Label = ac._instance(asm, ac.part_name(c)) if base else ac.part_name(c)
     want = configuration if configuration else old_config        # Manually select / Match name
     if want:
         set_configuration(target, want)

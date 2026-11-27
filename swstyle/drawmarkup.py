@@ -570,7 +570,7 @@ class _ColorButton(QtWidgets.QPushButton):
         self.setText(color)
 
     def pick(self):
-        c = QtWidgets.QColorDialog.getColor(QtGui.QColor(self.color), self, "Markup colour")
+        c = QtWidgets.QColorDialog.getColor(QtGui.QColor(self.color), self, "Markup color")
         if c.isValid():
             self.set(c.name())
 

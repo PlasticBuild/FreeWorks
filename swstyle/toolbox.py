@@ -1828,7 +1828,7 @@ if Gui is not None:
             self._labels(form)
             try:        # extapps144: a short screen (1366 x 768): Part Numbers starts closed, so Properties and Options show without scrolling
                 if QtWidgets.QApplication.primaryScreen().availableGeometry().height() < 800:
-                    QtCore.QTimer.singleShot(400, lambda: asmpm.fold(self.numbers))
+                    from . import safe_later as _sl; _sl.later(400, lambda: asmpm.fold(self.numbers), self, "numbers")
             except Exception as _fw_err:
                 _fw_log("toolbox.py:fold", _fw_err)
 

@@ -593,6 +593,15 @@ def add_without_redundancy(sketch, pending, avoid_redundant=True):
     the number kept (removeRedundantAutoConstraints + overDefines)."""
     if not pending:
         return 0
+    first = sketch.ConstraintCount
+    kept = _add_pending(sketch, pending, avoid_redundant)
+    if kept:
+        from . import helpers as H
+        H.name_intersections(sketch, first)
+    return kept
+
+
+def _add_pending(sketch, pending, avoid_redundant):
     if not avoid_redundant:
         for c in pending:
             sketch.addConstraint(c.to_constraint())

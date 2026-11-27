@@ -170,6 +170,12 @@ def after(sketch):
         return False
     k_before, g_before = got
     k_now = key(sketch)
+    if k_before == k_now:
+        # the same dimensions and relations: no edit to remember. FreeCAD signals Constraints on each
+        # solve of a sketch with a spline's end tangency; the geometry here is then the one before that
+        # solve, and put back later it made Equal Curvature's solve swap between two shapes
+        _last[i] = k_now
+        return False
     if k_before[0] != k_now[0] or len(k_before[1]) != len(k_now[1]) or len(g_before) != len(sketch.Geometry):
         # geometry or constraints added or taken away (a layout rebuilding the sketch, a new relation):
         # not a dimension edit, so the old states don't hold

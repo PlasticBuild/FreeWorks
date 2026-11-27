@@ -58,7 +58,7 @@ POINT_TYPES = ("App::Point", "PartDesign::Point")
 REFERENCE_TYPES = PLANE_TYPES + AXIS_TYPES + POINT_TYPES + (
     "PartDesign::CoordinateSystem", "App::LocalCoordinateSystem", "PartDesign::ShapeBinder",
     "PartDesign::SubShapeBinder", "Sketcher::SketchObject")
-FULL_ONLY = ("InvertSelection", "Customize", "BodyProperties", "GoToFeatureInTree",
+FULL_ONLY = ("InvertSelection", "Customize", "BodyProperties", "GoToFeatureInTree", "ContourSelect",
              # R9 read 52: a suppressed feature's short menu is the unsuppressed one (the row's eye unsuppresses)
              "Unsuppress", "UnsuppressDependents",
 
@@ -973,10 +973,17 @@ def picked_with(target):
     return out
 
 
+def _folder_alive(folder):
+    try:
+        return folder.Document.getObject(folder.Name) is not None
+    except Exception:
+        return False
+
+
 def _rename_new(view, folder):
     ""
     if view is not None and hasattr(view, "fm_rename"):
-        QtCore.QTimer.singleShot(400, lambda: rename(view, folder) if folder.Document.getObject(folder.Name) else None)
+        QtCore.QTimer.singleShot(400, lambda: rename(view, folder) if _folder_alive(folder) else None)
 
 
 def add_to_new_folder(view, objs):
@@ -1020,7 +1027,7 @@ def _external_refs_of(target):
     try:
         from . import asmextref
         doc = target if isinstance(target, App.Document) else target.Document
-        refs = asmextref.binders(doc)
+        refs = (getattr(asmextref, "references", None) or asmextref.binders)(doc)    # asmpkg346: and Insert Part
         if not refs or isinstance(target, App.Document):
             return refs
         deps = set(o.Name for o in target.OutListRecursive) | {target.Name}
@@ -1647,6 +1654,8 @@ def _entries(shell, target, view=None):
             add(("EditInContext", "Edit In Context", lambda: _later(lambda: _edit_in_context(doc, target)), True))
     if kind == "sketch":
         add(("ConfigureFeature", "Configure Feature", lambda: _configure_feature(target), True))
+        # rmbparity-1127: a sketch row's long menu has Contour Select Tool after Configure Feature (read 11-19)
+        add(("ContourSelect", "Contour Select Tool", lambda: _contour_select(), True))
 
 
     # entries; a sketch on its own has them, as a feature does
@@ -1833,12 +1842,7 @@ def _show_bodies(bodies, on):
             b.ViewObject.Visibility = bool(on)
 
 
-def _select_all(objs):
-    Gui.Selection.clearSelection()
-    for o in objs:
-        Gui.Selection.addSelection(o.Document.Name, o.Name)
-
-
+# dupdef-1126: the first _select_all (no error guard) was replaced by the one further down; removed
 def _edit_material(shell, doc):
     _select_all(material_targets(doc))
     _binding(shell, "EditMaterial") or Gui.runCommand("Std_SetMaterial", 0)
@@ -2076,7 +2080,10 @@ class _Chevron(QtWidgets.QWidgetAction):
 # item | Hide/Show Tree Items... FreeCAD's own items (Add to Library, Appearance, Expand Items, FreeCAD >) stay after
 
 TOP_ASSEMBLY_ORDER = ("InvertSelection", "GoTo", None, "HiddenTreeItems", "Isolate", "Comment", "TreeDisplay", "SpeedPak",
-                      "ConfigurationPublisher", "LightweightToResolved", "ResolvedToLightweight", "DocumentProperties",
+                      "ConfigurationPublisher", "LightweightToResolved", "ResolvedToLightweight",
+
+                      "ShowWithDependents", "ComponentDisplay", "Purge", "RefGeometryDisplay", "InsertNewSubassembly",
+                      "TopLevelTransparency", "DocumentProperties",
                       "-", "NewFolder", "Collapse", "Rename", "TreeItems")
 
 
@@ -2091,11 +2098,26 @@ def _select_all(objs):
 
 def top_assembly_order(items, target):
     ""
+    global TOP_ASSEMBLY_ORDER
+    try:        # hieronly-1127: Show Hierarchy Only, after Configuration Publisher... (read 11-19)
+        from . import hierarchyonly
+        if hierarchyonly.KEY not in TOP_ASSEMBLY_ORDER:
+            order = list(TOP_ASSEMBLY_ORDER)
+            order.insert(order.index("ConfigurationPublisher") + 1, hierarchyonly.KEY)
+            TOP_ASSEMBLY_ORDER = tuple(order)
+        if not any(i[0] == hierarchyonly.KEY for i in items):
+            items = list(items) + [hierarchyonly.menu_item(target)]
+    except Exception as _fw_err:
+        _fw_log("fmmenu.py:hierarchy only", _fw_err)
     try:
         from . import asmfolder, asmcore
         asm = asmcore.assembly_of(target.Document)
         if asm is not None and not any(i[0] == "NewFolder" for i in items):
             items = list(items) + [("NewFolder", "Create New Folder", lambda a=asm: asmfolder.create_new_folder(a), True)]
+        if asm is not None:     # rmbtop-1127
+            from . import asmmenu
+            have = {i[0] for i in items}
+            items = list(items) + [i for i in asmmenu.top_items(asm) if i[0] not in have]
     except Exception as _fw_err:
         _fw_log("fmmenu.py:top assembly folder", _fw_err)
     try:
@@ -2120,7 +2142,7 @@ def top_assembly_order(items, target):
     rest = [it for n, it in enumerate(items) if n not in used and it[0] != "-"]
     tail = [it for it in rest if it[0] == "Customize"]
     rest = [it for it in rest if it[0] != "Customize"]
-    return out + ([("-", None, None, False)] + rest if rest else []) + tail
+    return out + rest + tail
 
 
 def _surface_type(target):
@@ -2205,6 +2227,12 @@ def build(shell, target, view=None, full=False, parent=None):
                 lambda: Gui.runCommand("SWStyle_OpenDrawing", 0)))
         except Exception:
             row_entries = []
+    if top and shell is not None and row_entries:
+        try:
+            from . import asmmenu
+            row_entries = asmmenu.top_row(shell, target, row_entries)
+        except Exception as _fw_err:
+            _fw_log("fmmenu.py:top assembly row", _fw_err)
     if shell is not None and _solid_row(target):
         row_entries = _solid_row_bar(shell, target)
     try:
@@ -2214,7 +2242,7 @@ def build(shell, target, view=None, full=False, parent=None):
     except Exception as _fw_err:
         _fw_log("fmmenu.py:1779", _fw_err)
     if row_entries:
-        row = TreeRows(row_entries, kind)
+        row = TreeRows(row_entries, "feature" if top else kind)     # rmbtop-1127: two lines on the top assembly row
         row.chosen.connect(lambda entry, m=menu: (m.close(), _later(entry.run)))
         action = QtWidgets.QWidgetAction(menu)
         action.setDefaultWidget(row)
@@ -2376,7 +2404,36 @@ def _normal_to_live(target, row_entries):
     except Exception as _fw_err:
         _fw_log("fmmenu.py:normal-live", _fw_err)
         return row_entries
-    return [e for e in row_entries if e.key != "NormalTo"]
+
+    from . import contextbar
+    out = []
+    for e in row_entries:
+        if e.key == "NormalTo":
+            e = contextbar.Entry(e.key, e.label, e.icon, e.tip, _normal_to_page, e.enabled)
+        out.append(e)
+    return out
+
+
+NORMAL_TO_FIRST = ("Normal To needs a plane or a flat face to look at, and this item has no sketch plane. Pick a "
+                   "flat face of it in the graphics area (or a plane), then use Normal To again.")
+
+
+def _normal_to_page():
+    """Normal To on an item with no plane: the Message page (what to do first), as the other not-ready buttons."""
+    try:
+        from . import notready
+        if Gui.Control.activeDialog():
+            return False
+        page = notready.NotReadyPage("NormalTo")
+        from PySide import QtWidgets as _W
+        for lab in page.form.findChildren(_W.QLabel, "SWNotReadyMessage"):
+            lab.setText(NORMAL_TO_FIRST)
+        Gui.Selection.clearSelection()
+        Gui.Control.showDialog(page)
+        return True
+    except Exception as _fw_err:
+        _fw_log("fmmenu.py:normal-to-page", _fw_err)
+        return False
 
 
 def _body_tree_row(shell, body, row_entries):
@@ -2452,7 +2509,13 @@ def _reopen(menu, shell, target, view):
 
 
 LAST = [None]       # the menu shown last (tests)
-WHOLE_MENU = ("annotations",)
+WHOLE_MENU = ("annotations", "mate")
+                                         # too, holds 11-07 and read 11-19)
+
+
+def _contour_select():
+    from . import partextras
+    return partextras.contour_select_tool()
 
 
 def _solid_row(target):

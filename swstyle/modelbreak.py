@@ -165,6 +165,8 @@ class ModelBreakView:
 
     def rebuild(self):
         from pivy import coin
+        if getattr(self, "node", None) is None:
+            return                  # restorefix-1126: updateData can come before attach() on a reopened file
         obj = self.Object
         self.node.removeAllChildren()
         shape = obj.BrokenShape

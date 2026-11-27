@@ -30,13 +30,13 @@ def _log(site, err):
 
 
 S = "-"
-_FOLDER_TAIL = [S, "Copy", S, "Create New Folder", "Collapse Tree Items"]
+_FOLDER_TAIL = [S, "Copy", "Paste", S, "Create New Folder", "Collapse Tree Items"]
 
 ORDER = {
     "study": ["Run", "Update All Components", "Export...", S, "Trend Tracker", "Create Submodeling Study",
-              "Load Case Manager", "Copy Study", "Shell Manager", "Simulation Evaluator...", S, "Details...",
+              "Load Case Manager", "Copy Study", "Paste", "Shell Manager", "Simulation Evaluator...", S, "Details...",
               "Properties...", "Mass Properties...", S, "Define Function Curves...", S, "Rename", "Delete"],
-    "part": ["Apply/Edit Material...", "Apply Favorite Material", S, "Apply Draft Quality Mesh", S, "Shell Manager",
+    "part": ["Apply/Edit Material...", "Apply Favorite Material", S, "Apply Draft Quality Mesh", "Apply High Quality Mesh", S, "Shell Manager",
              "Define Shell By Selected Faces...", S, "Create Mesh...", "Treat as Beam...", "Treat as Remote Mass...",
              S, "Make Rigid", "Fix", "Exclude from Analysis", S, "Details...", S, "Copy", S, "Add to New Folder",
              "Collapse Tree Items"],
@@ -49,7 +49,7 @@ ORDER = {
                  "Hide All", "Show All"] + _FOLDER_TAIL,
     "loads": ["External Loads Advisor...", S, "Force...", "Torque...", "Pressure...", "Gravity...", "Centrifugal...",
               "Bearing Load...", "Temperature...", "Prescribed Displacement...", S, "Flow Effects...",
-              "Thermal Effects...", S, "Remote Load/Mass...", "Distributed Mass...", S, "Copy", S, "Hide All",
+              "Thermal Effects...", S, "Remote Load/Mass...", "Distributed Mass...", S, "Copy", "Paste", S, "Hide All",
               "Show All", S, "Create New Folder", "Collapse Tree Items"],
     "item": ["Edit Definition...", "Add to Library", "Details...", S, "Hide", "Show", "Suppress", "Unsuppress", S,
              "Delete...", "Copy"],
@@ -126,6 +126,9 @@ RENAME = {
 
 DROP = {
     "study": ("Study Advisor...", "Report..."),
+
+    # CommandManager (Fixtures Advisor and Connections Advisor flyouts)
+    "connections": ("Rigid...", "Rigid Connection..."),
 }
 
 

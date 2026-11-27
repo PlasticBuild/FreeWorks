@@ -70,6 +70,10 @@ def note_rename(comp):
     new = _base(comp.Label)
     old = os.path.splitext(os.path.basename(doc.FileName))[0]
     if not new or new == old or new.startswith("["):
+        # the name is the file's again (renamed back, or Replace Components naming the new part): a rename
+        # noted before is dropped. Replace Components sets a temporary name ("FwReplacing") first; kept, it
+        # saved the new part's file as FwReplacing.FCStd at the next save and the assembly used that file
+        PENDING.get(comp.Document.Name, {}).pop(comp.Name, None)
         return False
     PENDING.setdefault(comp.Document.Name, {})[comp.Name] = new
     return True

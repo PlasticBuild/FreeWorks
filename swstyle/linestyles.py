@@ -327,6 +327,20 @@ def _restore(sketch, scene, editing):
 
 
 # ------------------------------------------------------------------------------------- watcher
+def _files_busy():
+    """A file is opening or a document rebuilding (FreeCAD lets timers run between features then): the pass
+    waits, the next tick after does it once (File handling perf-1127)."""
+    try:
+        if App.isRestoring():
+            return True
+        for d in App.listDocuments().values():
+            if getattr(d, "Restoring", False) or getattr(d, "Recomputing", False):
+                return True
+    except Exception:
+        return False
+    return False
+
+
 class _Watcher(QtCore.QObject):
     def __init__(self):
         super().__init__()
@@ -337,6 +351,8 @@ class _Watcher(QtCore.QObject):
         self.hidden = {}
 
     def tick(self):
+        if _files_busy():
+            return            # opening or rebuilding: the next tick after draws the styles once
         try:
             self._tick()
         except Exception as exc:          # a drawing problem must never stop FreeCAD

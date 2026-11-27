@@ -49,6 +49,17 @@ def boxes(panel):
     add = filletpm._box("Items To Fillet")
     panel.xpert_list = filletpm._ItemsList(panel, "SWFilletXpertItems")
     add.layout().addWidget(panel.xpert_list)
+
+    # Full / Partial / No preview in Options; each the Manual tab's own setting, kept in step
+    manual_bar = getattr(panel, "toolbar_box", None)
+    if manual_bar is not None:
+        twin = QtWidgets.QCheckBox("Show selection toolbar", add)
+        twin.setObjectName("SWFilletXpertSelectionToolbar")
+        twin.setToolTip(manual_bar.toolTip() or "Show selection toolbar")
+        twin.setChecked(manual_bar.isChecked())
+        twin.toggled.connect(lambda on, m=manual_bar: m.isChecked() != on and m.setChecked(on))
+        manual_bar.toggled.connect(lambda on, t=twin: t.isChecked() != on and t.setChecked(on))
+        add.layout().addWidget(twin)
     row = QtWidgets.QHBoxLayout()
     row.addWidget(QtWidgets.QLabel("R", add))
     panel.xpert_radius = filletpm._spin(add, "SWFilletXpertRadius", "mm", 0.001, 1e6)
@@ -73,6 +84,15 @@ def boxes(panel):
         twin.setChecked(manual.isChecked())
         twin.toggled.connect(lambda on, m=manual: m.isChecked() != on and m.setChecked(on))
         manual.toggled.connect(lambda on, t=twin: t.isChecked() != on and t.setChecked(on))
+        add_options.layout().addWidget(twin)
+    group = QtWidgets.QButtonGroup(add_options)
+    for manual in list(getattr(panel, "preview_buttons", None) or []):
+        twin = QtWidgets.QRadioButton(manual.text(), add_options)
+        twin.setObjectName("SWFilletXpert" + manual.text().replace(" ", ""))
+        twin.setChecked(manual.isChecked())
+        group.addButton(twin)
+        twin.toggled.connect(lambda on, m=manual: on and not m.isChecked() and m.setChecked(True))
+        manual.toggled.connect(lambda on, t=twin: on and not t.isChecked() and t.setChecked(True))
         add_options.layout().addWidget(twin)
 
     change = filletpm._box("Change")

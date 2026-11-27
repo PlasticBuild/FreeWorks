@@ -630,12 +630,21 @@ def from_file(doc, path):
     return add(doc, table, path)
 
 
+def _sheet_metal():
+    """bendtable-1126: the part has a sheet metal body (toolfirst shows "Make a sheet metal body first." if not)."""
+    try:
+        from . import toolfirst
+        return toolfirst._has_sheet_body()
+    except Exception:
+        return True
+
+
 class NewCommand:
     def GetResources(self):
         return {"MenuText": "New...", "ToolTip": "Makes a new bend table for the part."}
 
     def IsActive(self):
-        return App.ActiveDocument is not None
+        return App.ActiveDocument is not None and _sheet_metal()     # bendtable-1126: else toolfirst's page
 
     def Activated(self):
         NewDialog(App.ActiveDocument).exec_()
@@ -646,7 +655,7 @@ class FileCommand:
         return {"MenuText": "From File...", "ToolTip": "Adds a bend table from a file to the part."}
 
     def IsActive(self):
-        return App.ActiveDocument is not None
+        return App.ActiveDocument is not None and _sheet_metal()     # bendtable-1126
 
     def Activated(self):
         path, _f = QtWidgets.QFileDialog.getOpenFileName(

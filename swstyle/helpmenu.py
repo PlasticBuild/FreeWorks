@@ -97,7 +97,7 @@ TUTORIALS = (
     ]),
     ("Lesson 2: Changing a part", [
         ("Edit a feature", "EditFeature", "Pick a feature in the FeatureManager, then Edit Feature."),
-        ("Roll back", None, "Drag the blue rollback bar above a feature; the features under it are greyed out."),
+        ("Roll back", None, "Drag the blue rollback bar above a feature; the features under it are grayed out."),
         ("Reorder", None, "Drag a feature to another place in the tree. A move that would break it is refused."),
         ("Equations", "Equations", "Tools > Equations: global variables drive the dimensions."),
     ]),
@@ -1131,7 +1131,7 @@ COMMANDS = {
     "SWStyle_IntroducingPDF": ("Introducing FreeCAD (pdf)", "A short introduction, as a PDF", lambda: pdf("intro", "Introducing")),
     "SWStyle_2Dto3D": ("Moving from 2D to 3D", "For 2D drafters", lambda: show("2d3d")),
     "SWStyle_Rx": ("FreeCAD Rx", "Diagnostics for support questions", lambda: _keep(RxDialog())),
-    "SWStyle_AboutFreeWorks": ("About FreeCAD...", "Version and licence", lambda: _keep(AboutDialog())),
+    "SWStyle_AboutFreeWorks": ("About FreeCAD...", "Version and license", lambda: _keep(AboutDialog())),
 }
 
 

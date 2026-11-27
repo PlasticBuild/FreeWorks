@@ -113,6 +113,20 @@ def _gusset(p, kind, blue, grey):
         x = {"Inner side": 9, "Both sides": 11.5, "Outer side": 14}[kind]
         _rect(p, x, 6, 5, 16, blue)
         return
+    if kind in ("Rounded gusset", "Flat gusset"):      # pkg439: Sheet Metal Gusset profile, across the bend
+        _rect(p, 3, 3, 5, 22, light)
+        _rect(p, 8, 20, 17, 5, light)
+        if kind == "Rounded gusset":
+            path = QtGui.QPainterPath(_pt(8, 9))
+            path.quadTo(_pt(9, 19), _pt(19, 20))
+            path.lineTo(_pt(8, 20))
+            path.closeSubpath()
+            p.setPen(QtCore.Qt.NoPen)
+            p.setBrush(blue)
+            p.drawPath(path)
+        else:
+            _poly(p, [(8, 9), (12, 9), (19, 16), (19, 20), (8, 20)], blue)
+        return
     # Start / Mid point / End: along the joint edge
     _rect(p, 2, 20, 24, 5, light)
     x = {"Start": 3, "Mid point": 10, "End": 17}.get(kind, 10)

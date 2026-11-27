@@ -62,6 +62,8 @@ def is_surface_body(obj):
     try:
         if obj.TypeId in NOT_BODIES or obj.isDerivedFrom("Part::Part2DObject") or _helper(obj):
             return False
+        if getattr(obj, "FwType", "") == "FwLiveSectionPlane":
+            return False      # a Live Section Plane is reference geometry (its sheet is not a surface body)
         if obj.isDerivedFrom("PartDesign::Feature") or obj.isDerivedFrom("App::DocumentObjectGroup"):
             return False
         if "Invalid" in obj.State and (obj.Shape.isNull()):
@@ -232,6 +234,24 @@ class RowView:
         self.Object = vobj.Object
         from pivy import coin
         vobj.addDisplayMode(coin.SoGroup(), "Default")
+        # rowvis-1126: an opened part's row comes back with its eye open whatever was saved, and passing that on showed a
+        # body the user had hidden (a hidden Live Section Plane came back cutting): until the part is open the row only
+        # follows its body, then takes its eye from it
+        self._ready = False
+        try:
+            from PySide import QtCore
+            QtCore.QTimer.singleShot(0, lambda vobj=vobj: self._settle(vobj))
+        except Exception:
+            self._ready = True
+
+    def _settle(self, vobj):
+        try:
+            src = source(vobj.Object)
+            if src is not None and src.ViewObject is not None and vobj.Visibility != src.ViewObject.Visibility:
+                vobj.Visibility = src.ViewObject.Visibility
+        except Exception as _fw_err:
+            _fw_log("surfacebodies.py:settle", _fw_err)
+        self._ready = True
 
     def getDisplayModes(self, vobj):
         return ["Default"]
@@ -254,7 +274,7 @@ class RowView:
         return ":/icons/Part_Feature.svg"
 
     def onChanged(self, vobj, prop):
-        if prop != "Visibility":
+        if prop != "Visibility" or not getattr(self, "_ready", True):
             return
         src = source(vobj.Object)
         try:
@@ -366,11 +386,13 @@ def sync(doc):
         box = _make(doc, "folder")
     have = {r.SourceName: r for r in rows(doc)}
     names = [o.Name for o in found]
+    moved = False
     for o in found:
         r = have.get(o.Name)
         if r is None:
             r = _make(doc, "row")
             r.SourceName = o.Name
+            moved = True
         _label(r, o.Label)
         if App.GuiUp and r.ViewObject is not None:
             if not r.ViewObject.ShowInTree:
@@ -385,9 +407,15 @@ def sync(doc):
         if name not in names:
             try:
                 doc.removeObject(r.Name)
+                moved = True
             except Exception as _fw_err:
                 _fw_log("surfacebodies.py:388", _fw_err)
     count = len(found)
+    if moved and box.Count == count:
+        # a body replaced by another (Trim, Extend): the count stays, so FreeCAD's tree never asked the
+        # folder for its rows again and the new row stood at the top level under the last feature
+        # (surface run 11-27: "Surface-Trim1" twice). Changing the count makes the tree re-read it.
+        box.Count = count + 1
     if box.Count != count:
         box.Count = count
     _label(box, "Surface Bodies(%d)" % count)

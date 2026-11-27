@@ -242,7 +242,7 @@ class LinearPatternPage(sketchtoolpm.ToolPage):
         self.count1.setChecked(p.GetBool("DisplayCount1", True))
         self.a1 = self._number(g, p.GetFloat("Angle1", 0.0), "°", -360.0, 360.0, "Angle")
         self.fix_x = QtWidgets.QCheckBox("Fix X-axis direction", g.body)
-        self.fix_x.setChecked(p.GetBool("FixX", False))
+        self.fix_x.setChecked(p.GetBool("FixX", True))
         self._rows(g, self.rev1, ("Spacing:", self.s1), self.dim_x, ("Instances:", self.n1), self.count1,
                    ("Angle:", self.a1), self.fix_x)
         g = self.group("Direction 2")

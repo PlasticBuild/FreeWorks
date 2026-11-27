@@ -49,6 +49,16 @@ def _view():
         return None
 
 
+def _sheet_widget():
+    """mbar-1126: the drawing sheet's picture area, for Record Video on a sheet."""
+    try:
+        from . import drawextras
+        w = drawextras.page_view_widget()
+        return w.viewport() if w is not None and hasattr(w, "viewport") else w
+    except Exception:
+        return None
+
+
 def _gl(view=None):
     view = view or _view()
     try:
@@ -242,7 +252,7 @@ class Recorder:
             _fw_log("viewextras.py:241", _fw_err)
 
     def grab(self):
-        widget = _gl()
+        widget = _gl() or _sheet_widget()
         if widget is None:
             return
         try:
@@ -294,7 +304,7 @@ class LightObject:
         obj.LightKind = list(LIGHT_KINDS)
         obj.LightKind = kind
         obj.addProperty("App::PropertyBool", "On", "Light", "The light shines").On = True
-        obj.addProperty("App::PropertyColor", "Color", "Light", "The light's colour").Color = (1.0, 1.0, 1.0)
+        obj.addProperty("App::PropertyColor", "Color", "Light", "The light's color").Color = (1.0, 1.0, 1.0)
         obj.addProperty("App::PropertyPercent", "Brightness", "Light", "How bright, 0-100").Brightness = 35
         obj.addProperty("App::PropertyVector", "Direction", "Light", "Where a directional or spot light points")
         obj.Direction = V(-1, -1, -1)
@@ -353,13 +363,27 @@ def _folder(doc):
     return group
 
 
+
+_DEFAULT_NAMES = ("Ambient", "Directional1", "Directional2", "Directional3")
+
+
+def _next_name(doc, kind, obj=None):
+    ""
+
+    taken = set(_DEFAULT_NAMES) | {o.Label for o in lights(doc) if o is not obj}
+    n = 1
+    while "%s%d" % (kind, n) in taken:
+        n += 1
+    return "%s%d" % (kind, n)
+
+
 def add_light(doc, kind, transaction=True):
     if transaction:
         doc.openTransaction("Add %s Light" % kind if kind != "Sun" else "Add Sunlight")
     try:
         obj = doc.addObject("App::FeaturePython", "Sunlight" if kind == "Sun" else "%sLight" % kind)
         LightObject(obj, kind)
-        obj.Label = "Sunlight" if kind == "Sun" else "%s%d" % (kind, len([o for o in lights(doc) if o.LightKind == kind]))
+        obj.Label = "Sunlight" if kind == "Sun" else _next_name(doc, kind, obj)
         if Gui is not None:
             obj.ViewObject.Proxy = 0
         _folder(doc).addObject(obj)
@@ -896,7 +920,7 @@ if Gui is not None:
 
     COMMANDS = [
         ("SWStyle_RecordVideo", "Record Video...", "Records the graphics area as a video.",
-         lambda: _has_view() and not RECORDER.on, _record, None),
+         lambda: (_has_view() or _sheet_widget() is not None) and not RECORDER.on, _record, None),
         ("SWStyle_StopVideoRecord", "Stop Video Record", "Ends the recording and saves the video.",
          lambda: RECORDER.on, _stop_record, None),
         ("SWStyle_ViewRotate", "Rotate", "Drag to rotate the view.", _has_view,

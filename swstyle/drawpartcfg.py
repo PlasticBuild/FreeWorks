@@ -349,11 +349,13 @@ def _patch_view_pm():
         linked = DS.parent_of(v) is not None or v.TypeId in (
             "TechDraw::DrawViewSection", "TechDraw::DrawViewDetail", "TechDraw::DrawComplexSection")
         if linked:
+
+            # view (and the views made from it). Never greyed: a greyed combo is hidden here, which left the
+            # group empty (usage run 11-27).
             self.config.setItemText(self.config.currentIndex(), self.config.currentText() + " <Link to parent>")
-            self.config.setEnabled(False)
-            return
         self.config.currentIndexChanged.connect(
-            lambda *_: self.change(lambda: apply_view(self.view, self.config.currentText())))
+            lambda *_: self.change(lambda: apply_view(self.view,
+                                                      self.config.currentText().replace(" <Link to parent>", ""))))
 
     cls.build = build
 

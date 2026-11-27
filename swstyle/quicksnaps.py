@@ -34,7 +34,7 @@ MASTER = "SnapToObjects"       # the older single switch: kept on while a Quick 
 # key -> (menu text, tooltip, switches left on)
 SNAPS = {
     "Point": ("Point Snap", "Snaps to endpoints and sketch points of the next entity only.", ("SnapToEndPoints",)),
-    "CenterPoint": ("Center Point Snap", "Snaps to centres of arcs and circles for the next entity only.", ("SnapToCenterPoints",)),
+    "CenterPoint": ("Center Point Snap", "Snaps to centers of arcs and circles for the next entity only.", ("SnapToCenterPoints",)),
     "Midpoint": ("Midpoint Snap", "Snaps to midpoints for the next entity only.", ("SnapToMidpoints",)),
     "Quadrant": ("Quadrant Snap", "Snaps to quadrant points of arcs and circles for the next entity only.", ("SnapToQuadrants",)),
     "Intersection": ("Intersection Snap", "Snaps to intersections for the next entity only.", ("SnapToIntersections",)),
@@ -94,6 +94,7 @@ class _OneShot:
         self.count = len(sketch.Geometry)
         self.tool_seen = _tool_running()
         self.timer.start()
+        _refresh_tool()
 
     def finish(self):
         self.timer.stop()
@@ -101,6 +102,7 @@ class _OneShot:
             write_switches(self.saved)
         _params().RemString("QuickSnapSaved")
         self.key, self.saved, self.sketch = None, None, None
+        _refresh_tool()
 
     def poll(self):
         from .sketchextras import sketch_in_edit
@@ -118,6 +120,15 @@ class _OneShot:
                 self.finish()
         except Exception:
             self.finish()
+
+
+def _refresh_tool():
+    """fix286: the running sketch tool takes the switches at once."""
+    try:
+        from .fwsketch import snap
+        snap.refresh_params()
+    except Exception as _fw_err:
+        _fw_log("quicksnaps.py:_refresh_tool", _fw_err)
 
 
 def _tool_running():

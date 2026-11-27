@@ -117,6 +117,12 @@ def parse_header(doc, header):
                 obj.renameConstraint(i, what)
             return ("value", obj, "Constraints." + (c.Name or what))
         return None
+    dims = _extra(obj)
+    if dims is not None:                    # D1@Plane1 is the offset, not the size (refdims-fix01)
+        m = re.match(r"D(\d+)$", what)
+        if m and 0 < int(m.group(1)) <= len(dims):
+            return ("value", obj, dims[int(m.group(1)) - 1])
+        return ("value", obj, what) if what in dims else None
     if what in obj.PropertiesList:
         return ("value", obj, what)
     m = re.match(r"D(\d+)$", what)
@@ -126,6 +132,15 @@ def parse_header(doc, header):
             if p in obj.PropertiesList:
                 return ("value", obj, p)
     return None
+
+
+def _extra(obj):
+    try:
+        from . import equations
+        return equations.extra_dims(obj)
+    except Exception as _fw_err:
+        _fw_log("cmflows.py:extra", _fw_err)
+        return None
 
 
 def unit_k(obj, prop):
@@ -609,15 +624,34 @@ def candidates(doc):
                     continue
                 out.append(("%s@%s" % (name, o.Label), o, path,
                             c.Value / k if c.Type != "Angle" else c.Value * 57.29577951308232, i))
+        elif _extra(o) is not None:
+            # a plane's offset or angle (D1@Plane1, never its display size), a Helix/Spiral's values, a
+            # circular-profile sweep's diameter; an axis, point or coordinate system has none (refdims-fix01)
+            for n, p in enumerate(_extra(o), 1):
+                if not equation_on(o, p):
+                    v = getattr(o, p)
+                    v = v.Value if hasattr(v, "Value") else float(v)
+                    out.append(("D%d@%s" % (n, o.Label), o, p, v / k if unit_k(o, p) else v, None))
         elif o.TypeId.startswith("PartDesign::") and o.TypeId not in ("PartDesign::Body",):
             for n, pool in ((1, FIRST_VALUES), (2, SECOND_VALUES)):
                 for p in pool:
                     if p in o.PropertiesList and hasattr(getattr(o, p), "Value"):
+                        if not _shown(o, p):
+                            break
                         if not equation_on(o, p):
                             v = getattr(o, p)
                             out.append(("D%d@%s" % (n, o.Label), o, p, v.Value / k if unit_k(o, p) else v.Value, None))
                         break
     return out
+
+
+def _shown(obj, prop):
+    try:
+        from . import equations
+        return equations.shown_dim(obj, prop)
+    except Exception as _fw_err:
+        _fw_log("cmflows.py:shown", _fw_err)
+        return True
 
 
 def auto_create(doc, headers):

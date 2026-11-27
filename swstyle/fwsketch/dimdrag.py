@@ -131,6 +131,14 @@ def filter(tool, obj, event):
             tool.sketch.Document.openTransaction(DRAG_STEP)
             return False                       # FreeCAD drags the dimension
         s.press = (_global(event), pre) if pre is not None and pre[0] == "geometry" else None
+        s.drag_pick = None
+        if s.press is not None and tool.empty() and not tool.indexes:
+            # dragdim-1127: what a click-drag starts from (the pressed element and where), see _drag_place
+            try:
+                from . import dimension as D
+                s.drag_pick = (D.preselected(tool.sketch), tool.pointer()[0])
+            except Exception as _fw_err:
+                _fw_log("fwsketch/dimdrag.py:drag-pick", _fw_err)
         s.dragged = False
         return None
     if t == QtCore.QEvent.MouseMove:
@@ -149,6 +157,19 @@ def filter(tool, obj, event):
         if s.swallow:
             return True
         press, s.press = s.press, None
+        drag_pick, s.drag_pick = getattr(s, "drag_pick", None), None
+        if press is not None and s.dragged and drag_pick is not None and drag_pick[0] is not None \
+                and drag_pick[1] is not None:
+
+            # the dimension of what was pressed is placed where the button comes up, then the Modify box. Before,
+            # the drag made no dimension, so the dimension seemed to vanish until the line was clicked again.
+            s.dragged = False
+            s.swallow = True
+            QtCore.QTimer.singleShot(0, lambda: setattr(s, "swallow", False))
+            tool._press = None
+            where = QtCore.QPoint(_global(event))      # the event is gone once this returns
+            QtCore.QTimer.singleShot(0, lambda: _drag_place(tool, drag_pick[0], drag_pick[1], where))
+            return True
         if press is not None and s.dragged and not _sketch_under(tool.sketch):
             s.dragged = False
             s.swallow = True
@@ -160,6 +181,29 @@ def filter(tool, obj, event):
         s.dragged = False
         return None
     return None
+
+
+def _drag_place(tool, pick, at, where):
+    """dragdim-1127: the pressed element is picked as a click at the press would pick it, the new dimension
+    follows to where the button came up, and that counts as the placing click (Modify box)."""
+    from . import toolbase as TB
+    s = state(tool)
+    try:
+        if TB.active() is not tool:
+            return
+        tool.release(at, forced_pick=pick)
+        if not tool.indexes:
+            s.tips.append(NO_DIMENSION)
+            QtWidgets.QToolTip.showText(where + QtCore.QPoint(16, -36), NO_DIMENSION)
+            return
+        tool._move()                    # the dimension (and its kind) follows the pointer, as on a plain move
+        p, px = tool.pointer()
+        if p is not None:
+            tool.pixel = px
+            tool.clear_hover()
+            tool.finalize()             # the placing click
+    except Exception as _fw_err:
+        _fw_log("fwsketch/dimdrag.py:drag-place", _fw_err)
 
 
 CENTRE_SNAP_PX = 8.0

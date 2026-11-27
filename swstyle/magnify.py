@@ -117,8 +117,13 @@ class Spot:
 def _element(doc, info):
     """The picked element's shape, in the document's coordinates."""
     try:
-        obj = doc.getObject(info.get("ParentObject") or info["Object"])
-        sub = info.get("SubName") if info.get("ParentObject") else info.get("Component")
+        parent = info.get("ParentObject")
+        if parent is not None and not isinstance(parent, str):
+            obj = parent        # FreeCAD 1.1 gives the object itself, not its name: a body's edges and corners
+                                # were never candidates, so the glass picked the face behind them (vd210, 11-27)
+        else:
+            obj = doc.getObject(parent or info["Object"])
+        sub = info.get("SubName") if parent else info.get("Component")
         return obj.getSubObject(sub or "")
     except Exception:
         return None
@@ -165,6 +170,8 @@ def _select(info, add):
     doc = info.get("Document")
     top = info.get("ParentObject") or info.get("Object")
     sub = info.get("SubName") if info.get("ParentObject") else info.get("Component")
+    if top is not None and not isinstance(top, str):
+        top = top.Name          # FreeCAD 1.1 gives the parent object itself (a body's edge was never picked)
     if not add:
         Gui.Selection.clearSelection()
     try:
@@ -253,9 +260,11 @@ class Magnifier(QtCore.QObject):
         self.close()
         self.viewer, self.widget = viewer, widget
         self.glass = Glass(widget)
+        self.glass.destroyed.connect(self._glass_gone)
         widget.installEventFilter(self)
         viewer.installEventFilter(self)
         widget.setMouseTracking(True)
+        self._esc_first()
         self.cache = None
         if pos is None:
             pos = QtCore.QPointF(widget.mapFromGlobal(QtGui.QCursor.pos()))
@@ -265,12 +274,56 @@ class Magnifier(QtCore.QObject):
         self.follow(QtCore.QPointF(pos))
         return True
 
+    def _esc_first(self):
+        ""
+
+        try:
+            from . import events
+            events.register("magnify-esc", (QtCore.QEvent.ShortcutOverride, QtCore.QEvent.KeyPress), self._esc)
+            for t in (QtCore.QEvent.ShortcutOverride, QtCore.QEvent.KeyPress):
+                lst = events._BY_TYPE.get(t, [])
+                lst[:] = [e for e in lst if e[0] == "magnify-esc"] + [e for e in lst if e[0] != "magnify-esc"]
+        except Exception as _fw_err:
+            _fw_log("magnify.py:esc", _fw_err)
+
+    def _glass_gone(self, *_args):
+        """The glass went with its view or document, without close(): take its Esc handler off too (Reviewer,
+        11-27). A glass put away by close() and then opened again keeps the new one's."""
+        if self.glass is not None and alive(self.glass):
+            return
+        try:
+            from . import events
+            events.unregister("magnify-esc")
+        except Exception as _fw_err:
+            _fw_log("magnify.py:esc-gone", _fw_err)
+        self.rest.stop()
+        self.glass = self.widget = self.viewer = None
+
+    def _esc(self, obj, event):
+        if not isinstance(event, QtGui.QKeyEvent) or event.key() != Qt.Key_Escape or not self.is_open():
+            return False
+        if QtWidgets.QApplication.activeModalWidget() is not None or QtWidgets.QApplication.activePopupWidget() is not None:
+            return False        # a dialog or a menu on top takes its own Esc
+        if event.type() == QtCore.QEvent.KeyPress:
+            QtCore.QTimer.singleShot(0, self.close)
+        event.accept()
+        return True
+
     def close(self):
         self.rest.stop()
+        try:
+            from . import events
+            events.unregister("magnify-esc")
+        except Exception as _fw_err:
+            _fw_log("magnify.py:esc-off", _fw_err)
         for w in (self.widget, self.viewer):
             if w is not None and alive(w):
                 w.removeEventFilter(self)
         if self.glass is not None and alive(self.glass):
+            try:
+                self.glass.destroyed.disconnect(self._glass_gone)
+            except (RuntimeError, TypeError) as _fw_err:
+                _fw_log("magnify.py:gone-off", _fw_err)
             self.glass.hide()
             self.glass.deleteLater()
         self.glass = self.widget = self.viewer = None

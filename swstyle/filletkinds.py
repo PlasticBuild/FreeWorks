@@ -234,7 +234,18 @@ def hold_line_fillet(base, edges, holds):
         if min(radii) < 1e-6:
             raise RuntimeError("The hold line touches the edge: pick a line on a face, away from the edge")
         rows.append((index, radii[0], radii[1]))
-    return multiradius.per_edge(base, "Fillet", rows)
+    try:
+        return multiradius.per_edge(base, "Fillet", rows)
+    except Exception as first:
+        # the round's tangent line lands exactly on the hold line, an edge of the face: OpenCascade refuses
+
+        for gap in (1e-3, 1e-2, 5e-2):
+            try:
+                return multiradius.per_edge(base, "Fillet", [(i, max(a - gap, 1e-3), max(b - gap, 1e-3))
+                                                             for i, a, b in rows])
+            except Exception as _fw_err:
+                _fw_log("filletkinds.py:hold_gap", _fw_err)
+        raise first
 
 
 def _plane(face):
@@ -263,6 +274,10 @@ def full_round(base, side1, center, side2):
     def inward(face, n):
         return n if base.isInside(face.CenterOfMass + n * 1e-3, 1e-7, True) else n * -1
     n1, n2, ncc = inward(side1, s1), inward(side2, s2), inward(center, nc)
+    # a rib: the side faces face away from each other and the round's centre is in the material. A
+    # slot's closed end (Triple Clamp: a 3 mm Thin cut, then Full Round on its end, R1.5): the
+    # material is outside the three faces, the round's centre is in the gap and the corners are filled
+    s = 1.0 if n1.dot(side2.CenterOfMass - side1.CenterOfMass) > 0 else -1.0
     u = ncc.cross(d)
     u.normalize()
     w = d.cross(u)          # the section's axes: u across the rib, w into it from the center face
@@ -272,8 +287,8 @@ def full_round(base, side1, center, side2):
     rows = []
     for n, pt in ((n1, p1), (n2, p2), (ncc, pc)):
         a, b = two(n)
-        rows.append((a, b, -1.0, a * two(pt)[0] + b * two(pt)[1]))
-    # n.(c - p) = r  ->  a*cu + b*cw - r = n.p
+        rows.append((a, b, -s, a * two(pt)[0] + b * two(pt)[1]))
+    # n.(c - p) = s r  ->  a*cu + b*cw - s r = n.p
     import numpy
     m = numpy.array([[a, b, c] for a, b, c, _k in rows])
     k = numpy.array([kk for _a, _b, _c, kk in rows])
@@ -288,7 +303,7 @@ def full_round(base, side1, center, side2):
     tmin, tmax = min(ts), max(ts)
     c0 = centre_2d + d * tmin
     # the touch points on the side faces and the corners at the center face, in the section at tmin
-    t1, t2 = c0 - n1 * r, c0 - n2 * r
+    t1, t2 = c0 - n1 * (s * r), c0 - n2 * (s * r)
 
     def corner(na, pa):           # the side line meets the center line (in the tmin section)
         a1, b1 = two(na)
@@ -301,7 +316,7 @@ def full_round(base, side1, center, side2):
     block = Part.Face(Part.makePolygon([t1, k1, k2, t2, t1])).extrude(d * (tmax - tmin))
     rod = Part.makeCylinder(r, tmax - tmin, c0, d)
     removed = block.cut(rod)
-    result = base.cut(removed)
+    result = base.cut(removed) if s > 0 else base.fuse(removed)
     try:
         result = result.removeSplitter()
     except Exception as _fw_err:
@@ -345,9 +360,10 @@ def _full_round(obj, base):
 
 # Face Set PURPLE, Side Face Set 2 PINK, as a 14 px bar at the left of a white box (the active box pale blue);
 # the faces in the view take the same colours
-SET_COLOURS = {"SideFace1": ("#50a8ff", (0.31, 0.66, 1.0)),
-               "CenterFace": ("#7f00fc", (0.5, 0.0, 0.99)),
-               "SideFace2": ("#f57ec0", (0.96, 0.49, 0.75))}
+
+SET_COLOURS = {"SideFace1": ("#53a9ff", (0.325, 0.663, 1.0)),
+               "CenterFace": ("#8000ff", (0.502, 0.0, 1.0)),
+               "SideFace2": ("#ff80c0", (1.0, 0.502, 0.753))}
 
 if Gui is not None:
     class FullRoundPanel(sf.Panel):
@@ -359,7 +375,7 @@ if Gui is not None:
             from . import filletpm
             self.overlay = filletpm.Overlay()
             pages = self.form if isinstance(self.form, list) else [self.form]
-            items = pages[0]
+            items = pages[1] if getattr(self, "head", None) is not None and len(pages) > 1 else pages[0]
             items.setWindowTitle("Items To Fillet")
             self.tangent = QtWidgets.QCheckBox("Tangent propagation", items)
             self.tangent.setObjectName("SWFullRoundTangent")
@@ -412,7 +428,7 @@ if Gui is not None:
         def _activate(self, name):
             self.active = name
             for other, widget in self.lists.items():
-                colour = SET_COLOURS.get(other, ("#50a8ff",))[0]
+                colour = SET_COLOURS.get(other, ("#53a9ff",))[0]
                 back = "#d6ecff" if other == name else "#ffffff"
                 widget.setStyleSheet("QListWidget { background: %s; color: #000000; border: 1px solid #b0b0b0;"
                                      " border-left: 14px solid %s; }" % (back, colour))
@@ -493,7 +509,8 @@ FACE_FILLET = sf.Spec(
 FACE_FILLET.fields[0].split_to = "FaceSet2"
 
 FULL_ROUND_FILLET = sf.Spec(
-    "SWStyle_FullRoundFillet", "Full Round Fillet", "FullRoundFillet",
+
+    "SWStyle_FullRoundFillet", "Full Round Fillet", "Fillet",
     "Replaces a face with a half round touching it and the two faces beside it.",
     "FEATURES_FILLET", "PartDesign_Fillet",
     [Field("SideFace1", "pick", "Side Face Set 1", what=("Face",)),
@@ -502,6 +519,16 @@ FULL_ROUND_FILLET = sf.Spec(
     _full_round, panel=None)
 
 FULL_ROUND_FILLET.panel = FullRoundPanel
+
+
+def _fillet_type_box(obj):
+    from . import filletchamfer
+    return filletchamfer.type_box(obj)
+
+
+for _spec in (FACE_FILLET, FULL_ROUND_FILLET):
+    _spec.head_box = _fillet_type_box
+    _spec.pm_title = "Fillet"
 
 ALL = [FACE_FILLET, FULL_ROUND_FILLET]
 

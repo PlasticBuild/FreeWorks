@@ -44,7 +44,11 @@ TOL = 0.1                    # default ± tolerance, mm
 GTOL_SYMBOLS = {"Position": "⌖", "Flatness": "⏥", "Perpendicularity": "⟂", "Parallelism": "∥",
                 "Profile of a Surface": "⌓", "Circularity": "○", "Cylindricity": "⌭",
                 "Concentricity": "◎", "Straightness": "⏤", "Angularity": "∠",
-                "Total Runout": "⌰", "Circular Runout": "↗", "Symmetry": "⌯"}
+                "Total Runout": "⌰", "Circular Runout": "↗", "Symmetry": "⌯", "Profile of a Line": "⌒"}
+
+GTOL_PALETTE = ("Straightness", "Flatness", "Circularity", "Cylindricity", "Profile of a Line", "Profile of a Surface",
+                "Angularity", "Perpendicularity", "Parallelism", "Position", "Concentricity", "Symmetry",
+                "Circular Runout", "Total Runout")
 KINDS = ("Size", "Location", "Angle", "BasicLocation", "BasicSize", "Datum", "DatumTarget", "GTol", "Pattern",
          "Note", "SurfaceFinish", "Weld", "Reference")
 MATERIAL = {"None": "", "MMC": "Ⓜ", "LMC": "Ⓛ", "RFS": "Ⓢ", "Free state": "Ⓕ", "Projected": "Ⓟ",
@@ -128,6 +132,12 @@ class PMIView:
         model.addChild(self.font3)
         model.addChild(self.label3)
         self.text_switch.addChild(model)
+        frame = coin.SoSeparator()                 # a feature control frame: boxes (frame_image)
+        self.frame_img = coin.SoImage()
+        self.frame_img.horAlignment = coin.SoImage.LEFT
+        self.frame_img.vertAlignment = coin.SoImage.HALF
+        frame.addChild(self.frame_img)
+        self.text_switch.addChild(frame)
         self.text_switch.whichChild = 0
         text = coin.SoSeparator()
         text.addChild(self.at)
@@ -172,8 +182,63 @@ class PMIView:
             self.label3.string.setValues(0, len(lines), lines)
             self.restyle(obj)
         self._colour(obj)
+        self._frame(obj)
         if hasattr(self, "arrow"):
             self._arrow(obj, anchor, tp)
+
+    def _frame(self, obj):
+        ""
+
+
+        if not hasattr(self, "frame_img"):
+            return
+        if obj.Kind in ("Datum", "SurfaceFinish") and self.text_switch.whichChild.getValue() in (0, 2):
+            if obj.Kind == "SurfaceFinish" or str(_dp(obj.Document, "Datums", "Display type", "Per Standard")) != \
+                    "Round (GB)":
+                try:
+                    rgb = self.colour.rgb.getValues()[0].getValue()
+                    if obj.Kind == "Datum":
+                        font = str(_dp(obj.Document, "Datums", "Font", "") or
+                                   _dp(obj.Document, "Dimensions", "Font", "Century Gothic"))
+                        img = datum_image(str(obj.Text), rgb, frame_width(obj), font)
+                    else:
+                        img = finish_image(str(obj.Text), str(getattr(obj, "SurfaceSymbol", "") or ""), rgb,
+                                           str(_dp(obj.Document, "Dimensions", "Font", "Century Gothic")))
+                    size, data = _coin_image(img)
+                    self.frame_img.image.setValue(size, 4, data)
+                    self.frame_size = tuple(size.getValue())
+                    self.text_switch.whichChild = 2
+                except Exception as _fw_err:
+                    _fw_log("mbd.py:datum/finish image", _fw_err)
+                    self.text_switch.whichChild = 0
+            return
+        if obj.Kind == "DatumTarget" and self.text_switch.whichChild.getValue() in (0, 2):
+            try:
+                font = str(_dp(obj.Document, "Datums", "Font", "") or _dp(obj.Document, "Dimensions", "Font", "Century Gothic"))
+                size, data = _coin_image(target_image(str(obj.Text), target_size_text(obj),
+                                                      self.colour.rgb.getValues()[0].getValue(), frame_width(obj), font))
+                self.frame_img.image.setValue(size, 4, data)
+                self.frame_size = tuple(size.getValue())
+                self.text_switch.whichChild = 2
+            except Exception as _fw_err:
+                _fw_log("mbd.py:target-symbol", _fw_err)
+                self.text_switch.whichChild = 0
+            return
+        if obj.Kind != "GTol" or "|" not in str(obj.Text):
+            return
+        if self.text_switch.whichChild.getValue() not in (0, 2):
+            return              # text in the model: the lines stay as they are
+        try:
+            font = str(_dp(obj.Document, "Geometric Tolerances", "Font", "") or
+                       _dp(obj.Document, "Dimensions", "Font", "Century Gothic"))
+            size, data = _coin_image(frame_image(str(obj.Text), self.colour.rgb.getValues()[0].getValue(),
+                                                 frame_width(obj), font))
+            self.frame_img.image.setValue(size, 4, data)
+            self.frame_size = tuple(size.getValue())
+            self.text_switch.whichChild = 2
+        except Exception as _fw_err:
+            _fw_log("mbd.py:gtol-frame", _fw_err)
+            self.text_switch.whichChild = 0
 
     def _colour(self, obj):
         if obj.Name in HIDE_GHOST.get(obj.Document.Name, set()):
@@ -181,18 +246,95 @@ class PMIView:
             return
         if overridden(obj) and bool(_dp(obj.Document, "Dimensions",
                                         "Highlight overridden dimensions in a different color", True)):
-            self.colour.rgb.setValue(*OVERRIDDEN)
-        elif obj.Kind in ("Datum", "DatumTarget"):
-            self.colour.rgb.setValue(0.1, 0.55, 0.1)
-        elif obj.Kind == "GTol":
-            self.colour.rgb.setValue(0.6, 0.1, 0.6)
+            self.colour.rgb.setValue(*(OVERRIDDEN_DARK if _dark() else OVERRIDDEN))
         else:
-            self.colour.rgb.setValue(0.0, 0.35, 0.85)
+            self.colour.rgb.setValue(*kind_colour(obj.Kind))
+
+    def _target_area(self, obj, anchor):
+        ""
+
+        from pivy import coin
+        n = _face_normal_at(obj, anchor) or App.Vector(0, 0, 1)
+        u = n.cross(App.Vector(0, 0, 1))
+        if u.Length < 1e-6:
+            u = n.cross(App.Vector(1, 0, 0))
+        u.normalize()
+        v = n.cross(u)
+        v.normalize()
+        area = str(getattr(obj, "TargetArea", "Point") or "Point")
+        w = float(getattr(obj, "TargetWidth", 0.0) or 0.0)
+        h = float(getattr(obj, "TargetHeight", 0.0) or 0.0) or w
+        lift = anchor + n * 0.01
+        if area == "Circle" and w > 0:
+            pts = [lift + u * (w / 2.0 * math.cos(2 * math.pi * k / 48)) + v * (w / 2.0 * math.sin(2 * math.pi * k / 48))
+                   for k in range(49)]
+            runs = [49]
+        elif area == "Rectangle" and w > 0:
+            pts = [lift + u * (sx * w / 2.0) + v * (sy * h / 2.0) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1), (-1, -1))]
+            runs = [5]
+        else:
+            s = max(1.0, arrow_style(obj.Document)["length"])
+            pts = [lift - (u + v) * s, lift + (u + v) * s, lift - (u - v) * s, lift + (u - v) * s]
+            runs = [2, 2]
+        co = coin.SoCoordinate3()
+        co.point.setValues(0, len(pts), [tuple(p) for p in pts])
+        ls = coin.SoLineSet()
+        ls.numVertices.setValues(0, len(runs), runs)
+        self.arrow.addChild(co)
+        self.arrow.addChild(ls)
+        self.target_runs = list(runs)
+
+    def _datum_triangle(self, obj, anchor, style):
+        ""
+
+        from pivy import coin
+        pts = getattr(self, "leader", None) or [anchor]
+        if len(pts) < 2:
+            return
+        out = pts[1] - anchor
+        if out.Length < 1e-9:
+            return
+        out.normalize()
+        a = arrow_style(obj.Document)
+        h, w = a["length"] * 1.2, a["length"] * 1.2
+        look = None
+        try:
+            look = App.Vector(*Gui.ActiveDocument.ActiveView.getViewDirection())
+        except Exception:
+            look = None
+        side = out.cross(look) if look is not None else App.Vector()
+        if side.Length < 1e-6:
+            side = out.cross(App.Vector(0, 0, 1))
+        if side.Length < 1e-6:
+            side = out.cross(App.Vector(1, 0, 0))
+        side.normalize()
+        b1, b2, tip = anchor + side * (w / 2.0), anchor - side * (w / 2.0), anchor + out * h
+        co = coin.SoCoordinate3()
+        if style.startswith("Filled"):
+            co.point.setValues(0, 3, [tuple(b1), tuple(b2), tuple(tip)])
+            shape = coin.SoFaceSet()
+            shape.numVertices.setValues(0, 1, [3])
+            hints = coin.SoShapeHints()
+            hints.vertexOrdering = coin.SoShapeHints.UNKNOWN_ORDERING
+            self.arrow.addChild(hints)
+        else:
+            co.point.setValues(0, 4, [tuple(b1), tuple(b2), tuple(tip), tuple(b1)])
+            shape = coin.SoLineSet()
+            shape.numVertices.setValues(0, 1, [4])
+        self.arrow.addChild(co)
+        self.arrow.addChild(shape)
 
     def _arrow(self, obj, anchor, tp):
         """The arrowhead at the model end of the leader, as Dimensions > Arrows says."""
         from pivy import coin
         self.arrow.removeAllChildren()
+        style = datum_attach(obj)
+        if style is not None:
+            self._datum_triangle(obj, anchor, style)
+            return
+        if obj.Kind == "DatumTarget":
+            self._target_area(obj, anchor)
+            return
         if obj.Kind not in ARROWED:
             return
         pts = getattr(self, "leader", None) or [anchor, tp]
@@ -272,6 +414,7 @@ class PMIView:
         if "/" in stack and any(ch.isdigit() for ch in stack):
             self.font3.size.setValue(3.5 * _percent(_dp(doc, "Dimensions", "Stack size", "100%")))
         self._colour(obj)
+        self._frame(obj)
         try:
             self._arrow(obj, anchor_of(obj), obj.TextPosition)
         except Exception as _fw_err:
@@ -354,6 +497,30 @@ def hidden_as_redundant(obj):
 
 
 OVERRIDDEN = (0.65, 0.35, 0.0)    # Highlight overridden dimensions in a different color
+OVERRIDDEN_DARK = (1.0, 0.66, 0.28)
+
+# viewport they sat at about 1.6:1 contrast (look audit MBD-1), so the Dark theme uses light tints of the same hues
+KIND_COLOURS = {"Datum": (0.1, 0.55, 0.1), "DatumTarget": (0.1, 0.55, 0.1), "GTol": (0.6, 0.1, 0.6)}
+KIND_COLOURS_DARK = {"Datum": (0.45, 0.88, 0.45), "DatumTarget": (0.45, 0.88, 0.45), "GTol": (0.93, 0.55, 0.93)}
+ANNOTATION = (0.0, 0.35, 0.85)
+ANNOTATION_DARK = (0.49, 0.74, 1.0)
+
+
+def _dark():
+    try:
+        from . import style
+        return bool(style.dark())
+    except Exception:
+        return False
+
+
+def kind_colour(kind, dark=None):
+    """An annotation's colour for the theme in use (dark: the light tints)."""
+    if dark is None:
+        dark = _dark()
+    if dark:
+        return KIND_COLOURS_DARK.get(kind, ANNOTATION_DARK)
+    return KIND_COLOURS.get(kind, ANNOTATION)
 
 
 def overridden(obj):
@@ -385,6 +552,14 @@ def arrow_style(doc):
 
 ANNOTATION_KINDS = ("Datum", "DatumTarget", "GTol", "SurfaceFinish", "Weld")
 THICKNESS = {"Thin": 1.0, "Normal": 1.6, "Thick": 2.6}
+
+
+def frame_width(obj):
+    """Document Properties > Geometric Tolerances > Frame thickness, in pixels."""
+    try:
+        return max(1.0, float(leader_width(obj)))
+    except Exception:
+        return 1.0
 
 
 def leader_width(obj):
@@ -439,9 +614,50 @@ def _screen_right():
         return V(1, 0, 0)
 
 
+
+ATTACH_STYLES = ("Filled triangle", "Filled triangle with shoulder", "Empty triangle", "Empty triangle with shoulder")
+
+
+def datum_attach(obj):
+    """A datum's attachment style; the others have none."""
+    if getattr(obj, "Kind", "") != "Datum":
+        return None
+    style = str(getattr(obj, "AttachStyle", "") or "")
+    return style if style in ATTACH_STYLES else ATTACH_STYLES[0]
+
+
+def _face_normal_at(obj, point):
+    """The unit normal of the datum's face at point (toward the outside), or None."""
+    try:
+        o, subs = obj.References[0]
+        sub = (subs[0] if isinstance(subs, (list, tuple)) else subs).split(".")[-1]
+        if not sub.startswith("Face"):
+            return None
+        face = o.Shape.getElement(sub)
+        u, v = face.Surface.parameter(point)
+        n = App.Vector(face.normalAt(u, v))
+        if face.Orientation == "Reversed":
+            n = n * -1
+        return n if n.Length > 1e-9 else None
+    except Exception:
+        return None
+
+
 def leader_points(obj, anchor, tp):
-    """The leader from the model to the text: straight, or bent with a horizontal shoulder (in the
-    screen's horizontal) of the leader length just before the text."""
+    ""
+
+
+    style = datum_attach(obj)
+    if style is not None and style.endswith("with shoulder") and (tp - anchor).Length > 1e-9:
+        n = _face_normal_at(obj, anchor)
+        if n is not None:
+            if n.dot(tp - anchor) < 0:
+                n = n * -1
+            leg = 2.0 * arrow_style(obj.Document)["length"]
+            rise = n.dot(tp - anchor)
+            if rise > 1e-6:
+                leg = min(leg, 0.5 * rise)      # the knee stays below a label set close over the face
+            return [anchor, anchor + n * leg, tp]
     on, length = bent_leader(obj)
     if not on or length <= 0 or (tp - anchor).Length < 1e-9:
         return [anchor, tp]
@@ -1124,15 +1340,307 @@ def next_letter(doc):
     return "Z"
 
 
-def datum(doc, obj, sub, letter=None):
-    return make(doc, "Datum", [(obj, sub)], letter or next_letter(doc))
+def set_attach(obj, style):
+    """Keep a datum's attachment style and redraw it."""
+    if "AttachStyle" not in obj.PropertiesList:
+        obj.addProperty("App::PropertyString", "AttachStyle", "PMI", "Datum attachment: filled or empty triangle, with or without a shoulder")
+    obj.AttachStyle = style if style in ATTACH_STYLES else ATTACH_STYLES[0]
+    try:
+        obj.ViewObject.Proxy.updateData(obj, "Text")
+    except Exception as _fw_err:
+        _fw_log("mbd.py:attach-redraw", _fw_err)
 
 
-def datum_target(doc, obj, sub, letter=None):
+def datum(doc, obj, sub, letter=None, attach=None):
+    made = make(doc, "Datum", [(obj, sub)], letter or next_letter(doc))
+    set_attach(made, attach or ATTACH_STYLES[0])
+    return made
+
+
+TARGET_AREAS = ("Point", "Circle", "Rectangle")
+
+
+def set_target(obj, area="Point", width=0.0, height=0.0):
+    ""
+    for name, kind, doc in (("TargetArea", "App::PropertyString", "Datum target: Point, Circle or Rectangle"),
+                            ("TargetWidth", "App::PropertyFloat", "Target circle diameter, or rectangle width"),
+                            ("TargetHeight", "App::PropertyFloat", "Target rectangle height")):
+        if name not in obj.PropertiesList:
+            obj.addProperty(kind, name, "PMI", doc)
+    obj.TargetArea = area if area in TARGET_AREAS else "Point"
+    obj.TargetWidth = float(width or 0.0)
+    obj.TargetHeight = float(height or 0.0)
+    try:
+        obj.ViewObject.Proxy.updateData(obj, "Text")
+    except Exception as _fw_err:
+        _fw_log("mbd.py:target-redraw", _fw_err)
+
+
+def target_size_text(obj):
+    """The upper half of the target symbol: ⌀d for a circle, w x h for a rectangle, empty for a point."""
+    area = str(getattr(obj, "TargetArea", "Point") or "Point")
+    w, h = float(getattr(obj, "TargetWidth", 0.0) or 0.0), float(getattr(obj, "TargetHeight", 0.0) or 0.0)
+    if area == "Circle" and w > 0:
+        return "⌀%g" % w
+    if area == "Rectangle" and w > 0:
+        return "%gx%g" % (w, h or w)
+    return ""
+
+
+def target_image(label, size="", rgb=(0.1, 0.55, 0.1), width=1.0, font="Century Gothic", px=14):
+    ""
+    from PySide import QtCore, QtGui
+    f = QtGui.QFont(font)
+    f.setPixelSize(px)
+    fm = QtGui.QFontMetrics(f)
+    d = max(int(px * 2.8), fm.horizontalAdvance(size) + px, fm.horizontalAdvance(label) + px)
+    lw = max(1, int(round(width)))
+    img = QtGui.QImage(d + 2 * lw + 1, d + 2 * lw + 1, QtGui.QImage.Format_ARGB32)
+    img.fill(QtCore.Qt.transparent)
+    qp = QtGui.QPainter(img)
+    qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
+    colour = QtGui.QColor.fromRgbF(*[min(1.0, max(0.0, float(v))) for v in rgb])
+    pen = QtGui.QPen(colour)
+    pen.setWidth(lw)
+    qp.setPen(pen)
+    qp.setFont(f)
+    qp.drawEllipse(QtCore.QRectF(lw, lw, d, d))
+    mid = lw + d / 2.0
+    qp.drawLine(QtCore.QPointF(lw, mid), QtCore.QPointF(lw + d, mid))
+    qp.drawText(QtCore.QRectF(lw, lw, d, d / 2.0), QtCore.Qt.AlignCenter, size)
+    qp.drawText(QtCore.QRectF(lw, mid, d, d / 2.0), QtCore.Qt.AlignCenter, label)
+    qp.end()
+    return img
+
+
+def datum_target(doc, obj, sub, letter=None, area=None, width=0.0, height=0.0):
     letter = letter or (next_letter(doc) if not any(is_pmi(o) and o.Kind == "Datum" for o in doc.Objects)
                         else sorted(o.Text for o in doc.Objects if is_pmi(o) and o.Kind == "Datum")[-1])
     n = 1 + sum(1 for o in doc.Objects if is_pmi(o) and o.Kind == "DatumTarget" and o.Text.startswith(letter))
-    return make(doc, "DatumTarget", [(obj, sub)], "%s%d" % (letter, n))
+    made = make(doc, "DatumTarget", [(obj, sub)], "%s%d" % (letter, n))
+    set_target(made, area or "Point", width, height)
+    return made
+
+
+def gtol_text(symbol="Position", value=0.1, datums=("A", "B", "C"), diameter=False, material="None",
+              datum_material=None, composite=None, modifier="None"):
+    """A feature control frame's text: |symbol|tolerance|datums| and a composite second row."""
+    dm = list(datum_material or [])
+    ds = [d + MATERIAL.get(dm[i] if i < len(dm) else "None", "") for i, d in enumerate([d for d in datums if d])]
+    parts = [GTOL_SYMBOLS.get(symbol, symbol), ("⌀" if diameter else "") + "%g" % value +
+             (MATERIAL.get(material, "") + MATERIAL.get(modifier or "None", ""))] + ds
+    first = "|" + "|".join(parts) + "|"
+    if not composite:
+        return first
+    return first + "\n|" + "|".join([" " * len(parts[0]), ("⌀" if diameter else "") + "%g" % composite] + ds[:1]) + "|"
+
+
+def gtol_rows(text):
+    """The frame's rows: (cells, note after the frame), from |a|b|c| NOTE lines."""
+    rows = []
+    for line in str(text).split("\n"):
+        if line.count("|") < 2:
+            rows.append(([line.strip()], ""))
+            continue
+        a, b = line.index("|"), line.rindex("|")
+        rows.append((line[a + 1:b].split("|"), line[b + 1:].strip()))
+    return rows
+
+
+_CIRCLED = {"Ⓜ": "M", "Ⓛ": "L", "Ⓢ": "S", "Ⓕ": "F", "Ⓟ": "P", "Ⓣ": "T", "Ⓤ": "U"}
+
+
+def _cell_runs(text, f, px):
+    """(glyph, width, circled letter or None) for each character of a frame cell."""
+    from PySide import QtGui
+    fm = QtGui.QFontMetrics(f)
+    return [(ch, int(px * 1.15), _CIRCLED[ch]) if ch in _CIRCLED else (ch, fm.horizontalAdvance(ch), None)
+            for ch in text]
+
+
+def _draw_cell(qp, rect, text, f, px, big=False):
+    """A cell's text centred: a characteristic symbol drawn larger, a material condition as a circled letter."""
+    from PySide import QtCore, QtGui
+    if big:
+        g = QtGui.QFont(f)
+        g.setPixelSize(int(px * 1.5))
+        qp.setFont(g)
+        qp.drawText(rect, QtCore.Qt.AlignCenter, text)
+        qp.setFont(f)
+        return
+    runs = _cell_runs(text, f, px)
+    x = rect.x() + (rect.width() - sum(w for _c, w, _l in runs)) / 2.0
+    small = QtGui.QFont(f)
+    small.setPixelSize(max(6, int(px * 0.72)))
+    for ch, w, letter in runs:
+        if letter:
+            d = px * 1.0
+            r = QtCore.QRectF(x + (w - d) / 2.0, rect.y() + (rect.height() - d) / 2.0, d, d)
+            qp.drawEllipse(r)
+            qp.setFont(small)
+            qp.drawText(r, QtCore.Qt.AlignCenter, letter)
+            qp.setFont(f)
+        else:
+            qp.drawText(QtCore.QRectF(x, rect.y(), w + 1, rect.height()), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, ch)
+        x += w
+
+
+def frame_image(text, rgb=(0.6, 0.1, 0.6), width=1.0, font="Century Gothic", px=14):
+    ""
+
+    from PySide import QtCore, QtGui
+    rows = gtol_rows(text)
+    f = QtGui.QFont(font)
+    f.setPixelSize(px)
+    fm = QtGui.QFontMetrics(f)
+    h = int(px * 1.7)
+    pad = int(px * 0.45)
+    ncol = max(len(c) for c, _n in rows)
+    widths = [h] * ncol
+    for cells, _note in rows:
+        for k, c in enumerate(cells):
+            if k and c.strip():
+                widths[k] = max(widths[k], sum(w for _c, w, _l in _cell_runs(c.strip(), f, px)) + 2 * pad)
+    notes = max((fm.horizontalAdvance(n) for _c, n in rows if n), default=0)
+    lw = max(1, int(round(width)))
+    W = sum(widths) + (notes + 2 * pad if notes else 0) + 2 * lw
+    H = h * len(rows) + 2 * lw
+    img = QtGui.QImage(W, H, QtGui.QImage.Format_ARGB32)
+    img.fill(QtCore.Qt.transparent)
+    qp = QtGui.QPainter(img)
+    qp.setRenderHint(QtGui.QPainter.Antialiasing, False)
+    qp.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
+    colour = QtGui.QColor.fromRgbF(*[min(1.0, max(0.0, float(v))) for v in rgb])
+    pen = QtGui.QPen(colour)
+    pen.setWidth(lw)
+    qp.setPen(pen)
+    qp.setFont(f)
+    composite = len(rows) > 1 and all(not c[0].strip() for c, _n in rows[1:])
+    for r, (cells, note) in enumerate(rows):
+        x, y = lw, lw + r * h
+        for k, c in enumerate(cells):
+            w = widths[k]
+            if k == 0 and composite:
+                if r == 0:
+                    qp.drawRect(x, y, w, h * len(rows))
+                    _draw_cell(qp, QtCore.QRect(x, y, w, h * len(rows)), c.strip(), f, px, big=True)
+            else:
+                qp.drawRect(x, y, w, h)
+                qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
+                _draw_cell(qp, QtCore.QRect(x, y, w, h), c.strip(), f, px, big=(k == 0))
+                qp.setRenderHint(QtGui.QPainter.Antialiasing, False)
+            x += w
+        if note:
+            qp.drawText(QtCore.QRect(x + pad, y, notes + pad, h), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, note)
+    qp.end()
+    return img
+
+
+def datum_image(letter, rgb=(0.1, 0.55, 0.1), width=1.0, font="Century Gothic", px=14):
+    ""
+    from PySide import QtCore, QtGui
+    f = QtGui.QFont(font)
+    f.setPixelSize(px)
+    fm = QtGui.QFontMetrics(f)
+    lw = max(1, int(round(width)))
+    side = max(int(px * 1.7), fm.horizontalAdvance(letter) + int(px * 0.9))
+    img = QtGui.QImage(side + 2 * lw, int(px * 1.7) + 2 * lw, QtGui.QImage.Format_ARGB32)
+    img.fill(QtCore.Qt.transparent)
+    qp = QtGui.QPainter(img)
+    colour = QtGui.QColor.fromRgbF(*[min(1.0, max(0.0, float(v))) for v in rgb])
+    pen = QtGui.QPen(colour)
+    pen.setWidth(lw)
+    qp.setPen(pen)
+    qp.setFont(f)
+    box = QtCore.QRect(lw, lw, side - 1, int(px * 1.7) - 1)
+    qp.drawRect(box)
+    qp.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
+    qp.drawText(box, QtCore.Qt.AlignCenter, letter)
+    qp.end()
+    return img
+
+
+FINISH_CHARS = {"√": "Basic", "∀": "Machining required", "⍻": "Machining prohibited"}
+
+
+def finish_image(text, symbol="", rgb=(0.0, 0.35, 0.85), font="Century Gothic", px=14):
+    ""
+
+
+    from PySide import QtCore, QtGui
+    lines = [ln for ln in str(text or "").split("\n")]
+    sym_row = next((i for i, ln in enumerate(lines) if any(c in ln for c in FINISH_CHARS)), None)
+    if not symbol and sym_row is not None:
+        symbol = next(FINISH_CHARS[c] for c in FINISH_CHARS if c in lines[sym_row])
+    around = sym_row is not None and "○" in lines[sym_row]
+    above = lines[:sym_row] if sym_row is not None else []
+    mid = lines[sym_row] if sym_row is not None else " ".join(lines)
+    below = lines[sym_row + 1:] if sym_row is not None else []
+    for c in list(FINISH_CHARS) + ["○"]:
+        mid = mid.replace(c, "")
+    mid = " ".join(mid.split())
+    f = QtGui.QFont(font)
+    f.setPixelSize(px)
+    fm = QtGui.QFontMetrics(f)
+    hgt = int(px * 1.6)                    # the short leg's height
+    lw = 1
+    leg = hgt * 2                          # the long leg
+    vx, vy = int(hgt * 0.6) + 2, leg + 2    # the knee (bottom point), image coordinates
+    top_y = vy - leg
+    tw = max([fm.horizontalAdvance(t) for t in above + below + [mid]] + [0])
+    W = vx + int(leg * 0.58) + tw + px + 4
+    H = vy + 4 + len(below) * fm.height() + (fm.height() if above else 0)
+    shift = fm.height() if above else 0
+    img = QtGui.QImage(max(W, 8), max(H + shift, 8), QtGui.QImage.Format_ARGB32)
+    img.fill(QtCore.Qt.transparent)
+    qp = QtGui.QPainter(img)
+    qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
+    colour = QtGui.QColor.fromRgbF(*[min(1.0, max(0.0, float(v))) for v in rgb])
+    pen = QtGui.QPen(colour)
+    pen.setWidthF(1.2)
+    qp.setPen(pen)
+    qp.setFont(f)
+    qp.translate(0, shift)
+    import math as _m
+    t60 = 1.0 / _m.tan(_m.radians(60))
+    left = QtCore.QPointF(vx - hgt * t60, vy - hgt)
+    knee = QtCore.QPointF(vx, vy)
+    top = QtCore.QPointF(vx + leg * t60, top_y)
+    qp.drawLine(left, knee)
+    qp.drawLine(knee, top)
+    if symbol == "Machining required":
+        qp.drawLine(left, QtCore.QPointF(vx + hgt * t60, vy - hgt))
+    elif symbol == "Machining prohibited":
+        r = hgt * 0.32
+        qp.drawEllipse(QtCore.QPointF(vx, vy - hgt * 0.55), r, r)
+    if around:
+        qp.drawEllipse(QtCore.QPointF(top.x(), top.y()), 3.0, 3.0)
+    tx = int(top.x()) + 4
+    if above or below:
+        qp.drawLine(top, QtCore.QPointF(tx + tw + 2, top.y()))     # the long leg's line
+    qp.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
+    for n, t in enumerate(above):
+        qp.drawText(QtCore.QPointF(tx, top.y() - 3 - (len(above) - 1 - n) * fm.height()), t)
+    if mid:
+        qp.drawText(QtCore.QPointF(vx + hgt * t60 + 3, vy - hgt * 0.25), mid)
+    for n, t in enumerate(below):
+        qp.drawText(QtCore.QPointF(tx, top.y() + fm.ascent() + 2 + n * fm.height()), t)
+    qp.end()
+    return img
+
+
+def _coin_image(img):
+    """A QImage as SoSFImage data: RGBA, rows bottom first (OpenGL)."""
+    from pivy import coin
+    from PySide import QtGui
+    q = img.convertToFormat(QtGui.QImage.Format_RGBA8888).mirrored(False, True)
+    w, h = q.width(), q.height()
+    try:
+        data = bytes(q.constBits())
+    except TypeError:
+        data = q.constBits().tobytes()
+    data = data[:w * h * 4]
+    return coin.SbVec2s(w, h), data
 
 
 def gtol(doc, obj, sub, symbol="Position", value=None, datums=("A", "B", "C"), diameter=None, material="None",
@@ -1154,12 +1662,8 @@ def gtol(doc, obj, sub, symbol="Position", value=None, datums=("A", "B", "C"), d
             rows = ["|" + "|".join([parts[0], "%g" % value + (MATERIAL.get(material, "") + MATERIAL.get(modifier or "None", ""))] + ds) + "| WIDTH",
                     "|" + "|".join([parts[0], "%g" % slot_length + (MATERIAL.get(material, "") + MATERIAL.get(modifier or "None", ""))] + ds) + "| LENGTH"]
             return make(doc, "GTol", [(obj, sub)], "\n".join(rows), value, value, 0)
-    if composite:
-        first = "|" + "|".join(parts) + "|"
-        second = "|" + "|".join([" " * len(GTOL_SYMBOLS.get(symbol, symbol)),
-                                 ("⌀" if diameter else "") + "%g" % composite] + ds[:1]) + "|"
-        return make(doc, "GTol", [(obj, sub)], first + "\n" + second, value, value, 0)
-    return make(doc, "GTol", [(obj, sub)], "|" + "|".join(parts) + "|", value, value, 0)
+    return make(doc, "GTol", [(obj, sub)], gtol_text(symbol, value, datums, diameter, material, datum_material,
+                                                    composite, modifier), value, value, 0)
 
 
 SKETCH_KINDS = {"Distance": "Location", "DistanceX": "Location", "DistanceY": "Location",
@@ -1607,6 +2111,16 @@ if Gui is not None:
                 out.append((holder, path[-1]))
         return out
 
+    def _lead_text(prefix, lead):
+        """The Dimension Text before <DIM> with the dimension's own lead (⌀, S⌀, R): a ⌀ typed or clicked
+        in the text is not doubled where the dimension already reads ⌀ (a cylinder): ⌀10.00, never ⌀⌀10.00."""
+        if "⌀" in lead:
+            while prefix.rstrip().endswith("⌀"):
+                prefix = prefix.rstrip()[:-1]
+        elif lead and prefix.endswith(lead):
+            lead = ""
+        return prefix + lead
+
     class _TextPart:
         ""
 
@@ -1691,6 +2205,7 @@ if Gui is not None:
                 self.ttype.currentTextChanged.connect(self._tol_shown)
                 self._tol_shown(self.ttype.currentText())
             self.extra = extra(lay) if extra else None
+            self.groups = self._tol_groups(lay) if title in TOLERANCED else []
             self.msg = QtWidgets.QLabel("")
             self.msg.setWordWrap(True)
             lay.addRow(self.msg)
@@ -1699,14 +2214,74 @@ if Gui is not None:
                 self._add(*p)
             Gui.Selection.addObserver(self)
             if len(self.items) >= self.need:
-                QtCore.QTimer.singleShot(0, self._done_auto)
+                from . import safe_later as _sl; _sl.later(0, self._done_auto, self, "msg")
 
         def _row(self, w, on):
             ""
             w.setVisible(on)
-            label = self.lay.labelForField(w)
+            par = w.parentWidget()
+            lay = par.layout() if par is not None else None
+            if not isinstance(lay, QtWidgets.QFormLayout):
+                lay = self.lay
+            label = lay.labelForField(w)
             if label is not None:
                 label.setVisible(on)
+
+        def _tol_groups(self, lay):
+            ""
+
+            def group(title, name):
+                w = QtWidgets.QWidget()
+                w.setWindowTitle(title)
+                w.setObjectName(name)
+                f = QtWidgets.QFormLayout(w)
+                f.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
+                return w, f
+
+            def move(w, form):
+                if w is None:
+                    return
+                label = lay.labelForField(w)
+                text = label.text() if label is not None else None
+                try:
+                    lay.takeRow(w)
+                except Exception:
+                    lay.removeWidget(w)
+                    if label is not None:
+                        lay.removeWidget(label)
+                if label is not None:
+                    label.hide()
+                    label.deleteLater()
+                if text:
+                    form.addRow(text, w)
+                else:
+                    form.addRow(w)
+                w.show()
+            tol, tform = group("Tolerance/Precision", "SWMBDTolPrecision")
+            for w in (self.ttype, self.plus, self.minus, getattr(self, "hole_fit", None),
+                      getattr(self, "shaft_fit", None), getattr(self, "precision", None)):
+                move(w, tform)
+            out = [tol]
+            box = getattr(self, "dimtext", None)
+            if box is not None:
+                txt, xform = group("Dimension Text", "SWMBDDimTextGroup")
+                move(box, xform)
+                row = QtWidgets.QHBoxLayout()
+                row.setSpacing(2)
+                for sym, tip in (("⌀", "Diameter"), ("°", "Degree"), ("±", "Plus/Minus"), ("□", "Square"),
+                                 ("⌴", "Counterbore"), ("⌵", "Countersink"), ("↧", "Depth")):
+                    b = QtWidgets.QToolButton(txt)
+                    b.setText(sym)
+                    b.setToolTip(tip)
+                    b.setObjectName("SWMBDDimSym_" + tip.replace("/", ""))
+                    b.clicked.connect(lambda _c=False, s=sym: box.insert(s))
+                    row.addWidget(b)
+                row.addStretch(1)
+                xform.addRow(row)
+                out.append(txt)
+            if self.ttype is not None:
+                self._tol_shown(self.ttype.currentText())
+            return out
 
         def _tol_shown(self, t):
             self._row(self.plus, t in ("Bilateral", "Symmetric", "Limit"))
@@ -1733,7 +2308,7 @@ if Gui is not None:
                     break
                 lead += ch
             obj.Text = tolerance_text(obj.Document, obj.Value, t, plus, minus, prec,
-                                      self.prefix.text() + lead, self.suffix.text(), obj.Kind == "Angle")
+                                      _lead_text(self.prefix.text(), lead), self.suffix.text(), obj.Kind == "Angle")
             obj.Plus, obj.Minus = (0.0, 0.0) if t in ("Basic", "None", "MIN", "MAX") else (plus, minus)
             if t == "Basic":
                 obj.Kind = "BasicSize" if obj.Kind == "Size" else ("BasicLocation" if obj.Kind == "Location" else obj.Kind)
@@ -1760,7 +2335,7 @@ if Gui is not None:
                 body = tolerance_text(obj.Document, obj.Value, "None", 0, 0, prec) + (" %s (%s)" % (fit, tol) if fit else " " + tol)
             else:
                 body = tolerance_text(obj.Document, obj.Value, "None", 0, 0, prec) + (" " + fit if fit else "")
-            obj.Text = self.prefix.text() + lead + body + self.suffix.text()
+            obj.Text = _lead_text(self.prefix.text(), lead) + body + self.suffix.text()
             obj.Plus, obj.Minus = (plus, minus) if t != "Fit" else (0.0, 0.0)
             obj.AutoText = obj.Text
             return obj
@@ -1785,7 +2360,7 @@ if Gui is not None:
                 obj = obj.getParentGeoFeatureGroup() or obj
             self._add(obj, path[-1])
             if len(self.items) >= self.need:
-                QtCore.QTimer.singleShot(0, self._done_auto)
+                from . import safe_later as _sl; _sl.later(0, self._done_auto, self, "msg")
 
         def _done_auto(self):
 
@@ -1805,7 +2380,7 @@ if Gui is not None:
                 App.ActiveDocument.commitTransaction()
                 self.msg.setStyleSheet("")
                 self.msg.setText("%s placed. Pick again for another, or OK." % self.title)
-                if self.title == "Datum" and isinstance(self.extra, QtWidgets.QLineEdit):
+                if self.title == "Datum" and hasattr(self.extra, "setText"):
                     self.extra.setText(next_letter(App.ActiveDocument))
             except Exception as error:
                 App.ActiveDocument.abortTransaction()
@@ -1834,19 +2409,39 @@ if Gui is not None:
             Gui.Control.closeDialog()
             return True
 
+    class _GTolWidgets(tuple):
+        ""
+        groups = ()
+
     def _gtol_extra(lay):
-        sym = QtWidgets.QComboBox()
+        ""
+
+
+        from PySide import QtGui
+        props = QtWidgets.QWidget()
+        props.setWindowTitle("Geometric Tolerance Properties")
+        props.setObjectName("SWMBDGTolProps")
+        form = QtWidgets.QFormLayout(props)
+        form.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
+        framebox = QtWidgets.QWidget()
+        framebox.setWindowTitle("Frame")
+        framebox.setObjectName("SWMBDGTolFrame")
+        fform = QtWidgets.QFormLayout(framebox)
+        fform.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
+        sym = QtWidgets.QComboBox()                 # kept (hidden): the palette writes it
+        sym.setObjectName("SWMBDSymbol")
         sym.addItems(list(GTOL_SYMBOLS))
         val = QtWidgets.QDoubleSpinBox()
+        val.setObjectName("SWMBDTolerance1")
         val.setDecimals(3)
         val.setValue(default_gtol(None, sym.currentText()))
         sym.currentTextChanged.connect(lambda t: val.setValue(default_gtol(None, t)))
         dat = QtWidgets.QLineEdit("A B C")          # kept (hidden): the three datum rows below write it
         dat.setObjectName("SWMBDDatums")
-        dia = QtWidgets.QCheckBox("Diameter (⌀)")
+        dia = QtWidgets.QCheckBox("Diameter (⌀)")   # kept (hidden): the ⌀ button writes it
         dia.setTristate(False)
         dia.setObjectName("SWMBDDiameter")
-        mat = QtWidgets.QComboBox()
+        mat = QtWidgets.QComboBox()                 # kept (hidden): the modifier buttons write it
         mat.setObjectName("SWMBDMaterial")
         mat.addItems(list(MATERIAL_CONDITIONS))
         mod = QtWidgets.QComboBox()
@@ -1898,21 +2493,130 @@ if Gui is not None:
         slot.setDecimals(3)
         slot.setSpecialValueText("Same as width")
         slot.setToolTip("A slot's position tolerance along its length (Tolerance is across its width)")
-        lay.addRow("Symbol", sym)
-        lay.addRow(dia)
-        lay.addRow("Tolerance", val)
-        lay.addRow("Material condition", mat)
-        lay.addRow("Modifier", mod)
+
+
+        pick = QtWidgets.QToolButton()
+        pick.setObjectName("SWMBDSymbolButton")
+        pick.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        pick.setMinimumWidth(48)
+        palette = QtWidgets.QMenu(pick)
+        palette.setObjectName("SWMBDSymbolPalette")
+        grid_host = QtWidgets.QWidget()
+        grid = QtWidgets.QGridLayout(grid_host)
+        grid.setContentsMargins(4, 4, 4, 4)
+        grid.setSpacing(2)
+        for k, name in enumerate(GTOL_PALETTE):
+            b = QtWidgets.QToolButton()
+            b.setObjectName("SWMBDSymbol_" + name.replace(" ", ""))
+            b.setText(GTOL_SYMBOLS.get(name, name))
+            b.setToolTip(name)
+            b.setFixedSize(30, 30)
+            b.clicked.connect(lambda _c=False, n=name: (sym.setCurrentText(n), palette.close()))
+            grid.addWidget(b, k // 7, k % 7)
+        wa = QtWidgets.QWidgetAction(palette)
+        wa.setDefaultWidget(grid_host)
+        palette.addAction(wa)
+        pick.setMenu(palette)
+
+        def show_symbol(name):
+            pick.setText(GTOL_SYMBOLS.get(name, name))
+            pick.setToolTip("Symbol: %s" % name)
+        sym.currentTextChanged.connect(show_symbol)
+        show_symbol(sym.currentText())
+
+
+        dbutton = QtWidgets.QToolButton()
+        dbutton.setObjectName("SWMBDDiameterButton")
+        dbutton.setText("⌀")
+        dbutton.setToolTip("Diameter")
+        dbutton.setCheckable(True)
+        dbutton.toggled.connect(dia.setChecked)
+        dia.toggled.connect(lambda on: dbutton.isChecked() != on and dbutton.setChecked(on))
+        t1 = QtWidgets.QHBoxLayout()
+        t1.addWidget(dbutton)
+        t1.addWidget(val, 1)
+        mods = QtWidgets.QHBoxLayout()
+        mods.setSpacing(2)
+        buttons = []
+        for combo, items in ((mat, MATERIAL_CONDITIONS[1:]), (mod, MODIFIERS[1:])):
+            for item in items:
+                b = QtWidgets.QToolButton()
+                b.setObjectName("SWMBDMod_" + item.replace(" ", ""))
+                b.setText(MATERIAL.get(item, item))
+                b.setToolTip({"MMC": "Maximum material condition", "LMC": "Least material condition",
+                              "RFS": "Regardless of feature size"}.get(item, item.capitalize()))
+                b.setCheckable(True)
+
+                def press(on, c=combo, it=item):
+                    c.setCurrentText(it if on else "None")
+                b.clicked.connect(press)
+                buttons.append((combo, item, b))
+                mods.addWidget(b)
+        mods.addStretch(1)
+
+        def show_mods(*_):
+            for combo, item, b in buttons:
+                b.setChecked(combo.currentText() == item)
+        mat.currentTextChanged.connect(show_mods)
+        mod.currentTextChanged.connect(show_mods)
+
+        preview = QtWidgets.QLabel()
+        preview.setObjectName("SWMBDGTolPreview")
+        preview.setMinimumHeight(30)
+
+        def text_now():
+            names = dat.text().split()
+            return gtol_text(sym.currentText(), val.value(), tuple(names), dia.isChecked(), mat.currentText(),
+                             [m.currentText() for _n, _d, m in rows][:len(names)], comp.value() or None,
+                             mod.currentText())
+
+        def show_preview(*_):
+            try:
+                img = frame_image(text_now(), (0.6, 0.1, 0.6), 1.0)
+                preview.setPixmap(QtGui.QPixmap.fromImage(img))
+                preview.setToolTip(text_now())
+            except Exception as _fw_err:
+                _fw_log("mbd.py:gtol-preview", _fw_err)
+        for s in (sym.currentTextChanged, mat.currentTextChanged, mod.currentTextChanged, dat.textChanged):
+            s.connect(show_preview)
+        for s in (val.valueChanged, comp.valueChanged):
+            s.connect(show_preview)
+        dia.toggled.connect(show_preview)
+        for _n, _d, m in rows:
+            m.currentTextChanged.connect(show_preview)
+
+        form.addRow("Symbol", pick)
+        form.addRow("Tolerance 1", t1)
+        form.addRow(mods)
         for name, d, m in rows:
             row = QtWidgets.QHBoxLayout()
             row.addWidget(d, 1)
             row.addWidget(m, 1)
-            lay.addRow(name, row)
-        dat.hide()
-        dmat.hide()
-        lay.addRow("Composite frame tolerance", comp)
-        lay.addRow("Slot length tolerance", slot)
-        return sym, val, dat, dia, mat, dmat, comp, slot, mod, tuple(m for _n, _d, m in rows)
+            form.addRow(name, row)
+        form.addRow(preview)
+        for w in (sym, dia, mat, mod, dat, dmat):
+            w.setParent(props)
+            w.hide()
+        composite = QtWidgets.QCheckBox("Composite frame")
+        composite.setObjectName("SWMBDCompositeFrame")
+
+        def frame2(on):
+            comp.setVisible(on)
+            label = fform.labelForField(comp)
+            if label is not None:
+                label.setVisible(on)
+            if not on:
+                comp.setValue(0)
+        composite.toggled.connect(frame2)
+        comp.valueChanged.connect(lambda v: v and not composite.isChecked() and composite.setChecked(True))
+        fform.addRow(composite)
+        fform.addRow("Tolerance (frame 2)", comp)
+        fform.addRow("Slot length tolerance", slot)
+        frame2(False)
+        show_preview()
+        out = _GTolWidgets((sym, val, dat, dia, mat, dmat, comp, slot, mod, tuple(m for _n, _d, m in rows)))
+        out.groups = (props, framebox)
+        return out
 
     def _letter_extra(lay):
         e = QtWidgets.QLineEdit("")
@@ -1920,15 +2624,161 @@ if Gui is not None:
         lay.addRow("Label", e)
         return e
 
-    def _datum_extra(lay):
+    class _DatumPage:
         ""
-        e = _letter_extra(lay)
-        e.setObjectName("SWMBDDatumLabel")
-        try:
-            e.setText(next_letter(App.ActiveDocument))
-        except Exception as _fw_err:
-            _fw_log("mbd.py:_datum_extra", _fw_err)
-        return e
+
+
+        def __init__(self):
+            self.settings = QtWidgets.QWidget()
+            self.settings.setWindowTitle("Label Settings")
+            self.settings.setObjectName("SWMBDDatumSettings")
+            form = QtWidgets.QFormLayout(self.settings)
+            self.edit = QtWidgets.QLineEdit(self.settings)
+            self.edit.setObjectName("SWMBDDatumLabel")
+            self.edit.setPlaceholderText("next free letter")
+            form.addRow("Label:", self.edit)
+            try:
+                self.edit.setText(next_letter(App.ActiveDocument))
+            except Exception as _fw_err:
+                _fw_log("mbd.py:_datum_extra", _fw_err)
+            self.leader = QtWidgets.QWidget()
+            self.leader.setWindowTitle("Leader")
+            self.leader.setObjectName("SWMBDDatumLeader")
+            row = QtWidgets.QHBoxLayout(self.leader)
+            row.setContentsMargins(6, 2, 6, 4)
+            self.styles = QtWidgets.QButtonGroup(self.leader)
+            self.styles.setExclusive(True)
+            for i, name in enumerate(ATTACH_STYLES):
+                b = QtWidgets.QToolButton(self.leader)
+                b.setText(("▲", "▲‗", "△", "△‗")[i])
+                b.setToolTip(name)
+                b.setObjectName("SWMBDDatumAttach%d" % i)
+                b.setCheckable(True)
+                b.setProperty("sw_attach", name)
+                b.setChecked(i == 0)
+                self.styles.addButton(b)
+                row.addWidget(b)
+            row.addStretch(1)
+            self.groups = [self.settings, self.leader]
+            self.last = None
+            self.styles.buttonClicked.connect(lambda _b: self.follow())
+
+        def text(self):
+            return self.edit.text()
+
+        def setText(self, t):
+            self.edit.setText(t)
+
+        def attach(self):
+            b = self.styles.checkedButton()
+            return b.property("sw_attach") if b is not None else ATTACH_STYLES[0]
+
+        def make(self, obj, sub):
+            self.last = datum(App.ActiveDocument, obj, sub, self.text().strip() or None, self.attach())
+            return self.last
+
+        def follow(self):
+            o = self.last
+            try:
+                if o is not None and o.Document is not None and o.Document.getObject(o.Name) is not None:
+                    set_attach(o, self.attach())
+                    o.Document.recompute()
+            except Exception as _fw_err:
+                _fw_log("mbd.py:datum-follow", _fw_err)
+
+    def _datum_extra(lay):
+        return _DatumPage()
+
+    class _TargetPage:
+        ""
+
+
+        def __init__(self):
+            self.settings = QtWidgets.QWidget()
+            self.settings.setWindowTitle("Settings")
+            self.settings.setObjectName("SWMBDTargetSettings")
+            form = QtWidgets.QFormLayout(self.settings)
+            form.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
+            self.edit = QtWidgets.QLineEdit(self.settings)
+            self.edit.setObjectName("SWMBDTargetLabel")
+            self.edit.setPlaceholderText("next free letter")
+            form.addRow("Datum reference:", self.edit)
+            row = QtWidgets.QHBoxLayout()
+            self.areas = QtWidgets.QButtonGroup(self.settings)
+            self.areas.setExclusive(True)
+            for i, (name, glyph, tip) in enumerate((("Point", "✕", "Target point"), ("Circle", "◯", "Target circle"),
+                                                    ("Rectangle", "▭", "Target rectangle"))):
+                b = QtWidgets.QToolButton(self.settings)
+                b.setText(glyph)
+                b.setToolTip(tip)
+                b.setObjectName("SWMBDTargetArea%d" % i)
+                b.setCheckable(True)
+                b.setProperty("sw_area", name)
+                b.setChecked(i == 0)
+                self.areas.addButton(b)
+                row.addWidget(b)
+            row.addStretch(1)
+            form.addRow("Target area:", row)
+            self.width = QtWidgets.QDoubleSpinBox(self.settings)
+            self.width.setObjectName("SWMBDTargetWidth")
+            self.width.setDecimals(3)
+            self.width.setRange(0, 10000)
+            self.width.setValue(10.0)
+            self.height = QtWidgets.QDoubleSpinBox(self.settings)
+            self.height.setObjectName("SWMBDTargetHeight")
+            self.height.setDecimals(3)
+            self.height.setRange(0, 10000)
+            self.height.setValue(5.0)
+            form.addRow("Width:", self.width)
+            form.addRow("Height:", self.height)
+            self.form = form
+            self.groups = [self.settings]
+            self.last = None
+            self.areas.buttonClicked.connect(lambda _b: (self._shown(), self.follow()))
+            self.width.valueChanged.connect(lambda _v: self.follow())
+            self.height.valueChanged.connect(lambda _v: self.follow())
+            self._shown()
+
+        def _shown(self):
+            area = self.area()
+            for w, on, text in ((self.width, area != "Point", "Diameter:" if area == "Circle" else "Width:"),
+                                (self.height, area == "Rectangle", "Height:")):
+                w.setVisible(on)
+                label = self.form.labelForField(w)
+                if label is not None:
+                    label.setVisible(on)
+                    label.setText(text)
+
+        def area(self):
+            b = self.areas.checkedButton()
+            return b.property("sw_area") if b is not None else "Point"
+
+        def text(self):
+            return self.edit.text()
+
+        def setText(self, t):
+            self.edit.setText(t)
+
+        def make(self, obj, sub):
+            area = self.area()
+            self.last = datum_target(App.ActiveDocument, obj, sub, self.text().strip() or None, area,
+                                     self.width.value() if area != "Point" else 0.0,
+                                     self.height.value() if area == "Rectangle" else 0.0)
+            return self.last
+
+        def follow(self):
+            o = self.last
+            try:
+                if o is not None and o.Document is not None and o.Document.getObject(o.Name) is not None:
+                    area = self.area()
+                    set_target(o, area, self.width.value() if area != "Point" else 0.0,
+                               self.height.value() if area == "Rectangle" else 0.0)
+                    o.Document.recompute()
+            except Exception as _fw_err:
+                _fw_log("mbd.py:target-follow", _fw_err)
+
+    def _target_extra(lay):
+        return _TargetPage()
 
     def _basic_extra(lay):
         b = QtWidgets.QCheckBox("Basic")
@@ -1952,11 +2802,9 @@ if Gui is not None:
                 App.ActiveDocument, p[0][0], p[0][1], 0, 0)), None, "Pick a hole, boss or face"),
         "SWStyle_MBDPattern": ("Pattern Feature", 1, lambda pm, p: pattern_feature(
             App.ActiveDocument, p[0][0], p[0][1], pm.plus.value(), pm.minus.value()), None, "Pick one hole of the pattern"),
-        "SWStyle_MBDDatum": ("Datum", 1, lambda pm, p: datum(App.ActiveDocument, p[0][0], p[0][1],
-                                                            pm.extra.text().strip() or None), _datum_extra,
+        "SWStyle_MBDDatum": ("Datum", 1, lambda pm, p: pm.extra.make(p[0][0], p[0][1]), _datum_extra,
                              "Pick the datum face"),
-        "SWStyle_MBDDatumTarget": ("Datum Target", 1, lambda pm, p: datum_target(
-            App.ActiveDocument, p[0][0], p[0][1], pm.extra.text().strip() or None), _letter_extra,
+        "SWStyle_MBDDatumTarget": ("Datum Target", 1, lambda pm, p: pm.extra.make(p[0][0], p[0][1]), _target_extra,
             "Pick where the target is"),
         "SWStyle_MBDGeometricTolerance": ("Geometric Tolerance", 1, lambda pm, p: gtol(
             App.ActiveDocument, p[0][0], p[0][1], pm.extra[0].currentText(), pm.extra[1].value(),
@@ -2007,7 +2855,11 @@ if Gui is not None:
 
         def Activated(self, checked=None):
             title, need, run, extra, hint = SPECS[self.name]
-            Gui.Control.showDialog(PickPM(title, need, run, extra, hint))
+            pm = PickPM(title, need, run, extra, hint)
+            groups = list(getattr(pm, "groups", None) or []) + list(getattr(pm.extra, "groups", None) or [])
+            if groups:
+                pm.form = [pm.form] + list(groups)
+            Gui.Control.showDialog(pm)
 
     class _Auto:
         def GetResources(self):
@@ -2315,7 +3167,7 @@ if Gui is not None:
     class _HideShow:
         def GetResources(self):
             return {"MenuText": "Hide/Show Annotations",
-                    "ToolTip": "Click annotations to hide them (grey) or show them again; click the tool again to finish",
+                    "ToolTip": "Click annotations to hide them (gray) or show them again; click the tool again to finish",
                     "Pixmap": "Std_ToggleVisibility", "Checkable": False}
 
         def IsActive(self):
@@ -2343,7 +3195,7 @@ if Gui is not None:
             raise
         _HIDE[doc.Name] = ob
         Gui.getMainWindow().statusBar().showMessage(
-            "Hide/Show Annotations: click annotations to hide (grey) or show them; the tool again ends it", 0)
+            "Hide/Show Annotations: click annotations to hide (gray) or show them; the tool again ends it", 0)
 
     def stop_hide(doc):
         ob = _HIDE.pop(doc.Name, None)

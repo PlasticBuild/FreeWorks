@@ -20,6 +20,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -367,7 +368,7 @@ def swing_angle(r, pivot, arm, side):
     sits off the line to the pivot by this angle (degrees; side +1 left, -1 right)."""
     c = (pivot * pivot + r * r - arm * arm) / (2.0 * pivot * r)
     if c < -1.0 - 1e-9 or c > 1.0 + 1e-9:
-        raise ValueError("A follower arm of %g on a pivot %g from the cam centre cannot reach radius %g." % (arm, pivot, r))
+        raise ValueError("A follower arm of %g on a pivot %g from the cam center cannot reach radius %g." % (arm, pivot, r))
     return side * math.degrees(math.acos(max(-1.0, min(1.0, c))))
 
 
@@ -742,7 +743,7 @@ if Gui is not None:
             sketch, support = None, None
             try:
                 edit = Gui.ActiveDocument.getInEdit()
-                obj = edit.Object if edit is not None else None
+                obj = editobj.of(edit) if edit is not None else None
                 if obj is not None and obj.TypeId == "Sketcher::SketchObject":
                     sketch = obj
             except Exception as _fw_err:

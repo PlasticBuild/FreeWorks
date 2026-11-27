@@ -64,8 +64,8 @@ TIPS = {
     "SWPatternUpToReference2": "Up to reference: the instances stop at a picked edge, face or vertex",
     "SWPatternUpTo1": "Reference: click where the pattern stops",
     "SWPatternUpTo2": "Reference: click where the pattern stops",
-    "SWPatternInstanceSpacing1": "Instance spacing: the angle between neighbouring instances",
-    "SWPatternInstanceSpacing2": "Instance spacing: the angle between neighbouring instances",
+    "SWPatternInstanceSpacing1": "Instance spacing: the angle between neighboring instances",
+    "SWPatternInstanceSpacing2": "Instance spacing: the angle between neighboring instances",
     "SWPatternEqualSpacing1": "Equal spacing: the instances share the angle evenly",
     "SWPatternEqualSpacing2": "Equal spacing: the instances share the angle evenly",
     "SWPatternSpacing1": "Spacing: the distance (or angle) from one instance to the next",
@@ -84,7 +84,7 @@ TIPS = {
     "SWPatternInstancesToVary": "Instances to vary: the spacing or the size changes from one instance to the next",
     "SWPatternVarySketch": "Vary sketch: each instance follows the sketch of its own (needs a driving dimension)",
     "SWPatternGeometryPattern": "Geometry pattern: copy the shape as it is (off: Up To end conditions are worked out again)",
-    "SWPatternPropagate": "Propagate visual properties: the copies take the colour of the original",
+    "SWPatternPropagate": "Propagate visual properties: the copies take the color of the original",
     # Mirror
     "SWMirrorPlane": "Mirror face/plane: click the face or plane to mirror about",
     "SWMirrorPlane2": "Secondary mirror face/plane: a second face or plane the copies are mirrored about as well",
@@ -168,6 +168,12 @@ def tips(view):
         if not isinstance(w, _WORDY):
             continue
         try:
+            if isinstance(w, QtWidgets.QToolButton) and w.property("class") == "header":
+
+                # page kept FreeCAD's old title as its tip (Extrude's From bar said "Direction 1")
+                if w.toolTip() and w.toolTip().replace("&", "") != w.text().replace("&", ""):
+                    w.setToolTip("")
+                continue
             if w.toolTip().strip():
                 continue
             tip = TIPS.get(w.objectName())
@@ -226,6 +232,25 @@ def _flush_left(frame):
         lay.setProperty("swFlush", True)
 
 
+_RED = ("c00000", "a00000", "#ff0000", "color: red")
+
+
+def _state(box):
+    ""
+
+
+    for label in box.findChildren(QtWidgets.QLabel):
+        try:
+            if label.property("swMessageText") or not label.isVisibleTo(box) or not label.text().strip():
+                continue
+            sheet = label.styleSheet().lower()
+            if any(r in sheet for r in _RED) or label.property("swstyle_warning"):
+                return WARN
+        except RuntimeError:
+            continue
+    return INFO
+
+
 def messages(view):
     ""
     for group in view.findChildren(QtWidgets.QWidget):
@@ -233,10 +258,10 @@ def messages(view):
             if group.inherits("QSint::ActionGroup") and _group_title(group) == "Message":
                 for frame in group.findChildren(QtWidgets.QFrame):
                     if frame.property("class") == "content":
-                        _mark(frame, INFO)
+                        _mark(frame, _state(frame))
                         _flush_left(frame)
             elif group.objectName() == "SWGroup_Message":
-                _mark(group.body, INFO)
+                _mark(group.body, _state(group.body))
         except (RuntimeError, AttributeError):
             continue
     for label in view.findChildren(QtWidgets.QLabel):

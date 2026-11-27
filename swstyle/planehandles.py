@@ -9,6 +9,7 @@
 
 
 
+
 _FW_SEEN = set()
 
 
@@ -40,12 +41,32 @@ def enabled():
     return paths.params().GetBool(PARAM, True)
 
 
+def _is_origin_plane(obj):
+    """Front, Top or Right Plane (an App::Plane of an Origin)."""
+    from . import planes
+    try:
+        return obj.TypeId == "App::Plane" and bool(planes._origins(obj))
+    except Exception:
+        return False
+
+
+def _set_box(plane, box):
+    if "SWPlaneBox" not in plane.PropertiesList:
+        plane.addProperty("App::PropertyFloatList", "SWPlaneBox", "Base",
+                          "The plane's size once its handles were dragged (umin, umax, vmin, vmax)")
+        try:
+            plane.setEditorMode("SWPlaneBox", 2)
+        except Exception as _fw_err:
+            _fw_log("planehandles.py:hide-box", _fw_err)
+    plane.SWPlaneBox = [float(x) for x in box]
+
+
 def _picked_datums(doc):
     from . import planes
     out = []
     try:
         for obj in Gui.Selection.getSelection(doc.Name):
-            if planes.is_datum(obj) and obj not in out:
+            if (planes.is_datum(obj) or _is_origin_plane(obj)) and obj not in out:
                 out.append(obj)
     except Exception as _fw_err:
         _fw_log("planehandles.py:picked", _fw_err)
@@ -113,6 +134,11 @@ def begin(plane, su, sv):
     from . import planes
     o, u, v, umin, umax, vmin, vmax = planes.extents(plane)
     plane.Document.openTransaction(TITLE)
+    if _is_origin_plane(plane):
+
+        drag = {"plane": plane, "su": su, "sv": sv, "o": o, "u": u, "v": v, "box": [umin, umax, vmin, vmax],
+                "origin": True, "was_box": planes.manual_box(plane)}
+        return
     drag = {"plane": plane, "su": su, "sv": sv, "o": o, "u": u, "v": v,
             "half": (max(abs(umin), abs(umax)), max(abs(vmin), abs(vmax))),
             "was": (plane.ResizeMode, float(plane.Length), float(plane.Width))}
@@ -124,6 +150,27 @@ def move_to(point):
         return
     plane = drag["plane"]
     d = point - drag["o"]
+    if drag.get("origin"):
+        umin, umax, vmin, vmax = drag["box"]
+        a, b = d.dot(drag["u"]), d.dot(drag["v"])
+        if drag["su"] > 0:
+            umax = max(umin + 2 * LEAST, a)
+        elif drag["su"] < 0:
+            umin = min(umax - 2 * LEAST, a)
+        if drag["sv"] > 0:
+            vmax = max(vmin + 2 * LEAST, b)
+        elif drag["sv"] < 0:
+            vmin = min(vmax - 2 * LEAST, b)
+        drag["box"] = [umin, umax, vmin, vmax]
+        _set_box(plane, drag["box"])
+        try:
+            from . import shell
+            sh = shell.shell()
+            if sh is not None and getattr(sh, "planes", None) is not None:
+                sh.planes.soon()
+        except Exception as _fw_err:
+            _fw_log("planehandles.py:origin-redraw", _fw_err)
+        return
     hu, hv = drag["half"]
     if drag["su"]:
         hu = max(LEAST, abs(d.dot(drag["u"])))
@@ -141,6 +188,11 @@ def end(keep=True):
     if drag is None:
         return
     doc = drag["plane"].Document
+    if not keep and drag.get("origin") and "SWPlaneBox" in drag["plane"].PropertiesList:
+        try:        # Esc: the size it had (none: sized to the part again)
+            drag["plane"].SWPlaneBox = list(drag["was_box"] or [])
+        except Exception as _fw_err:
+            _fw_log("planehandles.py:origin-esc", _fw_err)
     if keep:
         doc.commitTransaction()
     else:

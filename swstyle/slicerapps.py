@@ -114,7 +114,7 @@ def add_file(path, confirm=None, progress=None):
         text = "Run %s?\n\nSigned by: %s\n\nIt will be installed into FreeCAD's own folder, not Program Files." % (
             path.name, who or "NOT SIGNED - only continue if you trust where you got it")
         if confirm is not None and not confirm(text):
-            raise RuntimeError("Cancelled.")
+            raise RuntimeError("Canceled.")
         dest.mkdir(parents=True, exist_ok=True)
         exe = None
         if k == "msi":

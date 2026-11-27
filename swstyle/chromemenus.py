@@ -88,7 +88,7 @@ def _catalog_titles():
     try:
         from . import cmtabs
         every = [t for t, _l in cmtabs.all_tabs()]
-        if any(t in every for t in out):
+        if "Features" in out and any(t in every for t in out):     # cmmenu-1126: a part's tabs only
             out = every + [t for t in out if t not in every]
     except Exception as _fw_err:
         _fw_log("chromemenus.py:91", _fw_err)
@@ -107,7 +107,10 @@ def set_tab_shown(shell, title, on):
     hidden = [t for t in hidden_tabs() if t != title]
     off = _cm_hidden()
     if not on:
-        shown = [t for t in _catalog_titles() if t not in hidden and t not in off and t != title]
+        pool = _catalog_titles()
+        if _doc_tabs_kind() == "drawing":     # cmmenu-1126
+            pool = [p.title for p in getattr(getattr(shell, "topbar", None), "pages", [])]
+        shown = [t for t in pool if t not in hidden and t not in off and t != title]
         if not shown:
             return False
         hidden.append(title)
@@ -122,7 +125,11 @@ def set_tab_shown(shell, title, on):
     except Exception as error:
         App.Console.PrintLog("FreeCAD: CommandManager tabs list: %s\n" % error)
     try:
-        shell._build_pages()
+        from . import asmui
+        if getattr(asmui, "_showing", None) in ("drawing", "assembly", "edit"):
+            asmui.update_tabs(force=True)     # cmmenu-1126: that document's tabs, not the part tabs
+        else:
+            shell._build_pages()
     except Exception as error:
         App.Console.PrintWarning("FreeCAD: CommandManager tabs: %s\n" % error)
     return True
@@ -230,7 +237,63 @@ def _label(title):
         return title
 
 
+def rcmenus_shell():
+    from . import rcmenus
+    return rcmenus.shell()
+
+
+def _doc_tabs_kind():
+    ""
+    try:
+        from . import asmtabs
+        if asmtabs._assembly_active():
+            return "assembly"
+    except Exception as _fw_err:
+        _fw_log("chromemenus.py:kind-asm", _fw_err)
+    try:
+        from . import asmui
+        if getattr(asmui, "_showing", None) == "drawing":
+            return "drawing"
+    except Exception as _fw_err:
+        _fw_log("chromemenus.py:kind-showing", _fw_err)
+    try:
+        top = getattr(rcmenus_shell(), "topbar", None)
+        if [p.title for p in (top.pages if top is not None else [])][:1] == ["Drawing"]:
+            return "drawing"
+    except Exception as _fw_err:
+        _fw_log("chromemenus.py:kind-draw", _fw_err)
+    return "part"
+
+
+def _fill_tab_ticks_other(shell, menu, kind):
+    """cmmenu-1126: an assembly's tabs (asmtabs' list, Assembly always on) or a drawing's."""
+    if kind == "assembly":
+        from . import asmtabs, asmui, catalog
+        off = set(asmtabs.hidden())
+        for title, _l in asmtabs.every_tab(getattr(asmui, "_part_tabs", None) or catalog.TABS):
+            a = _check(menu, _label(title), title not in off, lambda on, t=title: asmtabs.toggle(t, on))
+            a.setEnabled(title != "Assembly")
+        return
+    hidden = hidden_tabs()
+    top = getattr(shell, "topbar", None)
+    titles = [p.title for p in (top.pages if top is not None else [])]
+    try:
+        from . import cmtabs
+        part = set(t for t, _l in cmtabs.all_tabs())
+    except Exception:
+        part = set()
+    titles += [t for t in hidden if t not in titles and t not in part]     # a drawing tab hidden before
+    for title in titles:
+        _check(menu, _label(title), title not in hidden, lambda on, t=title: set_tab_shown(shell, t, on))
+
+
 def _fill_tab_ticks(shell, menu):
+    kind = _doc_tabs_kind()
+    if kind != "part":
+        try:
+            return _fill_tab_ticks_other(shell, menu, kind)
+        except Exception as error:
+            App.Console.PrintLog("FreeCAD: CommandManager tabs list: %s\n" % error)
     hidden = set(hidden_tabs()) | _cm_hidden()
     for title in _catalog_titles():
         _check(menu, _label(title), title not in hidden, lambda on, t=title: set_tab_shown(shell, t, on))
@@ -280,6 +343,22 @@ def refresh_tooltips():
 
 
 def tabs_menu(shell):
+    ""
+
+
+
+    menu = toolbars_menu(shell)
+    menu.setObjectName("SWToolMenu_CommandManagerTabs")
+    try:
+        from . import cmcustom, customizedlg
+        if customizedlg.is_open():
+            cmcustom.fill_tab_menu(shell, menu, tab_under_pointer(shell))
+    except Exception as error:
+        App.Console.PrintLog("FreeCAD: CommandManager tab menu: %s\n" % error)
+    return menu
+
+
+def _tabs_menu_1121(shell):          # cmmenu-1126: the tabmenu-1121 layout, kept for reference only
     ""
 
     menu = QtWidgets.QMenu(shell.window)
@@ -391,7 +470,7 @@ def toolbar_rows(shell):
     from . import swtoolbars
     has_doc = App.ActiveDocument is not None
     names = sorted((title for title, _keys in swtoolbars.TOOLBARS), key=lambda t: t.lower())
-    return [(name, swtoolbars.is_shown(name), has_doc or name not in NO_DOC_GREY) for name in names]
+    return [(name, swtoolbars.listed_shown(name), has_doc or name not in NO_DOC_GREY) for name in names]   # cmmenu-1126
 
 
 def _fill_toolbar_columns(shell, menu):
@@ -409,7 +488,7 @@ def _fill_toolbar_columns(shell, menu):
         row = _ToolbarRow(name, on, widget)
         row.setEnabled(enabled)
         row.toggled.connect(lambda checked, n=name, m=menu: (m.close(), QtCore.QTimer.singleShot(
-            0, lambda: swtoolbars.show(shell, n, checked))))
+            0, lambda: swtoolbars.listed_show(shell, n, checked))))     # cmmenu-1126
         grid.addWidget(row, i % half, 0 if i < half else 2)      # column 1 is the divider
         menu.rows.append((name, row))
     line = QtWidgets.QFrame(widget)

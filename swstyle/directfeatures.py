@@ -121,14 +121,14 @@ def _scale(obj, base):
 SCALE = sf.Spec(
     "SWStyle_Scale", "Scale", "Scale", "Scales the part about its centroid, the origin or a coordinate system.", "FEATURES_SCALE",
     "Part_Scale",
-    [Field("About", "enum", "Scale about", "Centroid", values=["Centroid", "Origin", "Coordinate System"]),
+    [Field("About", "enum", "Scale about", "Centroid", values=["Centroid", "Origin", "Coordinate System"], box="Scale Parameters"),
      Field("CoordinateSystem", "pick", "Coordinate system", what="Feature", optional=True,
-           shown=lambda o: o.About == "Coordinate System"),
-     Field("Uniform", "bool", "Uniform scaling", True),
-     Field("Factor", "float", "Scale factor", 1.0, low=0.001, shown=lambda o: o.Uniform),
-     Field("FactorX", "float", "X", 1.0, low=0.001, shown=lambda o: not o.Uniform),
-     Field("FactorY", "float", "Y", 1.0, low=0.001, shown=lambda o: not o.Uniform),
-     Field("FactorZ", "float", "Z", 1.0, low=0.001, shown=lambda o: not o.Uniform)],
+           shown=lambda o: o.About == "Coordinate System", box="Scale Parameters"),
+     Field("Uniform", "bool", "Uniform scaling", True, box="Scale Parameters"),
+     Field("Factor", "float", "Scale factor", 1.0, low=0.001, shown=lambda o: o.Uniform, box="Scale Parameters"),
+     Field("FactorX", "float", "X", 1.0, low=0.001, shown=lambda o: not o.Uniform, box="Scale Parameters"),
+     Field("FactorY", "float", "Y", 1.0, low=0.001, shown=lambda o: not o.Uniform, box="Scale Parameters"),
+     Field("FactorZ", "float", "Z", 1.0, low=0.001, shown=lambda o: not o.Uniform, box="Scale Parameters")],
     _scale)
 
 
@@ -543,7 +543,9 @@ def _thicken(obj, base):
         tool = _slab(obj, base)
     if tool is None:
         return None, None
-    if base is None or base.isNull():
+    if base is None or base.isNull() or not base.Solids:
+        # no solid to merge with (a new part, or a solid turned into a surface by Delete Face): the
+        # thickened body is the part's solid; fusing with a bare shell failed "Null shape" (surface run 11-27)
         return tool, tool
     if not getattr(obj, "Merge", True):
         # Merge result off: the thickened body stays a body of its own
@@ -1613,23 +1615,24 @@ def _plane_corner_offset(size, normal):
     return face.CenterOfMass
 
 
+BOX_ITEMS = "Items To Fillet"
 VARIABLE_FILLET = sf.Spec(
     "SWStyle_VariableFillet", "Variable Size Fillet", "VarFillet",
     "Rounds edges with a radius that changes from the start to the end of each edge.",
     "FEATURES_VARIABLE_FILLET", "PartDesign_Fillet",
-    [Field("Edges", "pick", "Edges to fillet", what=("Edge",), many=True),
-     Field("StartRadius", "length", "Start radius", 2.0),
-     Field("EndRadius", "length", "End radius", 5.0),
-     Field("ControlPoints", "int", "Number of control points", 3,
+    [Field("Edges", "pick", "Edges to fillet", what=("Edge",), many=True, box=BOX_ITEMS),
+     Field("StartRadius", "length", "Start radius", 2.0, box=BOX_ITEMS),
+     Field("EndRadius", "length", "End radius", 5.0, box=BOX_ITEMS),
+     Field("ControlPoints", "int", "Number of control points", 3, box=BOX_ITEMS,
            tip="Points along each edge between its start and end"),
-     Field("PointRadii", "text", "Control point radii", "",
+     Field("PointRadii", "text", "Control point radii", "", box=BOX_ITEMS,
            tip="A radius for each control point, e.g. 3, 6, 3 (blank: straight from start to end)"),
-     Field("PointPositions", "text", "Control point positions (%)", "",
+     Field("PointPositions", "text", "Control point positions (%)", "", box=BOX_ITEMS,
            tip="Where the points are along the edge, e.g. 25, 50, 75 (blank: evenly spaced)"),
-     Field("Transition", "enum", "Transition", "Smooth transition",
+     Field("Transition", "enum", "Transition", "Smooth transition", box=BOX_ITEMS,
            values=["Smooth transition", "Straight transition"], legacy="Straight transition",
            tip="Smooth: the radius blends through the control points; Straight: it changes in straight lines"),
-     Field("ContinuousBlend", "bool", "Continuous edge blend", False, legacy=False,
+     Field("ContinuousBlend", "bool", "Continuous edge blend", False, legacy=False, box=BOX_ITEMS,
            tip="Tangent edges are filleted as one edge: the radius runs from the start of the chain to its end")],
     _variable_fillet, cache=True)
 try:
@@ -1637,6 +1640,15 @@ try:
     VARIABLE_FILLET.panel = _vfpm.Panel
 except Exception as _fw_err:
     _fw_log("directfeatures.py:1355", _fw_err)
+
+
+def _fillet_type_box(obj):
+    from . import filletchamfer
+    return filletchamfer.type_box(obj)
+
+
+VARIABLE_FILLET.head_box = _fillet_type_box
+VARIABLE_FILLET.pm_title = "Fillet"
 
 
 ALL = [SCALE, DOME, CUT_SURFACE, THICKEN, THICK_CUT, INDENT, INTERSECT, SPLIT_LINE, VARIABLE_FILLET]

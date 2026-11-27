@@ -17,6 +17,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -123,7 +124,7 @@ def _task_view():
 def _feature():
     try:
         edit = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument is not None else None
-        return edit.Object if edit is not None else None
+        return editobj.of(edit) if edit is not None else None
     except Exception:
         return None
 
@@ -140,10 +141,67 @@ def _pick_mode_on(view):
     return False
 
 
+# the add-on's own feature pages that take picks straight from the graphics area (Fillet, Chamfer, Shell): while
+# the reference page is over one, its selection observer is held, so a face picked for the plane is not added
+
+PAGES = ("DressUpPanel",)
+_observers = []     # (observer, extra args) of the selection observers the add-on registers, in order
+# Sweep and Loft (FreeCAD's pages with the add-on's pick boxes): their pick modes are let go while the reference
+# page is up (FreeCAD's buttons unpressed, the boxes parked, their observers held) and pressed again after
+PICK_FEATURES = ("PartDesign::AdditivePipe", "PartDesign::SubtractivePipe",
+                 "PartDesign::AdditiveLoft", "PartDesign::SubtractiveLoft")
+PICKERS = ("SweepBoxes", "GuideCurves", "LoftBoxes")
+
+
+def _track():
+    """Note every selection observer added (to hold a feature page's while a reference page is over it)."""
+    sel = Gui.Selection
+    if getattr(sel.addObserver, "_fw_nest", False):
+        return
+    add, remove = sel.addObserver, sel.removeObserver
+
+    def add_observer(obs, *args):
+        _observers.append((obs, args))
+        return add(obs, *args)
+
+    def remove_observer(obs, *args):
+        _observers[:] = [(o, a) for o, a in _observers if o is not obs]
+        return remove(obs, *args)
+    add_observer._fw_nest = True
+    add_observer._fw_add, add_observer._fw_remove = add, remove
+    try:
+        sel.addObserver, sel.removeObserver = add_observer, remove_observer
+    except Exception as _fw_err:
+        _fw_log("refnest.py:track", _fw_err)
+
+
+def _page_panels():
+    """The open feature pages of the add-on (by class) registered as selection observers."""
+    out = []
+    for obs, args in _observers:
+        names = [c.__name__ for c in type(obs).__mro__]
+        if any(n in PAGES for n in names) and getattr(obs, "form", None) is not None:
+            out.append((obs, args))
+    return out
+
+
+def _page_feature():
+    """The feature of the add-on's open page (Fillet, Chamfer, Shell), None without one."""
+    for obs, _args in _page_panels():
+        feat = getattr(obs, "feature", None)
+        if feat is not None:
+            return feat
+    return None
+
+
 def can_nest(native):
     if native not in COMMANDS or _host or not Gui.Control.activeDialog():
         return False
     feat = _feature()
+    if feat is None and _page_panels():
+        return _task_view() is not None          # the add-on's page: its picks are held while nested
+    if feat is not None and feat.TypeId in PICK_FEATURES:
+        return _task_view() is not None          # its pick modes are let go while nested
     if feat is None or feat.TypeId not in SAFE:
         return False
     view = _task_view()
@@ -201,7 +259,17 @@ class _Host(QtWidgets.QFrame):
         self.alive = False
         self.view = view
         self.doc = App.ActiveDocument
-        self.feature = _feature()
+        self.feature = _feature() or _page_feature()
+        self.held = _page_panels()
+        remove = getattr(Gui.Selection.addObserver, "_fw_remove", Gui.Selection.removeObserver)
+        for obs, _args in self.held:
+            try:
+                remove(obs)
+            except Exception as _fw_err:
+                _fw_log("refnest.py:hold", _fw_err)
+        self.parked, self.pressed = [], []
+        if self.feature is not None and getattr(self.feature, "TypeId", "") in PICK_FEATURES:
+            self._park(remove)
         self.before = {o.Name for o in self.doc.Objects}
         self.selection = Gui.Selection.getSelectionEx(self.doc.Name)
         self.setAutoFillBackground(True)
@@ -323,9 +391,53 @@ class _Host(QtWidgets.QFrame):
         except Exception:
             return []
 
+    def _park(self, remove):
+        """Sweep/Loft: the boxes stop pressing FreeCAD's pick buttons, the pressed ones are let go."""
+        for o in self.view.findChildren(QtCore.QObject):
+            if type(o).__name__ in PICKERS and hasattr(o, "active"):
+                self.parked.append((o, o.active))
+                o.active = None if type(o).__name__ == "SweepBoxes" else False
+        for obs, args in list(_observers):
+            if type(obs).__name__ in PICKERS and not any(h is obs for h, _a in self.held):
+                try:
+                    remove(obs)
+                    self.held.append((obs, args))
+                except Exception as _fw_err:
+                    _fw_log("refnest.py:hold-picker", _fw_err)
+        for b in self.view.findChildren(QtWidgets.QAbstractButton):
+            try:
+                if b.isCheckable() and b.isChecked() and not isinstance(b, (QtWidgets.QCheckBox, QtWidgets.QRadioButton)):
+                    b.click()
+                    self.pressed.append(b)
+            except Exception as _fw_err:
+                _fw_log("refnest.py:unpress", _fw_err)
+
+    def _unpark(self):
+        for b in self.pressed:
+            try:
+                if not b.isChecked():
+                    b.click()
+            except Exception as _fw_err:
+                _fw_log("refnest.py:repress", _fw_err)
+        for o, active in self.parked:
+            try:
+                o.active = active
+            except Exception as _fw_err:
+                _fw_log("refnest.py:unpark", _fw_err)
+        self.parked, self.pressed = [], []
+
     def _restore(self):
         for m, g in self.saved:
             m.Gui = g
+        add = getattr(Gui.Selection.addObserver, "_fw_add", Gui.Selection.addObserver)
+        for obs, args in getattr(self, "held", ()):
+            if any(o is obs for o, _a in _observers):    # the page is still open: it takes picks again
+                try:
+                    add(obs, *args)
+                except Exception as _fw_err:
+                    _fw_log("refnest.py:unhold", _fw_err)
+        self.held = []
+        self._unpark()
         try:
             QtWidgets.QApplication.instance().removeEventFilter(self.keys)
         except Exception:
@@ -506,3 +618,9 @@ def _remake(doc, body_name, recipes):
     finally:
         doc.commitTransaction()
     return out
+
+
+try:
+    _track()
+except Exception as _fw_err:
+    _fw_log("refnest.py:track-import", _fw_err)

@@ -52,6 +52,17 @@ def _name(doc):
     return os.path.basename(doc.FileName) if doc.FileName else doc.Label
 
 
+def _link_blue():
+
+    try:
+        from . import style
+        if style.dark():
+            return "#a8c7fa"
+    except Exception as _fw_err:
+        _fw_log("closeprompt.py:link_blue", _fw_err)
+    return "#1c5aa6"
+
+
 class SaveModifiedBox(QtWidgets.QDialog):
     ""
 
@@ -94,7 +105,7 @@ class SaveModifiedBox(QtWidgets.QDialog):
         font = head.font()
         font.setPointSizeF(font.pointSizeF() * 1.3)
         head.setFont(font)
-        head.setStyleSheet("color: #1c5aa6;")
+        head.setStyleSheet("color: %s;" % _link_blue())
         text.addWidget(head)
         note = QtWidgets.QLabel("One or more documents being closed as a result of this operation have been modified.")
         note.setWordWrap(True)
@@ -102,7 +113,7 @@ class SaveModifiedBox(QtWidgets.QDialog):
         for key, label, sub in ((SAVE, "&Save all", "All modified documents will be saved."),
                                 (DONT_SAVE, "Do&n't Save", "All changes to unsaved documents will be lost.")):
             button = QtWidgets.QCommandLinkButton(label, sub)
-            button.setStyleSheet("QCommandLinkButton { color: #1c5aa6; }")
+            button.setStyleSheet("QCommandLinkButton { color: %s; }" % _link_blue())
             button.setObjectName("FW_SaveModified_" + key)
             button.clicked.connect(lambda checked=False, k=key: self._pick(k))
             text.addWidget(button)
@@ -469,6 +480,8 @@ def _watch(*args):
     if area is None:
         return
     for sub in area.subWindowList():
+        if not isinstance(sub, QtWidgets.QMdiSubWindow):
+            continue        # mdiguard-1126: a stale wrapper PySide hands back while a drawing opens
         if not sub.property("fw_closeprompt"):
             sub.setProperty("fw_closeprompt", True)
             sub.installEventFilter(_filter)

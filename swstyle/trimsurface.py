@@ -337,12 +337,13 @@ class View:
         return ":/icons/booleans/Part_BooleanFragments.svg"
 
     def claimChildren(self):
+
+        # (Surface-Sweep1 ...) stay in the tree where they were made (surface run 11-27)
         obj = self.Object
-        out = list(obj.Surfaces or [])
-        if obj.TrimType == "Standard" and obj.TrimmingTool is not None and \
-                obj.TrimmingTool.TypeId not in ("App::Plane",):
-            out.append(obj.TrimmingTool)
-        return out
+        tool = obj.TrimmingTool if obj.TrimType == "Standard" else None
+        if tool is not None and tool.TypeId.startswith("Sketcher::"):
+            return [tool]
+        return []
 
     def setEdit(self, vobj, mode=0):
         if mode != 0:
@@ -564,7 +565,7 @@ class Panel:
     def addSelection(self, doc, name, sub, point):
         if doc != self.obj.Document.Name:
             return
-        QtCore.QTimer.singleShot(0, lambda: self._picked(name, sub, point))
+        from . import safe_later as _sl; _sl.later(0, lambda: self._picked(name, sub, point), self, "pieces")
 
     def _holder(self, name, sub):
         doc = self.obj.Document

@@ -74,7 +74,7 @@ class ColourFlyout:
     """The flyout's own button: the ink's colour now; clicked, Pen Properties (any colour, width)."""
 
     def GetResources(self):
-        return {"MenuText": "Color", "ToolTip": "The colour of the ink.", "Pixmap": "Std_RandomColor",
+        return {"MenuText": "Color", "ToolTip": "The color of the ink.", "Pixmap": "Std_RandomColor",
                 "CmdType": "ForEdit"}
 
     def IsActive(self):

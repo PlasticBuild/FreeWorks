@@ -294,11 +294,15 @@ class Panel(EdgePicks):
         self.positions = QtWidgets.QButtonGroup(edges)
         current = obj.BendType if obj else "Material Inside"
         current = "Thickness Outside" if current == CLOSED_OUTSIDE else current
+        from . import pmpics
+        prow = QtWidgets.QHBoxLayout()
         for i, (text, value) in enumerate(POSITIONS):
-            b = _radio("SWSMHemPosition" + text.replace(" ", ""), text)
+            b = pmpics.button("SWSMHemPosition" + text.replace(" ", ""), "flange_position", text)
             b.setChecked(value == current)
             self.positions.addButton(b, i)
-            f.addRow(b)
+            prow.addWidget(b)
+        prow.addStretch(1)
+        f.addRow(prow)
         if self.positions.checkedButton() is None:
             self.positions.button(0).setChecked(True)
 

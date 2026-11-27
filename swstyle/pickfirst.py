@@ -142,7 +142,7 @@ class PickPanel:
                 self.list.addItem(label)
 
     def addSelection(self, doc, name, sub, point):
-        QtCore.QTimer.singleShot(0, lambda: self.picked(doc, name, sub))
+        from . import safe_later as _sl; _sl.later(0, lambda: self.picked(doc, name, sub), self, "message")
 
     def _gone(self):
         """True when the PM was closed some other way (another dialog took the task panel): stop listening."""
@@ -448,7 +448,7 @@ class DefeaturePanel(PickPanel):
         if n is None:
             return
         self.normal = n
-        self.plane.setText(("%s@%s" % (sub.split(".")[-1], obj.Label)) if sub else obj.Label)
+        self.plane.setText(pmboxes.sw_name(("%s@%s" % (sub.split(".")[-1], obj.Label)) if sub else obj.Label))
 
     def _body(self):
         doc = App.ActiveDocument

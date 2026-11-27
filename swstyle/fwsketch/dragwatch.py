@@ -532,7 +532,7 @@ class DragWatcher(QtCore.QObject):
             if edge is None or not drag_ghost_wanted():
                 return
             point = (edge, None)   # FreeCAD drags the whole curve: the ghost and the badge only
-        elif _drag_point_alone(sketch):
+        elif not _adding_pick(event) and _drag_point_alone(sketch):
             # the cleared pick also cleared FreeCAD's point under the pointer: a move to the same
             # place finds it again before FreeCAD sees this press
             try:
@@ -602,6 +602,20 @@ def fully_defined_pick(sketch):
         return geo not in {g for g, _p in sketch.getGeometryWithDependentParameters()}
     except Exception as _fw_err:
         _fw_log("fwsketch/dragwatch.py:fully defined", _fw_err)
+        return False
+
+
+def _adding_pick(event):
+    ""
+
+    try:
+        if event.modifiers() & (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
+            return True
+        from .. import multipick, shell as _shell
+        sh = _shell.shell()
+        return sh is not None and multipick._collecting(sh)
+    except Exception as _fw_err:
+        _fw_log("fwsketch/dragwatch.py: adding pick", _fw_err)
         return False
 
 

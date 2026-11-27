@@ -82,7 +82,7 @@ def _stage(info, tok):
             raise extupdate.UpdateError("the download holds no complete copy")
         staged = os.path.join(d, "staged")
         shutil.rmtree(staged, ignore_errors=True)
-        shutil.copytree(root, staged, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.lck"))
+        shutil.copytree(root, staged, ignore=shutil.ignore_patterns("*.lck"))
     finally:
         shutil.rmtree(work, ignore_errors=True)
         try:

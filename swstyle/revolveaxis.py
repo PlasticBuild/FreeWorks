@@ -81,9 +81,81 @@ def use_centerline(feature, tries=0):
     feature.Document.recompute()
 
 
+_FIXING = []
+
+
+def follow_profile(feature):
+    """The axis names a construction line of the sketch (Axis0) while the profile is already its Selected
+    Contours object (an open sketch closed by the prompt): FreeCAD then looks for Axis0 on the profile
+    and refuses with "Invalid shape name Axis0". The axis follows the profile (contours._axis_to)."""
+    if _FIXING:
+        return
+    try:
+        profile = getattr(feature, "Profile", None)
+        profile = profile[0] if isinstance(profile, tuple) else profile
+        axis = feature.ReferenceAxis
+        if profile is None or not axis or not axis[0] or axis[0] is profile:
+            return
+        from . import contours
+        if not contours.is_helper(profile) or axis[0] is not getattr(profile, "Sketch", None):
+            return
+        _FIXING.append(1)
+        try:
+            contours._axis_to(feature, axis[0], profile)
+        finally:
+            _FIXING.pop()
+    except Exception as _fw_err:
+        _fw_log("revolveaxis.py:follow_profile", _fw_err)
+
+
+_FRESH = {}
+_MUTED = []
+
+
+def _quiet_first_compute(feature):
+    ""
+
+
+
+    import time
+    try:
+        if _MUTED or time.time() - _FRESH.get(feature.Document.Name + "." + feature.Name, 0) > 5.0:
+            return
+        sketch = getattr(feature, "Profile", None)
+        sketch = sketch[0] if isinstance(sketch, tuple) else sketch
+        axis = feature.ReferenceAxis
+        if sketch is None or sketch.TypeId != "Sketcher::SketchObject" or centerlines(sketch):
+            return
+        if not axis or axis[0] is not sketch or not axis[1] or axis[1][0] not in ("V_Axis", "H_Axis"):
+            return
+        names = ("Console", "ReportOutput", "NotificationAreaObserver", "StatusBar")
+        was = [(n, App.Console.GetStatus(n, "Err")) for n in names]
+        for n, _on in was:
+            if _on:
+                App.Console.SetStatus(n, "Err", False)
+        _MUTED.append(was)
+
+        def restore():
+            for n, on in was:
+                App.Console.SetStatus(n, "Err", bool(on))
+            _MUTED[:] = []
+        QtCore.QTimer.singleShot(0, restore)
+    except Exception as _fw_err:
+        _fw_log("revolveaxis.py:quiet_first_compute", _fw_err)
+
+
 class _Observer:
+    def slotChangedObject(self, obj, prop):
+        if prop in ("ReferenceAxis", "Profile") and getattr(obj, "TypeId", "") in TYPES:
+            follow_profile(obj)
+            if prop == "ReferenceAxis":
+                _quiet_first_compute(obj)
+
     def slotCreatedObject(self, obj):
         try:
+            if obj.TypeId in TYPES and not obj.Document.Restoring:
+                import time
+                _FRESH[obj.Document.Name + "." + obj.Name] = time.time()
             if obj.TypeId in TYPES and not obj.Document.Restoring and \
                     App.ParamGet(PARAMS).GetBool("RevolveAboutCenterline", True):
                 QtCore.QTimer.singleShot(0, lambda: use_centerline(obj))

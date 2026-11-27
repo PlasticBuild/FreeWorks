@@ -132,6 +132,16 @@ def _restore_later(obj, tries=0):
     def go():
         try:
             vobj = obj.ViewObject
+            if vobj is not None and tries == 0:
+                # FreeCAD 1.1 opens a hidden Part::FeaturePython shown: the plane keeps its own shown state (FwShown),
+                # and View > Hide / Show > Live Section Planes off hides it too
+                proxy = getattr(vobj, "Proxy", None)
+                if proxy is not None:
+                    proxy._ready = True
+                if "FwShown" in obj.PropertiesList and vobj.Visibility != obj.FwShown:
+                    vobj.Visibility = obj.FwShown
+                if vobj.Visibility and not planes_shown():
+                    _hide_by_view(obj)
             if vobj is None or not vobj.Visibility or cut_of(obj) is not None:
                 return
             if show_cut(obj, True) is None and tries < 20:
@@ -171,11 +181,20 @@ if App.GuiUp:
                 _fw_log("liveplane.py:169", _fw_err)
             # an opened part: a shown plane cuts again (once the view exists)
             self._tries = 0
+            self._ready = False
             QtCore.QTimer.singleShot(300, lambda vobj=vobj: self._restore(vobj))
 
         def _restore(self, vobj):
             try:
                 obj = vobj.Object
+                if not getattr(self, "_ready", True):
+                    # FreeCAD 1.1 opens a hidden Part::FeaturePython shown: the plane keeps its own shown state (FwShown)
+                    self._ready = True
+                    if "FwShown" in obj.PropertiesList and vobj.Visibility != obj.FwShown:
+                        vobj.Visibility = obj.FwShown
+                if vobj.Visibility and not planes_shown():
+                    _hide_by_view(obj)          # Hide / Show > Live Section Planes is off: an opened part shows none
+                    return
                 if not vobj.Visibility or cut_of(obj) is not None:
                     return
                 if show_cut(obj, True) is None and self._tries < 20:     # its window is not up yet
@@ -192,6 +211,9 @@ if App.GuiUp:
         def onChanged(self, vobj, prop):
             if prop == "Visibility":
                 obj = vobj.Object
+                if not getattr(self, "_ready", False):
+                    return          # the part is still opening: _restore_later sets the plane as it was saved
+                _keep_shown(obj, bool(vobj.Visibility))
                 QtCore.QTimer.singleShot(0, lambda: show_cut(obj, bool(vobj.Visibility)))
 
         def updateData(self, obj, prop):
@@ -212,6 +234,17 @@ if App.GuiUp:
 
         def loads(self, state):
             return None
+
+
+def _keep_shown(obj, on):
+    try:
+        if "FwShown" not in obj.PropertiesList:
+            obj.addProperty("App::PropertyBool", "FwShown", "Live Section Plane", "Shown (kept: FreeCAD opens it shown)")
+            obj.setEditorMode("FwShown", 2)
+        if obj.FwShown != on:
+            obj.FwShown = on
+    except Exception as _fw_err:
+        _fw_log("liveplane.py:keep-shown", _fw_err)
 
 
 # ---- the PropertyManager ------------------------------------------------------------------------
@@ -310,6 +343,8 @@ def make(doc, placement, reference=""):
         obj.Label = naming.next_label(doc, TITLE)
         if App.GuiUp and obj.ViewObject is not None:
             View(obj.ViewObject)
+            obj.ViewObject.Proxy._ready = True      # a new plane, not an opened one
+            _keep_shown(obj, True)
         doc.recompute()
     except BaseException:
         try:
@@ -321,6 +356,78 @@ def make(doc, placement, reference=""):
     if App.GuiUp:
         show_cut(obj, True)
     return obj
+
+
+
+# shown at once. A plane hidden by this toggle is marked FwHiddenByView, so turning it on again shows only those and planes
+
+VIEW_KEY = "ViewLiveSectionPlanes"
+VIEW_COMMAND = "SWStyle_ViewLiveSectionPlanes"
+
+
+def planes_shown():
+    try:
+        from . import paths
+        return paths.params().GetBool(VIEW_KEY, True)
+    except Exception:
+        return True
+
+
+def _hide_by_view(obj):
+    if "FwHiddenByView" not in obj.PropertiesList:
+        obj.addProperty("App::PropertyBool", "FwHiddenByView", "Live Section Plane", "Hidden by View > Hide / Show")
+        obj.setEditorMode("FwHiddenByView", 2)
+    obj.FwHiddenByView = True
+    obj.ViewObject.Visibility = False
+
+
+def apply_planes_shown(doc, on):
+    n = 0
+    for o in [x for x in doc.Objects if is_live_plane(x)]:
+        try:
+            vobj = o.ViewObject
+            if vobj is None:
+                continue
+            if not on and vobj.Visibility:
+                _hide_by_view(o)
+                n += 1
+            elif on and getattr(o, "FwHiddenByView", False):
+                o.FwHiddenByView = False
+                vobj.Visibility = True
+                n += 1
+        except Exception as _fw_err:
+            _fw_log("liveplane.py:hide-show", _fw_err)
+    return n
+
+
+def set_planes_shown(on):
+    try:
+        from . import paths
+        paths.params().SetBool(VIEW_KEY, bool(on))
+    except Exception as _fw_err:
+        _fw_log("liveplane.py:hide-show-param", _fw_err)
+    n = sum(apply_planes_shown(doc, on) for doc in App.listDocuments().values())
+    try:
+        for a in (Gui.Command.get(VIEW_COMMAND).getAction() or ()):
+            if a.isCheckable() and a.isChecked() != bool(on):
+                a.blockSignals(True)
+                a.setChecked(bool(on))
+                a.blockSignals(False)
+    except Exception as _fw_err:
+        _fw_log("liveplane.py:hide-show-tick", _fw_err)
+    return n
+
+
+class _ViewCommand:
+    def GetResources(self):
+        return {"MenuText": "Live Section Planes", "Pixmap": "I3DVIEW_SECT_VIEW", "Checkable": planes_shown(),
+                "ToolTip": "Shows or hides the Live Section Planes and their cuts"}
+
+    def IsActive(self):
+        return App.ActiveDocument is not None
+
+    def Activated(self, checked=None):
+        set_planes_shown(not planes_shown())       # the setting decides; the menu's tick follows it
 
 
 class _Command:
@@ -341,5 +448,7 @@ def register():
     try:
         if COMMAND not in Gui.listCommands():
             Gui.addCommand(COMMAND, _Command())
+        if VIEW_COMMAND not in Gui.listCommands():
+            Gui.addCommand(VIEW_COMMAND, _ViewCommand())
     except Exception as error:
         App.Console.PrintWarning("FreeCAD: %s not added: %s\n" % (COMMAND, error))

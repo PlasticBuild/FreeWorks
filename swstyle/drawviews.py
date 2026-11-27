@@ -417,6 +417,13 @@ def model_centre(v):
 
 SECTION_MESSAGE = ("Select Cutting Line and place it on a view.\n\nOptions: Use the Section View popup to add offsets to the Cutting Line.\nOR\nSelect Auto-start section view for immediate preview and placement of the section view.")
 
+
+
+DETAIL_MESSAGE = ("Please sketch a circle to continue view creation. If you do not want a circular profile, please "
+                  "create the profile before selecting the detail view command.")
+SECTION_OK_MESSAGE = ("Select OK to place section view.\nOR\nContinue to modify cutting line by selecting another "
+                      "offset from Section View popup.")
+
 _KEPT = {}      # section name: (model change count, origin, normal, shapes, kept half)
 
 
@@ -475,8 +482,33 @@ def _tight_centre(v, shapes):
     return x * c.x + y * c.y + d * c.z
 
 
+_BOXES = {}
+
+
 def view_box(v):
-    """(xmin, ymin, xmax, ymax) of the view on the sheet, from its visible lines (TechDraw keeps them scaled)."""
+    """(xmin, ymin, xmax, ymax) of the view on the sheet, from its visible lines (TechDraw keeps them scaled).
+    Kept for a moment for the same view at the same place and scale: one click of a sheet tool asks for every
+    view's box several times, and reading a 50-part view's lines took 34 ms each time."""
+    import time
+    try:
+        key = (v.Document.Name, v.Name)
+        sig = (D.view_position(v), float(v.Scale), float(getattr(v, "Rotation", 0) or 0), tuple(v.Direction),
+               bool(getattr(v, "CoarseView", False)))
+    except Exception:
+        key = sig = None
+    now = time.perf_counter()
+    hit = _BOXES.get(key) if key is not None else None
+    if hit is not None and hit[0] == sig and now - hit[1] < 0.75:
+        return hit[2]
+    box = _view_box(v)
+    if key is not None:
+        if len(_BOXES) > 200:
+            _BOXES.clear()
+        _BOXES[key] = (sig, now, box)
+    return box
+
+
+def _view_box(v):
     x0, y0 = D.view_position(v)
     k = 1.0
     xs, ys = [], []
@@ -647,11 +679,13 @@ def section_frame(base, kind, line, side, third_angle=True):
     nx, ny = -ey, ex
     if nx * side[0] + ny * side[1] < 0:
         nx, ny = -nx, -ny
-    s = 1.0 if third_angle else -1.0
-    nd = D._unit((x * nx + y * ny) * s)
+    # a section is seen from where it is placed, looking at the cutting line (its arrows point away from it), in
+
+    nd = D._unit(x * nx + y * ny)
     along = D._unit(x * ex + y * ey)
     if kind == "Horizontal":
-        xdir = x                          # the section keeps the view's X
+        xdir = D._unit(d.cross(nd))       # the section keeps the view's X, the side toward its viewer up (seen
+                                          # from the other side it is turned left-right, never upside down)
     elif kind == "Vertical":
         xdir = D._unit(y.cross(nd))       # and its up along a vertical cut
     else:
@@ -671,7 +705,7 @@ def make_section(page, base, kind, line, at, label=None, flip=False, style=None,
     nd, xdir, normal = section_frame(base, kind, line, side, D.third_angle(page))
     if flip:
         nd, normal = -nd, -normal
-        xdir = -xdir if kind != "Horizontal" else xdir
+        xdir = -xdir                      # still upright, seen from the other side
     s = doc.addObject("TechDraw::DrawViewSection", "SectionView")
     page.addView(s)
     s.BaseView = base
@@ -1079,10 +1113,11 @@ class SectionViewPanel(D._Panel):
         self.tabs.currentChanged.connect(self.tab_changed)
         self.auto = QtWidgets.QCheckBox("Auto-start section view", box)
         self.auto.setObjectName("SWSectionAutoStart")
-        self.auto.setChecked(True)
+        self.auto.setChecked(False)
         lay.addWidget(self.auto)
         self.lay.addWidget(box)
         box, lay = D._group("Section Line", self.form)
+        self.line_box = box
         self.flip = QtWidgets.QPushButton("Flip Direction", box)
         self.flip.setObjectName("SWSectionFlip")
         self.flip.clicked.connect(self.flip_direction)
@@ -1232,6 +1267,32 @@ class SectionViewPanel(D._Panel):
         D.extra_groups(self, "Projected", "Draft quality", lay, "SWSection")
         DL.sets(self.parent_style, False, *self.style.buttons.values())   # a style clicked turns Use parent style off
         self.parent_style.toggled.connect(self.parent_style_changed)
+
+        box, lay = D._group("Scale", self.form)
+        self.use_parent = QtWidgets.QRadioButton("Use parent scale", box)
+        self.use_parent.setObjectName("SWSectionParentScale")
+        self.use_parent.setChecked(True)
+        self.use_sheet = QtWidgets.QRadioButton("Use sheet scale", box)
+        self.use_sheet.setObjectName("SWSectionSheetScale")
+        self.use_custom = QtWidgets.QRadioButton("Use custom scale", box)
+        self.use_custom.setObjectName("SWSectionCustomScale")
+        self.scale_combo = QtWidgets.QComboBox(box)
+        self.scale_combo.setObjectName("SWSectionScaleCombo")
+        self.scale_combo.setEditable(True)
+        self.scale_combo.addItems(D.SCALES)
+        self.scale_combo.setCurrentText(D.scale_text(1.0))
+        combo = self.scale_combo          # live, as the other view PMs: a scale picked makes it the custom scale
+        combo.activated.connect(lambda *_: QtWidgets.QApplication.focusWidget() in (combo, combo.lineEdit(),
+                                                                                     combo.view())
+                                and self.use_custom.setChecked(True))
+        combo.lineEdit().textEdited.connect(lambda *_: self.use_custom.setChecked(True))
+        combo.currentTextChanged.connect(lambda *_: self.use_custom.isChecked() and self.rescale())
+        for w in (self.use_parent, self.use_sheet, self.use_custom):
+            w.toggled.connect(lambda on: on and self.rescale())
+        for w in (self.use_parent, self.use_sheet, self.use_custom, self.scale_combo):
+            lay.addWidget(w)
+        self.lay.addWidget(box)
+        self._after.append(lambda: self.set_page(1))
         self.base = None
         self.line = None
         self.first = None
@@ -1273,20 +1334,19 @@ class SectionViewPanel(D._Panel):
                                 "goes.",
                       "Arc": "Arc Offset: click where the arc starts on the cutting line, then where the line goes.",
                       "Notch": "Notch Offset: click the notch's start and end on the cutting line, then its depth.",
-                      None: "Add an offset, or OK in the pop-up (or click) to place the section view."}[self.offset_mode])
+                      None: SECTION_OK_MESSAGE}[self.offset_mode])
         elif name == "SWSectionAssistUndo":
             if self.offsets:
                 self.offsets.pop()
             self.offset_clicks = []
             self.say("Offset undone. %d offset(s) left." % len(self.offsets))
         elif name == "SWSectionAssistOK":
-            self.hide_assist()
-            self.offset_mode = None
-            self.say("Click to place the section view.")
+            self.placing()
         elif name == "SWSectionAssistCancel":
             self.hide_assist()
             self.line, self.offsets, self.offset_mode, self.offset_clicks = None, [], None, []
-            self.say("Cutting line cancelled. Click in a view to place it again.")
+            self.set_page(1)
+            self.say("Cutting line canceled. Click in a view to place it again.")
 
     def _assist_click(self, p):
         """A click while an offset is being added; True when it was used."""
@@ -1301,8 +1361,7 @@ class SectionViewPanel(D._Panel):
         self.offset_clicks = []
         self.assist({"Arc": "SWSectionArcOffset", "Single": "SWSectionSingleOffset"}.get(self.offset_mode,
                                                                                        "SWSectionNotchOffset"))
-        self.say("%d offset(s). Add another, or OK in the pop-up (or click) to place the section view."
-                 % len(self.offsets))
+        self.say(SECTION_OK_MESSAGE)
         return True
 
     def tab_changed(self, n):
@@ -1310,12 +1369,61 @@ class SectionViewPanel(D._Panel):
         self.half_box.setVisible(half)
         for b in self.kind.buttons():
             DL.row(b, not half)
-        self.say("Click the centre of the half section in a view." if half else
+        self.say("Click the center of the half section in a view." if half else
                  SECTION_MESSAGE)
 
     def _peek_label(self):
         cur = getattr(self.page, "FreeWorksNextViewLabel", "") if hasattr(self.page, "FreeWorksNextViewLabel") else ""
         return cur or "A"
+
+    def set_page(self, n):
+        ""
+
+        self.page_no = n
+        first = n == 1
+        keep = ("SWDrawGroup_Message", "SWSectionScopeGroup", "SWSectionRibGroup", "SWDrawGroup_HalfSection",
+                "SWDrawGroup_CuttingLine")
+        for box in self.form.findChildren(QtWidgets.QGroupBox):
+            if box.parent() is self.form and box.objectName() not in keep:
+                box.setVisible(not first)
+        self.tabs.setVisible(first)
+        self.cut_box.setVisible(first)
+        self.half_box.setVisible(first and self.tabs.currentIndex() == 1)
+        self.line_box.setTitle("Section Line" if first else "Cutting Line")
+        if not first:
+            label = self.label.text().strip() or "A"
+            self.form.setWindowTitle("Section View %s-%s" % (label, label))
+
+    def placing(self):
+        """The cutting line is done: page 2, the section view follows the next click."""
+        self.hide_assist()
+        self.offset_mode = None
+        self.set_page(2)
+        self.say("Click in the graphics area to place the new view.")
+
+    def parent_scale(self):
+        return view_scale(self.base) if self.base is not None else 1.0
+
+    def rescale(self):
+        s = self.section
+        if s is None or self.base is None:
+            return
+        mode, factor = D.view_scale_choice(self, self.base)
+        if mode == "Parent":
+            D.follow_parent_scale(s, self.base)
+        elif mode == "Sheet":
+            s.ScaleType = "Page"
+            D.set_scale_mode(s, "Sheet")
+        else:
+            s.ScaleType = "Custom"
+            s.Scale = factor
+            D.set_scale_mode(s, "Custom")
+        self.doc.recompute()
+
+    def _style(self):
+        if self.parent_style.isChecked() and self.base is not None:
+            return getattr(self.base, "SWDisplayStyle", "") or self.style.currentText()
+        return self.style.currentText()
 
     def kind_name(self):
         b = self.kind.checkedButton()
@@ -1346,10 +1454,7 @@ class SectionViewPanel(D._Panel):
                 c, p1, p2 = self.points
                 self.line = [p1, c, p2]
             self.points = []
-            if not self.auto.isChecked():
-                self.say("Auto-start section view is off: turn it on or click OK.")
-                return True
-            self.say("Click to place the section view.")
+            self.placing()             # no offsets for a half / aligned line: no pop-up to wait on
             return True
         if self.line is None:
             if self.first is None:
@@ -1369,35 +1474,40 @@ class SectionViewPanel(D._Panel):
             else:
                 self.line = (self.first, p)
                 self.first = None
-            self.show_assist(p)
-            if not self.auto.isChecked():
-                self.say("Auto-start section view is off: turn it on or click OK.")
+            if self.auto.isChecked():
+                self.placing()
                 return True
-            self.say("Add an offset in the pop-up, or click to place the section view.")
+            self.show_assist(p)
+            self.say(SECTION_OK_MESSAGE)
             return True
         self.hide_assist()
+        if getattr(self, "page_no", 2) == 1:
+            self.set_page(2)
         label = self.label.text().strip() or None
         if label is None or label == self._peek_label():
             label = take_label(self.page)
         if isinstance(self.line, list) and self.tabs.currentIndex() == 1:
             self.section = make_half_section(self.page, self.base, self.line, p, self.half.currentText(), label,
-                                             style=self.style.currentText())
+                                             style=self._style())
         elif isinstance(self.line, list):
             self.section = make_complex_section(self.page, self.base, self.line, p, "Aligned", label,
-                                                style=self.style.currentText())
+                                                style=self._style())
             self.section.SWSectionKind = "Aligned"
         elif self.offsets:
             pts = offset_line(self.base, self.kind_name(), self.line, self.offsets)
             self.section = make_offset_section(self.page, self.base, self.kind_name(), pts, p, label,
-                                               style=self.style.currentText(), side=self.fixed_side())
+                                               style=self._style(), side=self.fixed_side())
             self.section.addProperty("App::PropertyVectorList", "SWCutPoints", "FreeCAD", "cutting line (sheet)")
             self.section.SWCutPoints = [V(q[0], q[1], 0) for q in pts]
         else:
             self.section = make_section(self.page, self.base, self.kind_name(), self.line, p, label,
-                                        style=self.style.currentText(), side=self.fixed_side())
+                                        style=self._style(), side=self.fixed_side())
         self.label.setText(label)
+        self.form.setWindowTitle("Section View %s-%s" % (label, label))
         self.made.append(self.section)
         self._after_place()
+        if not self.use_parent.isChecked():
+            self.rescale()
         if self.section.TypeId != "TechDraw::DrawViewPart":
             self.reoption()
             if self.depth_on.isChecked():
@@ -1600,8 +1710,7 @@ class SectionViewPanel(D._Panel):
         s.SectionNormal = -V(s.SectionNormal)
         if (V(s.Direction) - want).Length > 1e-9:     # TechDraw turns the view with the normal; else we do
             s.Direction = want
-        if self.kind_name() != "Horizontal" or s.TypeId == "TechDraw::DrawComplexSection":
-            s.XDirection = -V(s.XDirection)
+        s.XDirection = -V(s.XDirection)          # seen from the other side, still upright
         self.doc.recompute()
         if getattr(s, "SWSectionDepth", 0.0) or section_scope(s)[0] or getattr(s, "SWAutoHatch", False):
             _rebuild_twin(s)
@@ -1656,6 +1765,8 @@ class SectionViewPanel(D._Panel):
             D.apply_extra(self, self.section)
             if self.base is not None:
                 D.set_parent(self.section, self.base)
+                if self.use_parent.isChecked():
+                    D.set_scale_mode(self.section, "Parent")
             D.apply_label_font(self, self.section)
             D.run_import(self, self.section)
 
@@ -1955,7 +2066,7 @@ class DetailViewPanel(D._Panel):
                    "Automatic View Update")
 
     def build(self):
-        self.say("Click in a view to set the detail circle's centre, then click to set its size.")
+        self.say(DETAIL_MESSAGE)
         box, lay = D._group("Detail Circle", self.form)
         row = QtWidgets.QHBoxLayout()
         row.addWidget(QtWidgets.QLabel("Label:", box))
@@ -1981,7 +2092,7 @@ class DetailViewPanel(D._Panel):
         self.as_circle.setChecked(True)
         self.as_profile.toggled.connect(lambda on: self.say(
             "Click the corners of the profile in a view; click the first corner again to close it." if on else
-            "Click in a view to set the detail circle's centre, then click to set its size."))
+            DETAIL_MESSAGE))
         row.addWidget(self.as_circle)
         row.addWidget(self.as_profile)
         lay.addLayout(row)
@@ -2053,11 +2164,25 @@ class DetailViewPanel(D._Panel):
                 w.toggled.connect(self.update_detail)
         self.scale.valueChanged.connect(self.update_detail)
         self.lay.addWidget(box)
+        self._after.append(lambda: self.set_page(1))
         self.base = None
         self.centre = None
         self.radius = None
         self.detail = None
         self.scale_set = False
+
+    def set_page(self, n):
+        ""
+
+
+        keep = ("SWDrawGroup_Message", "SWDrawGroup_DetailCircle", "SWDrawGroup_DisplayStyle",
+                "SWDrawGroup_CosmeticThreadDisplay")
+        for box in self.form.findChildren(QtWidgets.QGroupBox):
+            if box.parent() is self.form and box.objectName() not in keep:
+                box.setVisible(n != 1)
+        if n != 1:
+            label = self.label.text().strip() or "A"
+            self.form.setWindowTitle("Detail View %s" % label)
 
     def chosen_scale(self):
         if self.use_parent.isChecked() and self.base is not None:
@@ -2085,7 +2210,8 @@ class DetailViewPanel(D._Panel):
             cy = sum(q[1] for q in pts) / len(pts)
             self.centre = (cx, cy)
             self.radius = max(0.5, max(math.hypot(q[0] - cx, q[1] - cy) for q in pts))
-            self.say("Profile closed. Click to place the detail view.")
+            self.set_page(2)
+            self.say("Click in the graphics area to place the new view.")
             return True
         self.profile.append(p)
         self.say("Corner %d. Click the next corner, or the first one to close the profile." % len(self.profile))
@@ -2099,7 +2225,7 @@ class DetailViewPanel(D._Panel):
         if self.centre is None:
             v = view_at(self.page, p)
             if v is None:
-                self.say("Click inside a drawing view to set the detail circle's centre.")
+                self.say("Click inside a drawing view to set the detail circle's center.")
                 return True
             self.base = v
             self.centre = p
@@ -2111,7 +2237,8 @@ class DetailViewPanel(D._Panel):
             return True
         if self.radius is None:
             self.radius = max(0.5, math.hypot(p[0] - self.centre[0], p[1] - self.centre[1]))
-            self.say("Click to place the detail view.")
+            self.set_page(2)
+            self.say("Click in the graphics area to place the new view.")
             return True
         label = self.label.text().strip()
         cur = getattr(self.page, "FreeWorksNextViewLabel", "") if hasattr(self.page, "FreeWorksNextViewLabel") else ""
@@ -2994,6 +3121,7 @@ class RelativeViewPanel(D._SourcePick, D._Panel):
         self.only_bodies.setToolTip("The view shows only the bodies the picked faces are on")
         self.bodies = QtWidgets.QListWidget(bbox)
         self.bodies.setObjectName("SWRelativeBodies")
+        self.bodies.setProperty("swpickbox", True)
         self.bodies.setMaximumHeight(60)
         blay.addWidget(self.only_bodies)
         blay.addWidget(self.bodies)

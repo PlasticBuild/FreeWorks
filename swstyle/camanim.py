@@ -26,7 +26,7 @@ def _fw_log(site, err):
     try:
         if site not in _FW_SEEN:
             _FW_SEEN.add(site)
-            __import__("FreeCAD").Console.PrintLog("FreeWorks %s: %s\n" % (site, err))
+            __import__("FreeCAD").Console.PrintLog("FreeCAD %s: %s\n" % (site, err))
     except Exception:
         return
 
@@ -221,7 +221,21 @@ def animate_to(view=None, rotation=None, fit=True):
                 d = coin.SbRotation(*end_q).multVec(coin.SbVec3f(0, 0, -1)).getValue()
                 cam.position.setValue(*[f - start["focal"] * di for f, di in zip(fp, d)])
         if fit:
-            view.fitAll()
+            # look-audit MF-4 (BB25): FreeCAD 1.1's fitAll() runs its own zoom animation, which zoomed
+            # in, jumped back out when this move started, and zoomed in again (or snapped where its
+            # timer was faster): its animation off while the end is read, as animate_command does
+            grp = App.ParamGet(VIEW)
+            was = grp.GetBool("UseNavigationAnimations", True)
+            try:
+                grp.SetBool("UseNavigationAnimations", False)
+                view.fitAll()
+            finally:
+                grp.SetBool("UseNavigationAnimations", was)
+            try:
+                view.stopAnimating()
+            except Exception as _fw_err:
+                _fw_log("camanim.py:stop-fit", _fw_err)
+            cam = view.getCameraNode()
         end = _state(cam)
     except Exception as error:
         _fw_log("camanim.py:end", error)

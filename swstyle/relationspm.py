@@ -28,6 +28,7 @@
 
 
 
+from . import editobj
 
 _FW_SEEN = set()
 
@@ -65,6 +66,10 @@ try:  # hidden helper geometry (arc Midpoint, arc slot centre arc): not listed, 
     from .fwsketch import helpers as _fw_helpers
 except Exception:
     _fw_helpers = None
+try:
+    from .fwsketch import eqcurv as _fw_eqcurv
+except Exception:
+    _fw_eqcurv = None
 from .widgets import alive, ui_font
 from . import geomkeep
 
@@ -79,7 +84,7 @@ SKETCH_PARAMS = "User parameter:BaseApp/Preferences/Mod/Sketcher"
 
 ORDER = ("Horizontal", "Vertical", "Collinear", "Coradial", "Perpendicular", "Parallel", "Tangent",
          "Concentric", "Midpoint", "Intersection", "Coincident", "Equal", "Symmetric", "Pierce", "Fix",
-         "Merge", "Equal Curve Length")
+         "Merge", "Equal Curve Length", "Equal Curvature")
 
 _equal_curve_length = None
 
@@ -268,13 +273,65 @@ def picked_with_model(sketch):
         obj = entry.Object
         if obj is None or obj.Document.Name != sketch.Document.Name or obj.Name == sketch.Name:
             continue
-        for sub in entry.SubElementNames:
-            if sketch_element(obj, sub, sketch) is not None:
+        for sub in (entry.SubElementNames or ("",)):
+            if sub and sketch_element(obj, sub, sketch) is not None:
                 continue        # the sketch's own, picked through its Body
             element = sub.rsplit(".", 1)[-1] if sub else ""
             if element.startswith(("Edge", "Vertex")):
                 out.append("%s%s.%s" % (MODEL_PREFIX, obj.Name, element))
+                continue
+            # a plane, axis or reference point picked as a whole (in the tree, or Body > Origin > Front Plane)
+            parts = [p for p in sub.split(".") if p and not p.startswith(";")]
+            target = sketch.Document.getObject(parts[-1]) if parts else obj
+            key = "%s%s." % (MODEL_PREFIX, target.Name) if target is not None else None
+            if key and key not in out and target.Name != sketch.Name and _reference_geometry(target):
+                out.append(key)
     return out
+
+
+def _reference_geometry(obj):
+    """'plane', 'line' or 'point' for a plane, axis or reference point (the origin's, a datum), else None."""
+    try:
+        for kind, types in (("plane", ("App::Plane", "PartDesign::Plane", "Part::DatumPlane")),
+                            ("line", ("App::Line", "PartDesign::Line", "Part::DatumLine")),
+                            ("point", ("App::Point", "PartDesign::Point", "Part::DatumPoint"))):
+            if any(obj.isDerivedFrom(t) for t in types):
+                return kind
+    except Exception as _fw_err:
+        _fw_log("relationspm.py:ref-geometry", _fw_err)
+    return None
+
+
+def _reference_item(sketch, sub, obj, count):
+    """Item for a whole plane, axis or reference point picked in the sketch: a plane upright to the sketch is
+    the line it is seen as, an axis its line in the sketch (or the point an upright one pierces), a reference
+    point a point. A plane parallel to the sketch relates to nothing: None."""
+    kind = _reference_geometry(obj)
+    if kind is None:
+        return None
+    _origin, normal = _sketch_frame(sketch)
+    rot = obj.getGlobalPlacement().Rotation
+    geo = MODEL_GEO - count
+    label = obj.Label
+    if kind == "plane":
+        if abs(rot.multVec(App.Vector(0, 0, 1)).dot(normal)) > 1 - 1e-6:
+            return None
+        item = Item(sub, "line", geo, NONE, label, "LineSegment", axis=True, model=(obj.Name, ""))
+    elif kind == "line":
+        local = App.Vector(1, 0, 0) if obj.isDerivedFrom("App::Line") else App.Vector(0, 0, 1)
+        along = abs(rot.multVec(local).dot(normal))
+        if along > 1 - 1e-6:
+
+            # edge (refpierce-fix01; it was a point offering Coincident / Horizontal / Vertical)
+            item = Item(sub, "pierce", geo, NONE, label, "LineSegment", model=(obj.Name, ""), pierce=True)
+        else:
+
+            item = Item(sub, "line", geo, NONE, label, "LineSegment", axis=True, model=(obj.Name, ""),
+                        pierce=along > 1e-6)
+    else:
+        item = Item(sub, "point", geo, START, label, "Point", model=(obj.Name, ""))
+    item.refs = _references_of(sketch, obj.Name, "")
+    return item
 
 
 def _sketch_frame(sketch):
@@ -294,6 +351,8 @@ def _model_item(sketch, sub, count):
     obj = sketch.Document.getObject(name)
     if obj is None:
         return None
+    if not element:
+        return _reference_item(sketch, sub, obj, count)
     shape = _model_shape(obj, element)
     geo = MODEL_GEO - count
     origin, normal = _sketch_frame(sketch)
@@ -378,6 +437,8 @@ def _reference_name(sketch, g):
     ""
     name, element, _automatic = _external_ref(sketch, g)
     obj = sketch.Document.getObject(name) if name else None
+    if obj is not None and not element and _reference_geometry(obj):
+        return obj.Label
     if obj is None or not element:
         return None
     obj = getattr(obj, "FWExtRefOf", None) or obj      # a solid outside the Body: named, not its hidden binder
@@ -410,8 +471,21 @@ def _pierce_point(sketch, obj, element):
     """Where the edge crosses the sketch plane, in sketch coordinates (nearest the sketch
     origin when it crosses more than once), or None."""
     import Part
-    edge = _model_shape(obj, element)
     origin, normal = _sketch_frame(sketch)
+    if not element and _reference_geometry(obj) == "line":
+        # a whole axis (origin or reference): its line, unbounded, meets the plane once (refpierce-fix01)
+        try:
+            e = Part.getShape(obj).Edges[0]
+            p, d = App.Vector(e.Curve.Location), App.Vector(e.Curve.Direction)
+            den = d.dot(normal)
+            if abs(den) < 1e-12:
+                return None
+            hit = p + d * ((origin - p).dot(normal) / den)
+            return sketch.getGlobalPlacement().inverse().multVec(hit)
+        except Exception as _fw_err:
+            _fw_log("relationspm.py:pierce-axis", _fw_err)
+            return None
+    edge = _model_shape(obj, element)
     size = max(edge.BoundBox.DiagonalLength, 1.0) * 4 + origin.distanceToPoint(edge.BoundBox.Center) * 2
     plane = Part.makePlane(size, size, origin - _in_plane(normal, size / 2), normal)
     try:
@@ -555,6 +629,15 @@ def _belongs(point, other):
     return any(abs(point.at[0] - q[0]) < 1e-7 and abs(point.at[1] - q[1]) < 1e-7 for q in other.ends)
 
 
+def _meet_at_ends(a, b):
+    """Two own entities with an end of one where an end of the other is (ends: start, end first)."""
+    if not (a.own and b.own) or len(a.ends) < 2 or len(b.ends) < 2:
+        return False
+    if any(len(e.ends) >= 2 and e.cls == "BSplineCurve" and e.ends[0] == e.ends[1] for e in (a, b)):
+        return False        # a closed (periodic) spline has no end
+    return any(abs(p[0] - q[0]) < 1e-7 and abs(p[1] - q[1]) < 1e-7 for p in a.ends[:2] for q in b.ends[:2])
+
+
 def _centerline(lines):
     """The one construction line or axis among three lines, the mirror line of Symmetric."""
     mirrors = [e for e in lines if e.axis or e.construction]
@@ -642,6 +725,15 @@ def relations_for(items):
             if len(lines) == 1 and len(arcs) == 1 and arcs[0].cls == "ArcOfCircle" and not lines[0].axis \
                     and (equal_curve_length() or _fw_curvelength is not None):
                 keys += ["Equal Curve Length"]      # the line as long as the arc (studies 06, 07)
+        # a spline meeting an arc, a line or a spline at its end: the same curvature there
+        if _fw_eqcurv is not None and any(e.cls == "BSplineCurve" for e in items) \
+                and all(e.cls in ("BSplineCurve", "ArcOfCircle", "LineSegment") and not e.axis for e in items) \
+                and _meet_at_ends(items[0], items[1]):
+            keys += ["Equal Curvature"]
+    elif n == 3 and len(lines) == 1 and len(arcs) == 2 and (lines[0].construction or lines[0].axis):
+
+        if any(e.own for e in arcs):
+            keys += ["Symmetric"]
     elif n == 3 and len(points) == 2 and len(lines) == 1:
         if any(e.own for e in points) and not all(_belongs(p, lines[0]) for p in points):
             keys += ["Symmetric"]
@@ -679,6 +771,14 @@ def _is_arc(sketch, g):
     try:
         geo = sketch.Geometry[g] if g >= 0 else sketch.ExternalGeo[-g - 1]
         return _class(geo) in ("Circle", "ArcOfCircle")
+    except Exception:
+        return False
+
+
+def _is_spline(sketch, g):
+    try:
+        geo = sketch.Geometry[g] if g >= 0 else sketch.ExternalGeo[-g - 1]
+        return _class(geo) == "BSplineCurve"
     except Exception:
         return False
 
@@ -789,7 +889,8 @@ def _covering(sketch, items, any_of=False):
 
 
 _HELD_GROUPS = (("FWOffset_", "Offset Entities"), ("FWOnEdge_", "On Edge"), ("FWGroup_", None), ("FWMidArc_", "Midpoint"),
-                ("FWMidLnC_", "Coincident"), ("FWMidLnM_", "Midpoint"))
+                ("FWMidLnC_", "Coincident"), ("FWMidLnM_", "Midpoint"), ("FWInter_", "Intersection"),
+                ("FWEqCurv_", "Equal Curvature"))
 GROUP_PREFIX = "FWGroup_"
 
 # group (one row in Existing Relations, deleted as one), not a relation per pair
@@ -799,13 +900,16 @@ GROUPED = ("Parallel", "Equal", "Collinear", "Coradial")
 def _name_group(sketch, key, items, first):
     """Names the relations just added (from index first) FWGroup_<k>_<j> when they make one
     relation over three or more picked entities."""
-    if key not in GROUPED or len([e for e in items if e.kind != "point"]) < 3:
+
+    # and Equal) is one row, Symmetric<n>, on the arcs and the centerline
+    sym_arcs = key == "Symmetric" and any(getattr(e, "cls", "") in ("Circle", "ArcOfCircle") for e in items)
+    if (key not in GROUPED and not sym_arcs) or len([e for e in items if e.kind != "point"]) < 3:
         return
     new = list(range(first, len(sketch.Constraints)))
     if len(new) < 2:
         return
     names = {c.Name for c in sketch.Constraints}
-    tag = "C" if key == "Coradial" else ""      # a Coradial group is Coincident + Equal pairs
+    tag = "C" if key == "Coradial" else ("S" if sym_arcs else "")      # a Coradial group is Coincident + Equal pairs
     k = 0
     while any(n.startswith("%s%s%d_" % (GROUP_PREFIX, tag, k)) for n in names):
         k += 1
@@ -837,7 +941,7 @@ def _held_group(name):
 
     for prefix, base in _HELD_GROUPS:
         if name and name.startswith(prefix):
-            if prefix in ("FWOnEdge_", GROUP_PREFIX, "FWMidArc_", "FWMidLnC_", "FWMidLnM_"):
+            if prefix in ("FWOnEdge_", GROUP_PREFIX, "FWMidArc_", "FWMidLnC_", "FWMidLnM_", "FWInter_", "FWEqCurv_"):
                 return name.rsplit("_", 1)[0] + "_", base
             return name, base
     return None
@@ -867,7 +971,9 @@ def existing_relations(sketch, items, everything=False, any_of=False, where=None
         if i in in_locks and i not in locks:
             continue        # the second distance of a Lock: listed with the first, as Fix
         group = _pattern_of(c)
-        if group is not None and group in patterns:
+        if group is not None and group in patterns and c.Type != "Tangent":
+            # fix275: each side's Tangent to the circle is also its own row, Tangent0.. beside
+
             indices = patterns[group]
             if i != indices[0]:
                 continue        # one Patterned relation for the polygon, at its first member
@@ -895,6 +1001,14 @@ def existing_relations(sketch, items, everything=False, any_of=False, where=None
                         keys.append(k)
             if not keys and prefix.startswith(("FWMidLnC_", "FWMidLnM_")):
                 keys = _midline_keys(sketch, indices)
+            if prefix.startswith(GROUP_PREFIX + "S"):
+
+                ends = []
+                for k in keys:
+                    k = ("e", k[1]) if k[0] != "e" and k[1] >= 0 and k[2] in (START, END) else k
+                    if k not in ends:
+                        ends.append(k)
+                keys = ends
             if not keys:
                 continue
         elif c.Type in DIMENSIONS:
@@ -1476,7 +1590,10 @@ def _tangent(sketch, a, b, units, taken):
     joint = _joint(sketch, a, b)
     if joint is not None and joint[0] not in taken:
         taken.append(joint[0])
-        units.append(([("Tangent", joint[1])], [joint[0]]))
+        args = joint[1]
+        if len(args) == 4 and _is_spline(sketch, args[2]) and not _is_spline(sketch, args[0]):
+            args = (args[2], args[3], args[0], args[1])     # stock's solver takes a spline's end tangency spline first
+        units.append(([("Tangent", args)], [joint[0]]))
     else:
         units.append(([("Tangent", (a, b))], []))
 
@@ -1589,6 +1706,22 @@ def plan(sketch, key, items):
     elif key == "Symmetric":
         if len(points) == 2:
             once("Symmetric", pt(points[0]), pt(points[1]), (lines[0].geo, NONE))
+        elif len(arcs) == 2:
+            # symcl-01: two arcs about the centerline: mirrored centres and the same radius (a full circle), or
+            # the ends mirrored and the same radius (an arc: the centres follow)
+            a, b = arcs
+            unit = []
+            if any(e.geo >= 0 and _class(sketch.Geometry[e.geo]) == "Circle" for e in arcs):
+                if not _has(sketch, "Symmetric", [(a.geo, MID), (b.geo, MID), (lines[0].geo, NONE)]):
+                    unit.append(("Symmetric", tuple(_args([(a.geo, MID), (b.geo, MID), (lines[0].geo, NONE)]))))
+            else:
+                for pa, pb in _mirror_pairs(sketch, a.geo, b.geo, lines[0].geo):
+                    if not _has(sketch, "Symmetric", [(a.geo, pa), (b.geo, pb), (lines[0].geo, NONE)]):
+                        unit.append(("Symmetric", tuple(_args([(a.geo, pa), (b.geo, pb), (lines[0].geo, NONE)]))))
+            if not _has(sketch, "Equal", [(a.geo, NONE), (b.geo, NONE)]):
+                unit.append(("Equal", tuple(_args([(a.geo, NONE), (b.geo, NONE)]))))
+            if unit:
+                units.append((unit, []))
         else:
             mirror = _centerline(lines)
             a, b = [e for e in lines if e is not mirror]
@@ -1790,7 +1923,10 @@ def _is_pierce(sketch, g):
             return False
     except Exception:
         return False
-    element = _external_ref(sketch, g)[1]
+    name, element = _external_ref(sketch, g)[:2]
+    if name and not element:            # an axis's crossing point (refpierce-fix01)
+        obj = sketch.Document.getObject(name)
+        return obj is not None and _reference_geometry(obj) == "line"
     return bool(element) and element.startswith("Edge")
 
 
@@ -1802,6 +1938,8 @@ def add_relation(sketch, key, items):
     if key == "Equal Curve Length" and _fw_curvelength is not None \
             and (not equal_curve_length() or not any(e.kind == "line" for e in items)):
         return _add_curve_length_stock(sketch, items)
+    if key == "Equal Curvature" and _fw_eqcurv is not None:
+        return _add_equal_curvature(sketch, items)
     # Part edges and other sketches' entities are referenced with each try and taken
     # back with it; the references come out the same each time (added at the end).
     picked = items
@@ -1870,6 +2008,8 @@ def add_relation(sketch, key, items):
         sketch.solve()
         return False, "Not added: %s would over-define the sketch.%s" % (key, _clash_text(clashes))
     _name_group(sketch, key, picked, len(sketch.Constraints) - sum(len(adds) for adds, _d in accepted))
+    if key == "Intersection" and _fw_helpers is not None:      # fix279: one Intersection row
+        _fw_helpers.name_intersections(sketch, existing)
     doc.commitTransaction()
     _auto_recompute(sketch)
     if reasons and all(r == "redundant" for r in reasons):
@@ -1907,6 +2047,37 @@ def _add_curve_length_stock(sketch, items):
         return False, "Not added: Equal Curve Length would over-define the sketch.%s" % _clash_text(clashes)
     doc.commitTransaction()
     _fw_curvelength.start()
+    _auto_recompute(sketch)
+    return True, ""
+
+
+def _add_equal_curvature(sketch, items):
+    """Equal Curvature (fwsketch/eqcurv.py): the shared end's Tangent plus hidden helpers, one undo step."""
+    doc = sketch.Document
+    edges = [e for e in items if e.kind != "point"]
+    if len(edges) != 2 or not _fw_eqcurv.offer(sketch, edges[0].geo, edges[1].geo):
+        if len(edges) == 2 and _fw_eqcurv._has(sketch, edges[0].geo, edges[1].geo):
+            return False, "The selection already has the Equal Curvature relation."
+        return False, "Equal Curvature needs a spline and an arc, a line or a spline that meet at an end."
+    before = _state(sketch)
+    doc.openTransaction("Add Equal Curvature Relation")
+    try:
+        existing, removed = len(sketch.Constraints), []
+        _fw_eqcurv.add(sketch, edges[0].geo, edges[1].geo, removed)
+        existing -= len(removed)    # the joint's Coincident goes first: the clash list counts without it
+        reason = _worse(_state(sketch), before)
+    except Exception as error:
+        doc.abortTransaction()
+        sketch.solve()
+        return False, "Equal Curvature could not be added: %s" % error
+    if reason is not None:
+        clashes = []
+        if reason == "over":
+            _add_clashes(sketch, existing, clashes)
+        doc.abortTransaction()
+        sketch.solve()
+        return False, "Not added: Equal Curvature would over-define the sketch.%s" % _clash_text(clashes)
+    doc.commitTransaction()
     _auto_recompute(sketch)
     return True, ""
 
@@ -1997,7 +2168,17 @@ def delete_relations(sketch, indices):
     doc = sketch.Document
     doc.openTransaction("Delete Relation" if len(indices) == 1 else "Delete Relations")
     try:
-        sketch.delConstraints(indices, True, False)
+        # Equal Curvature deleted: a Tangent the user had at the joint before stays (eqcurv.own_tangents)
+        # (and the joint of one that made its own Tangent keeps its Coincident: eqcurv.joints)
+        own = _fw_eqcurv.own_tangents(sketch, indices) if _fw_eqcurv is not None else []
+        joints = _fw_eqcurv.joints(sketch, indices) if _fw_eqcurv is not None else []
+        indices = [i for i in indices if i not in own]
+        if indices:
+            sketch.delConstraints(indices, True, False)
+        if own:
+            _fw_eqcurv.restore(sketch, [o - sum(1 for i in indices if i < o) for o in own])
+        if joints:
+            sketch.addConstraint(joints)
         if _fw_references is not None and not hasattr(sketch, "addAutomaticReference"):
             _fw_references.prune(sketch)
     except Exception as error:
@@ -2397,7 +2578,7 @@ def _drawn_at(sketch):
     try:
         gdoc = Gui.getDocument(sketch.Document.Name)
         vp = gdoc.getInEdit()
-        if vp is not None and vp.Object.Name == sketch.Name:
+        if vp is not None and getattr(editobj.of(vp), "Name", None) == sketch.Name:
             return gdoc.EditingTransform
     except Exception as _fw_err:
         _fw_log("relationspm.py:2317", _fw_err)
@@ -2662,6 +2843,15 @@ def _draw_relation(key, p):
         _pen(p, width=1.6)
         _line(p, 3.5, 6, 12.5, 6)
         _line(p, 3.5, 10, 12.5, 10)
+    elif key == "Equal Curvature":
+        _pen(p, _blue(), 1.4)
+        p.drawArc(QtCore.QRectF(1.5, 4, 10, 10), 90 * 16, 90 * 16)
+        path = QtGui.QPainterPath(QtCore.QPointF(6.5, 4))
+        path.cubicTo(QtCore.QPointF(10, 4), QtCore.QPointF(12, 6), QtCore.QPointF(14.5, 10))
+        p.drawPath(path)
+        _pen(p, width=1.4)
+        _line(p, 5.5, 11, 10.5, 11)
+        _line(p, 5.5, 13.5, 10.5, 13.5)
     elif key == "Equal Curve Length":
         _pen(p, width=1.4)
         _line(p, 2.5, 12.5, 13.5, 12.5)
@@ -3571,6 +3761,11 @@ class Panel(QtWidgets.QWidget):
         if value is None:
             return
         step = box.property("singleStep") or 1.0
+        if shown is not None and abs(value - shown) <= 1e-9 * (1.0 + abs(shown)):
+            # fix281: no step, the value shown: nothing to apply. The box re-sends its value when the
+            # page goes (taken off the pane after the sketch changed); applying it then gave the
+            # old entity's length to whatever entity has that number now
+            return
         if shown is not None:
             # FreeCAD's spin box steps from its text, rounded to the user's decimals: step from
 
@@ -3823,7 +4018,7 @@ class Panel(QtWidgets.QWidget):
                 pmhelp.HELP[title] = SKETCH_HELP.get(title, SKETCH_HELP["Properties"])
             return pmhelp.show(self, title)
         except Exception as error:
-            App.Console.PrintWarning("FreeWorks: no help for %s (%s)\n" % (title, error))
+            App.Console.PrintWarning("FreeCAD: no help for %s (%s)\n" % (title, error))
             return None
 
     def delete_current_relation(self):
@@ -4843,7 +5038,7 @@ class RelationsPM(QtCore.QObject):
             sketch.Document.undo()
             sketch.recompute()
         except Exception as error:
-            App.Console.PrintWarning("FreeWorks: Undo last relation change: %s\n" % error)
+            App.Console.PrintWarning("FreeCAD: Undo last relation change: %s\n" % error)
             return False
         self.update()
         return True

@@ -790,7 +790,8 @@ def mirror_part(source_doc, source, normal, base=V(0, 0, 0), name=None, transfer
             from . import insertpart, surfacefeatures
             src = surfacefeatures.make(insertpart.INSERT_PART, new, edit=False, File=source_doc.FileName,
                                        **dict(transfer or {}))
-            src.Label = source.Label + "->"
+
+            src.Label = (os.path.splitext(os.path.basename(source_doc.FileName))[0] or source.Label) + "->"
             if src.Shape.isNull():
                 raise RuntimeError("nothing read")
         except Exception as error:
@@ -1393,7 +1394,13 @@ c.onwheel=e=>{e.preventDefault();zm*=e.deltaY<0?1.1:1/1.1;draw()};onresize=draw;
 def publish_viewer(doc, path):
     """A web page with the model in 3D (turn, zoom, pan in any browser; no add-on needed)."""
     meshes = []
-    for o in doc.Objects:
+    try:
+        from . import publishview       # fh244: what the full viewer shows (components; a Body once, no datums)
+        shown = [o for _n, o, _s in publishview.items(doc)]
+    except Exception as _fw_err:
+        _fw_log("insertextras.py:publish rows", _fw_err)
+        shown = None
+    for o in (shown if shown is not None else doc.Objects):
         shape = getattr(o, "Shape", None)
         if shape is None or shape.isNull() or not shape.Faces:
             continue
@@ -1405,6 +1412,8 @@ def publish_viewer(doc, path):
         except Exception as _fw_err:
             _fw_log("insertextras.py:1340", _fw_err)
         pts, tris = shape.tessellate(max(shape.BoundBox.DiagonalLength / 400.0, 0.01))
+        if not tris:
+            continue
         meshes.append({"v": [round(c, 4) for p in pts for c in (p.x, p.y, p.z)],
                        "f": [i for t in tris for i in t], "c": colour})
     with open(path, "w", encoding="utf-8") as out:
@@ -1584,7 +1593,7 @@ if Gui is not None:
                 ref = [None, ""]
                 if i < len(picks):
                     ref[:] = [picks[i][0], picks[i][1]]
-                    ent.setText("%s %s" % (picks[i][0].Label, picks[i][1].split(".")[-1]))
+                    ent.setText(pmboxes.sw_name("%s %s" % (picks[i][0].Label, picks[i][1].split(".")[-1])))
                 self.slots.append((ent, kind, align, ref))
             self.finish()
             Gui.Selection.addObserver(self)
@@ -1593,7 +1602,7 @@ if Gui is not None:
             for ent, kind, align, ref in self.slots:
                 if ref[0] is None:
                     ref[:] = [App.getDocument(doc).getObject(name), sub]
-                    ent.setText("%s %s" % (ref[0].Label, sub.split(".")[-1]))
+                    ent.setText(pmboxes.sw_name("%s %s" % (ref[0].Label, sub.split(".")[-1])))
                     break
 
         def _done(self):
@@ -1912,20 +1921,33 @@ if Gui is not None:
             if self.face is not None:
                 self.plane.insertItem(0, "Picked face")
                 self.plane.setCurrentIndex(0)
-            self.lay.addRow("Mirror plane", self.plane)
-            self.link = QtWidgets.QCheckBox("Linked to the original")
-            self.link.setToolTip("Untick to break the link to the original part")
-            self.link.setChecked(True)
-            self.lay.addRow(self.link)
 
-            self.lay.addRow(QtWidgets.QLabel("Transfer"))
+            self.datum = _picked_plane() if self.face is None else None
+            if self.datum is not None:
+                if self.plane.findText(self.datum[0]) >= 0:
+                    self.plane.removeItem(self.plane.findText(self.datum[0]))     # listed once, read from the plane
+                self.plane.insertItem(0, self.datum[0])
+                self.plane.setCurrentIndex(0)
+            self.lay.addRow("Mirror plane", self.plane)
+
+            group = QtWidgets.QGroupBox("Transfer")
+            gl = QtWidgets.QVBoxLayout(group)
             self.transfer = {}
             for key, text, default in MIRROR_TRANSFER:
                 cb = QtWidgets.QCheckBox(text)
                 cb.setObjectName("SWMirrorTransfer" + key)
                 cb.setChecked(default)
-                self.lay.addRow(cb)
+                gl.addWidget(cb)
                 self.transfer[key] = cb
+            self.lay.addRow(group)
+
+            group = QtWidgets.QGroupBox("Link")
+            gl = QtWidgets.QVBoxLayout(group)
+            self.break_link = QtWidgets.QCheckBox("Break link to original part")
+            self.break_link.setObjectName("SWMirrorBreakLink")
+            self.break_link.setToolTip("Keep the mirrored bodies as they are now: later changes to the part are not read")
+            gl.addWidget(self.break_link)
+            self.lay.addRow(group)
             self.finish()
 
         def ok(self):
@@ -1938,19 +1960,36 @@ if Gui is not None:
             if text == "Picked face":
                 f = self.face[2]
                 normal, base = f.normalAt(0, 0), f.CenterOfMass
+            elif self.datum is not None and text == self.datum[0]:
+                normal, base = self.datum[1], self.datum[2]
             else:
                 normal = {"Right Plane": V(1, 0, 0), "Top Plane": V(0, 0, 1), "Front Plane": V(0, 1, 0)}[text]
                 base = V(0, 0, 0)
-            if not self.link.isChecked():
+            transfer = {k: cb.isChecked() for k, cb in self.transfer.items()}
+            if self.break_link.isChecked() and doc.FileName:
+                transfer["BreakLink"] = True        # read once with the Transfer choices, then kept
+            if self.break_link.isChecked() and not doc.FileName:
                 new = App.newDocument("Mirror" + doc.Name)
                 o = new.addObject("Part::Feature", "MirrorPart")
                 o.Shape = src.Shape.mirror(base, normal)
                 o.Label = "Mirror" + src.Label
                 new.recompute()
             else:
-                mirror_part(doc, src, normal, base, transfer={k: cb.isChecked() for k, cb in self.transfer.items()})
+                mirror_part(doc, src, normal, base, transfer=transfer)
             Gui.SendMsgToActiveView("ViewFit")
             return True
+
+    def _picked_plane():
+        """fh210: (name, normal, base) of a plane picked in the tree or the view before Mirror Part, else None."""
+        for o in Gui.Selection.getSelection():
+            if o.TypeId not in ("App::Plane", "PartDesign::Plane") and not o.isDerivedFrom("App::Plane"):
+                continue
+            try:
+                pl = o.getGlobalPlacement()
+            except Exception:
+                pl = o.Placement
+            return o.Label, pl.Rotation.multVec(V(0, 0, 1)), pl.Base
+        return None
 
     def _fuse_all(doc, solids):
         o = doc.addObject("Part::MultiFuse", "AllBodies")
@@ -2247,6 +2286,12 @@ if Gui is not None:
                                (doc.Label or doc.Name) + ".html")
         p = _ask_file("Publish to 3D Viewer", "Web page (*.html)", save=True, default=default)
         if p:
+            try:
+                from . import publishview       # the full 3D Viewer page, as the assembly File menu writes it
+                if publishview.start(doc, p):
+                    return
+            except Exception as _fw_err:
+                _fw_log("insertextras.py:publishview", _fw_err)
             publish_viewer(doc, p)
             QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(p))
 

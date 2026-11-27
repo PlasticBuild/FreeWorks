@@ -234,3 +234,18 @@ def _later(name):
     doc = App.listDocuments().get(name)
     if doc is not None:
         rename_defaults(doc)
+
+_RAW = ("out of range", "has no attribute", "NoneType", "is not iterable", "not subscriptable", "unsupported operand",
+        "division by zero", "shape is invalid", "invalid literal", "Traceback", "object is not", "KeyError", "IndexError",
+        "TypeError", "AttributeError", "ValueError")
+
+
+def status_text(obj, what="This feature"):
+    ""
+
+
+    text = (obj.getStatusString() or "").strip()
+    if not text or text.lower() == "error" or any(w in text for w in _RAW):
+        return "%s cannot be made on the selected edge or face. Select a different one." % what
+    return text
+

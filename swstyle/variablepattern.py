@@ -300,6 +300,33 @@ SPEC = sf.Spec(
 _open = {"panel": None}
 
 
+class _DimClicks(QtCore.QObject):
+    """pkg466: a click on a shown seed dimension picks it for the table (not the face behind it)."""
+
+    def __init__(self, panel):
+        QtCore.QObject.__init__(self)
+        self.panel = panel
+
+    def eventFilter(self, widget, event):
+        if event.type() not in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseButtonRelease) or \
+                event.button() != QtCore.Qt.LeftButton:
+            return False
+        try:
+            from . import featuredimshow
+            view = Gui.ActiveDocument.ActiveView
+            x, y, ratio = featuredimshow._coin_pos(widget, event)
+            dims = [d for s in getattr(self.panel, "_shown", []) for d in s.dims]
+            d = featuredimshow.dim_at(view, x, y, ratio, dims)
+        except Exception as _fw_err:
+            App.Console.PrintLog("FreeCAD: variable pattern click: %r\n" % (_fw_err,))
+            return False
+        if d is None:
+            return False
+        if event.type() == QtCore.QEvent.MouseButtonPress:
+            QtCore.QTimer.singleShot(0, lambda: _open["panel"] is self.panel and self.panel.dim_clicked(d))
+        return True
+
+
 def current():
     """The Variable Pattern PropertyManager that is open, or None."""
     return _open["panel"]
@@ -402,12 +429,15 @@ class Panel(sf.Panel):
                     "%.6g" % (seed[c] if value is None and seed[c] is not None else value) if
                     (value is not None or seed[c] is not None) else ""))
         self.grid.blockSignals(False)
-        self.delete_button.setEnabled(bool(rows))
-        self.add_button.setEnabled(bool(columns))
+        names = sorted(f.Name for f in features)
+        if names != getattr(self, "_dims_for", None) or not getattr(self, "_shown", None):
+            self._dims_for = names
+            self._dims_on()
+        # no grey buttons (NO DEAD CONTROLS): a click with nothing to act on says what to do first
         if not features:
             self.note.setText("Pick the seed features first.")
         elif not columns:
-            self.note.setText("Tick the dimensions to vary, then add instances.")
+            self.note.setText("Click the dimensions to vary in the graphics area, then add instances.")
         else:
             self.note.setText("")
         self.busy_table = False
@@ -442,9 +472,18 @@ class Panel(sf.Panel):
             rows[r][c] = None
         self._store(columns, rows)
 
+    def _first(self, text):
+        self.note.setText(text)
+        try:
+            Gui.getMainWindow().statusBar().showMessage(text, 0)
+        except Exception as error:
+            App.Console.PrintLog("FreeCAD: variable pattern note: %r\n" % (error,))
+
     def add_instance(self):
         columns, rows = self._state()
         if not columns:
+            self._first("Pick the seed features first." if not _seeds(self.obj) else
+                        "Tick the dimensions to vary first, then add instances.")
             return
         seed = seed_values(_seeds(self.obj), columns)
         full = [seed] + [[s if v is None else v for v, s in zip(row, seed)] for row in rows]
@@ -458,21 +497,71 @@ class Panel(sf.Panel):
                 new.append(value + (value - before[i]))
             else:
                 new.append(value)
-        if before is None:
-            # the first instance: the seed's values, with the first column stepped by its own size
-            new = [v for v in new]
-            if new and new[0] is not None:
-                new[0] = new[0] * 2 if new[0] else 10.0
+        # the first instance starts as the seed's values, to be typed over (doubling the first column put an
+        # X position of 802 mm at 1604 mm, far off the part)
         rows.append(new)
         self._store(columns, rows)
 
     def _close(self):
         _open["panel"] = None
+        self._dims_off()
         sf.Panel._close(self)
+
+
+    def _dims_on(self):
+        from . import featuredimshow
+        self._dims_off()
+        shown = []
+        for feature in _seeds(self.obj):
+            s = featuredimshow._Shown()
+            try:
+                s.show(feature)
+            except Exception as _fw_err:
+                App.Console.PrintLog("FreeCAD: variable pattern dimensions: %r\n" % (_fw_err,))
+                continue
+            shown.append(s)
+        self._shown = shown
+        if shown and getattr(self, "_dim_filter", None) is None:
+            widget = featuredimshow._viewport()
+            if widget is not None:
+                self._dim_filter = _DimClicks(self)
+                self._dim_widget = widget
+                widget.installEventFilter(self._dim_filter)
+
+    def _dims_off(self):
+        for s in getattr(self, "_shown", []):
+            try:
+                s.hide()
+            except Exception as _fw_err:
+                App.Console.PrintLog("FreeCAD: variable pattern dimensions: %r\n" % (_fw_err,))
+        self._shown = []
+        f, w = getattr(self, "_dim_filter", None), getattr(self, "_dim_widget", None)
+        if f is not None and w is not None:
+            try:
+                w.removeEventFilter(f)
+            except RuntimeError as _fw_err:
+                App.Console.PrintLog("FreeCAD: variable pattern dimensions: %r\n" % (_fw_err,))
+        self._dim_filter = self._dim_widget = None
+
+    def dim_clicked(self, d):
+        """A shown dimension was clicked: it becomes a column of the table (a second click takes it out)."""
+        key = None
+        if d.prop is not None:
+            key = "%s:%s" % (d.obj.Name, d.prop)
+        elif d.index is not None:
+            key = "%s:%s" % (d.obj.Name, _constraint_key(d.obj, d.index))
+        for i in range(self.dims.count()):
+            item = self.dims.item(i)
+            if item.data(QtCore.Qt.UserRole) == key:
+                item.setCheckState(QtCore.Qt.Unchecked if item.checkState() == QtCore.Qt.Checked else QtCore.Qt.Checked)
+                return True
+        self._first("That dimension cannot be varied: pick a sketch dimension or the depth of a seed Extrude.")
+        return True
 
     def delete_instance(self):
         columns, rows = self._state()
         if not rows:
+            self._first("There is no instance to delete: add an instance first.")
             return
         r = self.grid.currentRow() - 1
         rows.pop(r if 0 <= r < len(rows) else len(rows) - 1)

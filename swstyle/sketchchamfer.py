@@ -51,9 +51,28 @@ def _line_ends_at(sketch, point):
     return out
 
 
-def chamfer_corner(sketch, point, d1, second, angle_mode, first=None):
+def _free_name(sketch, base):
+    names = {c.Name for c in sketch.Constraints}
+    k = 1
+    while "%s%d" % (base, k) in names:
+        k += 1
+    return "%s%d" % (base, k)
+
+
+def _tie_equal(sketch, shown, follower):
+    ""
+
+    name = _free_name(sketch, "Chamfer")
+    sketch.renameConstraint(shown, name)
+    sketch.renameConstraint(follower, name + "_t1")
+    sketch.setVirtualSpace(follower, True)
+    sketch.setExpression(".Constraints[%d]" % follower, ".Constraints.%s" % name)
+
+
+def chamfer_corner(sketch, point, d1, second, angle_mode, first=None, equal=False):
     """Chamfers the corner of two lines at point. second is Distance 2, or with angle_mode the
-    Direction 1 angle in degrees. first: the geo of Direction 1. Returns the chamfer line or None."""
+    Direction 1 angle in degrees. first: the geo of Direction 1. equal: Equal distance (one shown
+    dimension). Returns the chamfer line or None."""
     import Part
     C = dimtools._constraint
     ends = _line_ends_at(sketch, point)
@@ -124,6 +143,7 @@ def chamfer_corner(sketch, point, d1, second, angle_mode, first=None):
     dims = [C("Distance", sharp, 1, a, pa, float(d1))]
     if not angle_mode:
         dims.append(C("Distance", sharp, 1, b, pb, float(d2)))
+    made = []
     for d in dims:
         try:
             i = sketch.addConstraint(d)
@@ -133,6 +153,12 @@ def chamfer_corner(sketch, point, d1, second, angle_mode, first=None):
         _, bad = dimtools.state(sketch)
         if bad:
             sketch.setDriving(i, False)
+        made.append(i)
+    if equal and not angle_mode and len(made) == 2 and all(sketch.Constraints[i].Driving for i in made):
+        try:
+            _tie_equal(sketch, made[0], made[1])
+        except Exception as _fw_err:
+            _fw_log("sketchchamfer.py:equal", _fw_err)
     if angle_mode:
         _angle_dimension(sketch, cham, a, pa, second)
     sketch.solve()
@@ -300,7 +326,8 @@ class SketchChamferPage(sketchtoolpm.ToolPage):
         d1, second, ang = self.values()
         failed = 0
         for point, first in self.corners:
-            if chamfer_corner(self.sketch, point, d1, second, ang, first) is None:
+            if chamfer_corner(self.sketch, point, d1, second, ang, first,
+                              equal=not ang and self.equal.isChecked()) is None:
                 failed += 1
         sketchtoolpm._refresh(self.sketch)
         if failed:
@@ -322,12 +349,16 @@ class SketchChamferCommand:
                 "CmdType": "ForEdit"}
 
     def IsActive(self):
-        return contextbar.sketch_in_edit() is not None
+        # sketchfirst-1126: live with a document; with no sketch open it shows the "open a sketch first" page
+        return contextbar.sketch_in_edit() is not None or App.ActiveDocument is not None
 
     def Activated(self):
         sketch = contextbar.sketch_in_edit()
         if sketch is not None:
             sketchtoolpm.open_page(SketchChamferPage(sketch))
+        else:
+            from . import solidfirstlive
+            solidfirstlive.sketch_first("SketchChamfer")
 
 
 def register():

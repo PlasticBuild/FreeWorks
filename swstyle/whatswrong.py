@@ -55,6 +55,8 @@ def errors(doc):
         try:
             if "Invalid" not in obj.State:
                 continue
+            if _redundant_only(obj):
+                continue        # fh256: a Warning row (warnings()), as the Stop and Repair question says
             text = obj.getStatusString() or "Error"
         except Exception:
             continue
@@ -193,13 +195,23 @@ def describe(text):
     return joined.replace("constraints", "relations").replace("constraint", "relation")
 
 
+def _redundant_only(obj):
+    ""
+
+    try:
+        return obj.TypeId == "Sketcher::SketchObject" and bool(obj.RedundantConstraints) and \
+            not obj.ConflictingConstraints and not obj.MalformedConstraints
+    except Exception:
+        return False
+
+
 def warnings(doc):
     """(object, text) for every sketch that solves but has redundant relations, in tree order."""
     found = []
     for obj in doc.Objects:
         try:
-            if obj.TypeId == "Sketcher::SketchObject" and "Invalid" not in obj.State \
-                    and obj.RedundantConstraints:
+            if obj.TypeId == "Sketcher::SketchObject" and obj.RedundantConstraints and \
+                    ("Invalid" not in obj.State or _redundant_only(obj)):
                 found.append((obj, "The sketch has redundant relations."))
         except Exception as _fw_err:
             _fw_log("whatswrong.py:191", _fw_err)
@@ -391,11 +403,13 @@ def warning_icon(size=16):
     pm.fill(Qt.transparent)
     p = QtGui.QPainter(pm)
     p.setRenderHint(QtGui.QPainter.Antialiasing)
-    p.setPen(QtGui.QPen(QtGui.QColor("#8a6a00"), 1))
+    # strokes scale with the mark: at the tree's 9 px corner mark fixed 1 px edge and 1.8 px "!" covered the
+
+    p.setPen(QtGui.QPen(QtGui.QColor("#8a6a00"), min(1.0, size / 16.0)))
     p.setBrush(QtGui.QColor(WARNING_YELLOW))
-    p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(size / 2, 1), QtCore.QPointF(size - 1, size - 1.5),
-                                   QtCore.QPointF(1, size - 1.5)]))
-    pen = QtGui.QPen(QtGui.QColor("#202020"), 1.8)
+    p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(size / 2, 0.5), QtCore.QPointF(size - 0.5, size - 0.5),
+                                   QtCore.QPointF(0.5, size - 0.5)]))
+    pen = QtGui.QPen(QtGui.QColor("#202020"), max(0.8, size * 0.11))
     pen.setCapStyle(Qt.RoundCap)
     p.setPen(pen)
     p.drawLine(QtCore.QPointF(size / 2, size * 0.38), QtCore.QPointF(size / 2, size * 0.66))

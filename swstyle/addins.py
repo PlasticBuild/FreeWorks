@@ -73,6 +73,15 @@ def app_active(kind, target):
         return False
 
 
+def _app_installed(target):
+    try:
+        from . import extapps
+        return bool(extapps.installed(target))
+    except Exception as _fw_err:
+        _fw_log("addins.py:installed", _fw_err)
+        return True
+
+
 def set_app_active(kind, target, on):
     t0 = time.perf_counter()
     if kind == "extapp":
@@ -392,6 +401,8 @@ class AddInsDialog(QtWidgets.QDialog):
                 self._row(name, module_active(target), module_startup(target), target, kind, target)
         self._group("Other Add-ins")
         for name, kind, target in APPS:
+            if kind == "extapp" and not _app_installed(target):
+                continue        # addins-1127: no row for an add-in that is not downloaded yet (the Download button is below); nothing ticked that shows nothing
             self._row(name, app_active(kind, target), module_startup(target), target, kind, target)
         for wb in sorted(names, key=lambda n: workbench_label(n).lower()):
             if wb in used or wb in HIDDEN_WORKBENCHES:

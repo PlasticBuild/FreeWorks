@@ -414,7 +414,7 @@ class SlicingPanel:
         sub = sub.split(".")[-1] if sub else ""
         if obj is not None and _plane_of(obj, sub) is not None:
             self.plane = (obj, sub)
-            QtCore.QTimer.singleShot(0, self._show)
+            from . import safe_later as _sl; _sl.later(0, self._show, self, "box")
 
     def removeSelection(self, doc, name, sub):
         pass

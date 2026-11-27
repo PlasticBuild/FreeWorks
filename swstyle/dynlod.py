@@ -13,6 +13,10 @@
 
 
 
+
+
+
+
 _FW_SEEN = set()
 
 
@@ -307,8 +311,60 @@ def _event(obj, event):
     return False
 
 
+OPTIMIZE_COMMAND = "SWStyle_OptimizeZoomPanRotate"
+_KEPT = "Level of detail before Optimize off"      # the slider's stop while the menu switch is off
+
+
+def optimized():
+    """View > Display > Optimize Zoom/Pan/Rotate is checked: the view leaves out small components while it moves."""
+    return SMALL_PX.get(setting(), 0.0) > 0
+
+
+def set_optimized(on):
+    from . import optionspages
+    now = setting()
+    if on and now == "Off":
+        back = optionspages.stored("Performance", _KEPT, "More (slower)")
+        optionspages.set_stored("Performance", SETTING, back if SMALL_PX.get(back, 0.0) > 0 else "More (slower)")
+    elif not on and now != "Off":
+        optionspages.set_stored("Performance", _KEPT, now)
+        optionspages.set_stored("Performance", SETTING, "Off")
+        stop()
+    _sync()
+
+
+def _sync():
+    state = optimized()
+    try:
+        actions = Gui.Command.get(OPTIMIZE_COMMAND).getAction()
+    except Exception:
+        actions = []
+    for action in actions:
+        if action.isChecked() != state:
+            blocked = action.blockSignals(True)
+            action.setChecked(state)
+            action.blockSignals(blocked)
+
+
+class _Optimize:
+    def GetResources(self):
+        return {"MenuText": "Optimize Zoom/Pan/Rotate", "Pixmap": "zoom-all",
+                "ToolTip": "While you zoom, pan or rotate an assembly, leaves out the components that are small "
+                           "on screen and draws them again when the view stops",
+                "Checkable": optimized(), "CmdType": "ForEdit"}
+
+    def Activated(self, checked=None):
+        set_optimized(not optimized())
+
+    def IsActive(self):
+        _sync()     # follows the Options slider too
+        return Gui.ActiveDocument is not None
+
+
 def install():
     from PySide import QtCore
+    if OPTIMIZE_COMMAND not in Gui.listCommands():
+        Gui.addCommand(OPTIMIZE_COMMAND, _Optimize())
     from . import events
     events.register("dynamic-level-of-detail", (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseMove,
                                                 QtCore.QEvent.MouseButtonRelease, QtCore.QEvent.Wheel), _event)

@@ -33,6 +33,7 @@ except ImportError:  # pragma: no cover
     from PySide6 import QtCore, QtGui, QtWidgets
 
 COINCIDENT, CONCENTRIC, SYMMETRIC = "Coincident", "Concentric", "Symmetric"
+EQUAL_CURVATURE = "Equal Curvature"     # fix316: at an Equal Curvature joint (fwsketch/eqcurv.py)
 START, END, MID = 1, 2, 3
 GREEN = (0.0, 0.6, 0.0)      # used only when the glyph colour is not set
 OFFSET = 4
@@ -53,7 +54,7 @@ def _round(geo):
     return type(geo).__name__ in ("Circle", "ArcOfCircle", "Ellipse", "ArcOfEllipse")
 
 
-def _shown(sketch, i):
+def _shown(sketch, i, kind=None):
     try:
         from .. import sketchview
         if not sketchview.shown("Relations"):
@@ -62,6 +63,8 @@ def _shown(sketch, i):
         _fw_log("fwsketch/pointglyphs.py:shown", _fw_err)
     try:        # Hide in the relation list (setVisibility) clears IsVisible; the virtual space is not shown
         c = sketch.Constraints[i]
+        if kind == EQUAL_CURVATURE:         # its Tangent sits in hidden space so FreeCAD draws no Tangent glyph
+            return 'IsVisible="0"' not in c.Content
         return not c.InVirtualSpace and 'IsVisible="0"' not in c.Content
     except Exception:
         return True
@@ -92,6 +95,13 @@ def relations(sketch):
     except Exception as _fw_err:
         _fw_log("fwsketch/pointglyphs.py:relations", _fw_err)
     try:
+        # fix316: Equal Curvature's square by the joint, at its Tangent's point (FreeCAD's Tangent glyph is not drawn)
+        for i, c in enumerate(sketch.Constraints):
+            if c.Type == "Tangent" and (c.Name or "").startswith("FWEqCurv_") and int(c.FirstPos) in (START, END):
+                out.append((i, EQUAL_CURVATURE, (c.First, int(c.FirstPos))))
+    except Exception as _fw_err:
+        _fw_log("fwsketch/pointglyphs.py:equal curvature", _fw_err)
+    try:
 
         # first one (glyphs.paint_symmetric); this square is the second point's
         from . import glyphs
@@ -107,6 +117,9 @@ def symbol(p, kind, u):
     if kind == SYMMETRIC:
         from . import glyphs
         glyphs._symbol(p, "Constraint_Symmetric", u)
+    elif kind == EQUAL_CURVATURE:
+        from . import glyphs
+        glyphs._symbol(p, "SW_EqualCurvature", u)
     elif kind == CONCENTRIC:
         p.drawEllipse(QtCore.QRectF(2.5 * u, 2.5 * u, 11 * u, 11 * u))
         p.drawEllipse(QtCore.QRectF(5.5 * u, 5.5 * u, 5 * u, 5 * u))
@@ -248,7 +261,7 @@ def update(view, sketch):
         try:
             placement = sketch.getGlobalPlacement()
             for i, kind, (geo, pos) in relations(sketch):
-                if not _shown(sketch, i):
+                if not _shown(sketch, i, kind):
                     continue
                 v = sketch.getPoint(geo, pos) if geo >= 0 or geo == -1 else None
                 if v is None:

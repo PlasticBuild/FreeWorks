@@ -256,7 +256,7 @@ class RectanglePanel(_SketchPanel):
 class CirclePanel(_SketchPanel):
     TITLE = "Circle"
     PIXMAP = "Sketcher_CreateCircle"
-    HINT = "Click the centre, then a point on the circle."
+    HINT = "Click the center, then a point on the circle."
 
     def make(self, pts):
         c, e = pts
@@ -277,7 +277,7 @@ class ArcPanel(_SketchPanel):
     TITLE = "Arc"
     PIXMAP = "Sketcher_CreateArc"
     POINTS = 3
-    HINT = "Click the centre, the start, then the end (counterclockwise)."
+    HINT = "Click the center, the start, then the end (counterclockwise)."
 
     def make(self, pts):
         c, s, e = pts
@@ -427,7 +427,7 @@ class CenterRectanglePanel(_PolyPanel):
     TITLE = "Center Rectangle"
     PIXMAP = "Sketcher_CreateRectangle_Center"
     KIND = "CenterRectangle"
-    HINT = "Click the centre, then a corner."
+    HINT = "Click the center, then a corner."
 
     def points(self, pts):
         c, b = pts
@@ -439,7 +439,7 @@ class PolygonPanel(_PolyPanel):
     TITLE = "Polygon"
     PIXMAP = "Sketcher_CreateHexagon"
     KIND = "Polygon"
-    HINT = "Click the centre, then a vertex (6 sides)."
+    HINT = "Click the center, then a vertex (6 sides)."
     SIDES = 6
 
     def build(self):
@@ -472,7 +472,7 @@ class EllipsePanel(_PolyPanel):
     PIXMAP = "Sketcher_CreateEllipseByCenter"
     KIND = "Ellipse"
     POINTS = 3
-    HINT = "Click the centre, the end of the major axis, then a point for the minor axis."
+    HINT = "Click the center, the end of the major axis, then a point for the minor axis."
 
     def points(self, pts):
         return ellipse_points(*pts)
@@ -611,7 +611,7 @@ COMMANDS = {
     "FreeWorks_DrawSketchPoint": ("Point", "Sketcher_CreatePoint", "Sketches a point."),
     "FreeWorks_DrawSketchSpline": ("Spline", "Sketcher_CreateBSpline", "Sketches a spline through points."),
     "FreeWorks_DrawSketchCenterRectangle": ("Center Rectangle", "Sketcher_CreateRectangle_Center",
-                                            "Sketches a rectangle from its centre."),
+                                            "Sketches a rectangle from its center."),
     "FreeWorks_DrawSketchSlot": ("Straight Slot", "Sketcher_CreateSlot", "Sketches a straight slot."),
     "FreeWorks_DrawSketchPerimeterCircle": ("Perimeter Circle", "Sketcher_Create3PointCircle",
                                             "Sketches a circle through three points."),

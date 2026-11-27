@@ -256,6 +256,31 @@ class _NameDelegate(QtWidgets.QStyledItemDelegate):
     def setModelData(self, editor, model, index):
         model.setData(index, editor.currentText())
 
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        try:
+
+            if not (index.data() or "") and index.row() == index.model().rowCount() - 1:
+                painter.save()
+                painter.setPen(option.palette.color(QtGui.QPalette.Disabled, QtGui.QPalette.Text))
+                painter.drawText(option.rect.adjusted(4, 0, -4, 0), int(Qt.AlignLeft | Qt.AlignVCenter),
+                                 NEW_ROW_TEXT)
+                painter.restore()
+        except Exception as _fw_err:
+            _fw_log("customprops.py:new-row", _fw_err)
+
+
+NEW_ROW_TEXT = "<Type a new property>"
+
+
+def link_text(doc, name, config=None):
+    ""
+
+    file_name = os.path.basename(doc.FileName) if getattr(doc, "FileName", "") else doc.Label + ".FCStd"
+    if config:
+        return '"SW-%s@@%s@%s"' % (name, config, file_name)
+    return '"SW-%s@%s"' % (name, file_name)
+
 
 class _ValueDelegate(QtWidgets.QStyledItemDelegate):
     ""
@@ -265,8 +290,13 @@ class _ValueDelegate(QtWidgets.QStyledItemDelegate):
         box = QtWidgets.QComboBox(parent)
         box.setEditable(True)
         box.setObjectName("SWCustomPropertiesValueBox")
-        doc = App.ActiveDocument
-        links = ['$PRP:"%s"' % n for n in LINKS]
+        editor = self.parent().parent() if self.parent() is not None else None
+        doc = getattr(editor, "doc", None) or App.ActiveDocument
+        config = getattr(editor, "config", None) if type(editor).__name__ == "ConfigEditor" else None
+
+
+        links = list(LINKS)
+        box.textActivated.connect(lambda t, b=box, d=doc, c=config: self._link_picked(b, t, d, c))
         try:
             own = index.model().index(index.row(), 0).data() or ""
             links += ['$PRP:"%s"' % n for n, _k, _v in read(doc) if n and n != own]
@@ -283,6 +313,15 @@ class _ValueDelegate(QtWidgets.QStyledItemDelegate):
         box.setProperty("swLastText", "")
         box.currentTextChanged.connect(lambda t, b=box: self._unit_picked(b, t))
         return box
+
+    @staticmethod
+    def _link_picked(box, text, doc, config):
+        if text not in LINKS or doc is None:
+            return
+        box.blockSignals(True)
+        box.setEditText(link_text(doc, text, config))
+        box.blockSignals(False)
+        box.setProperty("swLastText", box.currentText())
 
     @staticmethod
     def _unit_picked(box, text):
@@ -407,6 +446,7 @@ def remember_mass(doc, config=None):
         from . import fileprops
         config = config or fileprops.active_configuration(doc)
         values = {what: _linked(doc, what, None, 0) for what in MASS_LINKS}
+        values["_volume_mm3"] = sum(b.Shape.Volume for b in _bodies(doc))     # fh238: the volume whatever the units
         meta = dict(doc.Meta or {})
         text = json.dumps(values)
         if meta.get(CFG_MASS + config) != text:
@@ -454,11 +494,41 @@ def _config_material(doc, config):
     return mat.current(doc)[1] or "", mat.density(doc)
 
 
-def _mass_text(grams):
+def _mass_text(grams, doc=None):
     ""
 
-    unit = _doc_unit("mass") or "g"
+    unit = _doc_unit("mass", doc) or "g"
     return "%.4f %s" % (grams / UNIT_SIZES["mass"][unit], unit)
+
+
+def _small(value, decimals=2):
+    """value at decimals, or at 3 significant digits when that would show 0 (a density in g/mm^3)."""
+    if value and abs(value) < 10 ** -decimals:
+        return "%.3g" % value
+    return "%.*f" % (decimals, value)
+
+
+def _volume_text(mm3, doc=None):
+    length = _doc_unit("length", doc) or "mm"
+    return "%.2f %s^3" % (mm3 / UNIT_SIZES["length"][length] ** 3, length)
+
+
+def _area_text(mm2, doc=None):
+    length = _doc_unit("length", doc) or "mm"
+    return "%.2f %s^2" % (mm2 / UNIT_SIZES["length"][length] ** 2, length)
+
+
+def _density_text(kg_m3, doc=None):
+    ""
+    length, mass = _doc_unit("length", doc) or "mm", _doc_unit("mass", doc) or "g"
+    g_mm3 = kg_m3 * 1.0e-6
+    value = g_mm3 * UNIT_SIZES["length"][length] ** 3 / UNIT_SIZES["mass"][mass]
+    return "%s %s/%s^3" % (_small(value), mass, length)
+
+
+def _point_text(p, doc=None):
+    size = UNIT_SIZES["length"][_doc_unit("length", doc) or "mm"]
+    return "%.2f, %.2f, %.2f" % tuple(float(v) / size for v in p)
 
 
 def _kept_with_material(doc, what, config, kept):
@@ -469,15 +539,18 @@ def _kept_with_material(doc, what, config, kept):
     if what == "Material":
         return name or "Material <not specified>"
     if what == "Density":
-        return "%.2f kg/m^3" % density
+        return _density_text(density, doc)
     over = massprops.overrides(doc, config)
     if what == "Mass":
         if over.get("mass"):
-            return _mass_text(float(over["mass"]))
-        vol = float(str(kept.get("Volume", "0")).split()[0])
-        return _mass_text(vol * density * 1.0e-6)
+            return _mass_text(float(over["mass"]), doc)
+        if "_volume_mm3" in kept:
+            vol = float(kept["_volume_mm3"])
+        else:
+            vol = float(str(kept.get("Volume", "0")).split()[0])
+        return _mass_text(vol * density * 1.0e-6, doc)
     if what == "Center of Mass" and over.get("center"):
-        return "%.2f, %.2f, %.2f" % tuple(float(v) for v in over["center"][:3])
+        return _point_text(over["center"][:3], doc)
     return kept[what]
 
 
@@ -575,25 +648,26 @@ def _linked(doc, what, config, depth):
         vol = sum(b.Shape.Volume for b in bodies)            # mm^3
         from . import material as mat
         density = mat.density(doc) * 1.0e-9                  # kg/m^3 -> kg/mm^3
+        # fh238: in the part's own Mass/Section Properties units, whichever document is active
         if what == "Volume":
-            return "%.2f mm^3" % vol
+            return _volume_text(vol, doc)
         if what == "Mass":
-            return _mass_text(_mass(doc, bodies, density))
+            return _mass_text(_mass(doc, bodies, density), doc)
         if what == "Density":
-            return "%.2f kg/m^3" % (density * 1.0e9)
+            return _density_text(density * 1.0e9, doc)
         if what == "Surface Area":
-            return "%.2f mm^2" % sum(b.Shape.Area for b in bodies)
+            return _area_text(sum(b.Shape.Area for b in bodies), doc)
         if what == "Center of Mass":
             if not bodies or vol <= 0:
                 return "0, 0, 0"
             try:
                 r = _measured(doc, bodies, density)
                 if r is not None:
-                    return "%.2f, %.2f, %.2f" % tuple(r["center"])
+                    return _point_text(r["center"], doc)
             except Exception as _fw_err:
                 _fw_log("customprops.py:424", _fw_err)
             c = sum((b.Shape.CenterOfMass * b.Shape.Volume for b in bodies), App.Vector()) * (1.0 / vol)
-            return "%.2f, %.2f, %.2f" % (c.x, c.y, c.z)
+            return _point_text((c.x, c.y, c.z), doc)
         return mat.current(doc)[1] or "Material <not specified>"
     if what == "File Name":
         return os.path.splitext(os.path.basename(doc.FileName))[0] if doc.FileName else doc.Label
@@ -658,7 +732,25 @@ def _kind_of(unit):
     return next((k for k, units in UNIT_SIZES.items() if unit in units), None)
 
 
-def _doc_unit(kind):
+MASS_SYMBOLS = {"grams": "g", "kilograms": "kg", "pounds": "lb"}
+_BASE = [False]         # fh238: while a value is converted to a [unit], links give mm and g (no rounding twice)
+
+
+def _doc_unit(kind, doc=None):
+    """The unit symbol of kind (length, mass, volume, angle): doc's own Document Properties > Units >
+    Mass/Section Properties (fh238), else the active document's unit system."""
+    if _BASE[0]:
+        return {"length": "mm", "mass": "g", "volume": "mm^3", "angle": "deg"}.get(kind)
+    if doc is not None:
+        try:
+            from . import unitspage
+            length, mass, _ld, _md = unitspage.mass_units(doc)
+            ls = unitspage.LENGTH_SIZES.get(length, ("mm", 1.0))[0]
+            ms = MASS_SYMBOLS.get(mass, "g")
+            if ls in UNIT_SIZES["length"] and ms in UNIT_SIZES["mass"]:
+                return {"length": ls, "mass": ms, "volume": ls + "^3", "angle": "deg"}.get(kind)
+        except Exception as _fw_err:
+            _fw_log("customprops.py:_doc_unit", _fw_err)
     try:
         from . import massprops
         length, mass = DOC_UNITS.get(massprops.unit_system(), DOC_UNITS["MMGS"])
@@ -667,7 +759,7 @@ def _doc_unit(kind):
     return {"length": length, "mass": mass, "volume": length + "^3", "angle": "deg"}.get(kind)
 
 
-def convert_unit(evaluated, unit):
+def convert_unit(evaluated, unit, doc=None):
     """An evaluated value converted to unit and written with it ('25.4' mm, [in] -> '1 in'). A bare number
     counts as millimetres (or degrees for an angle unit); a value written with its own unit is read in it."""
     m = re.match(r"^\s*(-?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\s*([A-Za-z^0-9]*)\s*$", str(evaluated))
@@ -676,7 +768,12 @@ def convert_unit(evaluated, unit):
     number, own = float(m.group(1)), m.group(2)
     own_kind = _kind_of(own) if own else None
     if unit == "units":
-        unit = _doc_unit(own_kind or "length")
+        was = _BASE[0]
+        _BASE[0] = False
+        try:
+            unit = _doc_unit(own_kind or "length", doc)
+        finally:
+            _BASE[0] = was
     kind = _kind_of(unit)
     if kind is None:
         return evaluated
@@ -692,7 +789,13 @@ def convert_unit(evaluated, unit):
 def evaluate(doc, kind, value, config=None, depth=0):
     expr, unit = split_unit(value.strip())
     if unit is not None and (unit == "units" or _kind_of(unit)) and depth < 8:
-        return convert_unit(evaluate(doc, kind, expr, config, depth + 1), unit)
+        was = _BASE[0]
+        _BASE[0] = True
+        try:
+            inner = evaluate(doc, kind, expr, config, depth + 1)
+        finally:
+            _BASE[0] = was
+        return convert_unit(inner, unit, doc)
     text = value.strip()
     if "@@@" in text:
         got = cut_list_value(doc, text)
@@ -1142,9 +1245,15 @@ class PropertyTab(QtWidgets.QWidget):
             label = QtWidgets.QLabel()
             full = name + ":"
             text = label.fontMetrics().elidedText(full, Qt.ElideRight, cap)
-            label.setText(text)
             if text != full:
+                # look-audit TP-2 (BB22): a name too long for the column ("EngineeringApproval") goes whole on
+                # its own line with its field under it, not cut to "EngineeringAp..."
+                label.setText(full)
                 label.setToolTip(name)
+                form.addRow(label)
+                form.addRow(w)
+                continue
+            label.setText(text)
             form.addRow(label, w)
         self.area.setWidget(page)
 

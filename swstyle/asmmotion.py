@@ -471,9 +471,8 @@ def physics(asm, sim):
             continue
         text = m.Formula
         v = motor_values(m)
-        if v and v.get("type", TYPES[0]) != TYPES[0]:
-            pass        # a linear motor: the formula is in mm already
-        drives.append((joint, text))
+        # a linear motor: the formula is in mm already, and it slides its component (asmpkg360)
+        drives.append((joint, text, bool(v and v.get("type", TYPES[0]) != TYPES[0])))
     from . import asmloads
     from . import asmtimeline as tl
     o = tl.study_options(sim)
@@ -735,11 +734,9 @@ class MotionPane(QtWidgets.QWidget):
                 if obj is not None and plc is not None and not obj.Placement.isSame(plc, 1e-9):
                     obj.Placement = plc
             axis, deg = tl.view_angle(d, t)
-            if axis is not None:
-                self.camera.turn(tl.model_centre(self.asm), axis, deg)
             tl.apply_looks(self.asm, self.sim, t)
             tl.apply_mates(self.asm, self.sim, t)
-            tl.apply_view_keys(self.sim, t)
+            self._view_at(axis, deg, t)
             self.last_cam = tl.camera_now()         # the study turned the view, not a hand
             self.time.setText("%.2f sec" % t)
             Gui.updateGui()
@@ -1143,6 +1140,20 @@ class MotionPane(QtWidgets.QWidget):
         self.own = (out, {"keyed": True, "views": views, "motor": True})
         self.frames = len(out) + 1
 
+    def _view_at(self, axis, deg, t):
+        """The view at t: the Orientation and Camera Views keys, then the Animation Wizard's Rotate model
+        turn on top of them (asmpkg360: a view key used to undo the wizard's turn, its start row too)."""
+        from . import asmtimeline as tl
+        keyed = tl.apply_view_keys(self.sim, t)
+        if axis is None:
+            return
+        if keyed:
+            cam = tl._Camera()
+            cam.capture()
+            cam.turn(tl.model_centre(self.asm), axis, deg)
+        else:
+            self.camera.turn(tl.model_centre(self.asm), axis, deg)
+
     def show_frame(self, i):
         if self.frames <= 0:
             self.time.setText("0.00 sec")
@@ -1159,10 +1170,8 @@ class MotionPane(QtWidgets.QWidget):
                     if obj is not None and plc is not None:
                         obj.Placement = plc
                 axis, deg = self.own[1]["views"][k]
-                if axis is not None:
-                    self.camera.turn(tl.model_centre(self.asm), axis, deg)
                 tl.apply_looks(self.asm, self.sim, k * float(self.sim.cTimeStepOutput))
-                tl.apply_view_keys(self.sim, k * float(self.sim.cTimeStepOutput))
+                self._view_at(axis, deg, k * float(self.sim.cTimeStepOutput))
                 self.last_cam = tl.camera_now()
             finally:
                 self._applying = was        # still the study moving them while the view updates below
@@ -1693,7 +1702,7 @@ class MotorPanel:
     def _motion_picked(self, i):
         ""
         if self.motion.itemText(i) in FUNCTION_MOTIONS:
-            QtCore.QTimer.singleShot(0, self.edit_function)
+            from . import safe_later as _sl; _sl.later(0, self.edit_function, self, "motion")
 
     def edit_function(self, modal=True):
         from . import asmfunction
@@ -1717,7 +1726,7 @@ class MotorPanel:
 
     def addSelection(self, doc, obj, sub, pnt):
         self.doc.Name      # its document closed: this raises here and selguard drops the observer
-        QtCore.QTimer.singleShot(0, lambda: selguard.quiet(lambda: self._pick(self.doc.getObject(obj), sub)))
+        from . import safe_later as _sl; _sl.later(0, lambda: selguard.quiet(lambda: self._pick(self.doc.getObject(obj), sub)), self, "where")
 
     def removeSelection(self, *args):
         pass
@@ -2078,7 +2087,7 @@ class ResultsPanel:
         return _series(self.pane, self.comp.currentData(), self.sub.currentText())
 
     def addSelection(self, doc, obj, sub, pnt):
-        QtCore.QTimer.singleShot(0, lambda: self._pick(doc, obj, sub))
+        from . import safe_later as _sl; _sl.later(0, lambda: self._pick(doc, obj, sub), self, "comp")
 
     def _pick(self, doc, obj, sub):
         if self.closed:

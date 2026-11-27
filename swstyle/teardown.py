@@ -146,6 +146,26 @@ def drop_observers():
 
 
 # --- Python-owned Qt objects ------------------------------------------------------------------
+def _holds_foreign(obj):
+    """orphanfix-1127: True when obj has a child (at any depth) that Python did not create."""
+    try:
+        for child in obj.findChildren(QtCore.QObject):
+            if not _shiboken.createdByPython(child):
+                return True
+    except Exception:
+        return True
+    return False
+
+
+_LET_GO = []
+
+
+def _let_go(obj):
+    """orphanfix-1127: obj is not deleted here; a reference is kept so it stays as it is while FreeCAD ends (the PC:
+    shiboken.invalidate on it crashed the same way as deleting it)."""
+    _LET_GO.append(obj)
+
+
 def delete_orphans():
     """Delete the QObjects Python created and owns that have no parent, while the QApplication
     still exists (otherwise Python deletes them after it, during its own shutdown)."""
@@ -173,6 +193,13 @@ def delete_orphans():
                 continue            # went with an orphan deleted before it
             if isinstance(obj, QtCore.QTimer):
                 obj.stop()
+            if _holds_foreign(obj):
+                # orphanfix-1127: it holds Qt objects FreeCAD made and still points at (swmenus' SWLeftOutMenus parks
+                # the menus a workbench change left behind): deleting it deleted them under FreeCAD, an access
+                # violation in this post routine at every close (PC fault.txt, teardown.py:178). It is let go
+                # instead: kept as it is while FreeCAD ends.
+                _let_go(obj)
+                continue
             if isinstance(obj, QtWidgets.QWidget):
                 obj.hide()
             _shiboken.delete(obj)

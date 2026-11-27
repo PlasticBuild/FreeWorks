@@ -356,13 +356,16 @@ def _density(comp, default):
     try:
         from . import material
         doc = getattr(part, "Document", None)
-        value = material.current(doc)[0] if doc is not None and doc is not comp.Document else None
-        if value:
-            return float(value)
+        if doc is not None and doc is not comp.Document:
+
+            # typed in its Document Properties, else 1000 kg/m^3 (never FreeCAD's 1 kg/m^3 "Default")  (asmpkg356)
+            return float(material.density(doc))
     except Exception as _fw_err:
         _fw_log("asmevaluate.py:352", _fw_err)
     for obj in (part, getattr(part, "Tip", None)):
         mat = getattr(obj, "ShapeMaterial", None)
+        if mat is not None and (getattr(mat, "UUID", "") == "7f9fd73b-50c9-41d8-b7b2-575a030c1eeb" or getattr(mat, "Name", "") == "Default"):
+            continue
         try:
             d = mat.PhysicalProperties.get("Density") if mat is not None else None
             if d:
@@ -412,7 +415,7 @@ class VisualizationWindow(ReportWindow):
         self.prop.setObjectName("SWAssemblyVisualizationProperty")
         self.prop.addItems(PROPERTIES)
         self.prop.currentIndexChanged.connect(lambda *_: self.refresh())
-        self.colours = QtWidgets.QCheckBox("Show colours")
+        self.colours = QtWidgets.QCheckBox("Show colors")
         self.colours.setChecked(True)
         self.colours.toggled.connect(lambda *_: self.refresh())
         self.options.addWidget(QtWidgets.QLabel("Property:"))
@@ -1088,9 +1091,9 @@ TOOLS = (
     ("SWStyle_ClearanceVerification", "Clearance Verification",
      "Checks the gaps between components against a minimum clearance.", clearance_verification, True),
     ("SWStyle_HoleAlignment", "Hole Alignment",
-     "Finds holes in different components that line up but are off centre.", hole_alignment, True),
+     "Finds holes in different components that line up but are off center.", hole_alignment, True),
     ("SWStyle_AssemblyVisualization", "Assembly Visualization",
-     "Lists and colours the components by mass, volume, faces, triangles or rebuild time.", assembly_visualization, True),
+     "Lists and colors the components by mass, volume, faces, triangles or rebuild time.", assembly_visualization, True),
     ("SWStyle_MateXpert", "MateXpert",
      "Finds the mates that do not hold, and the ones to suppress so the rest solve.", matexpert, True),
     ("SWStyle_AssemblyPerformance", "Performance Evaluation",
@@ -1128,9 +1131,9 @@ CATALOG = (
     ("ClearanceVerification", "Clearance Verification", "SWStyle_ClearanceVerification", "ASSEMBLIES_CLEARANCE_VERIFICATION",
      "Checks the gaps between components against a minimum clearance.", "Clearance\nVerification"),
     ("HoleAlignment", "Hole Alignment", "SWStyle_HoleAlignment", "ASSEMBLIES_HOLE_ALIGNMENT",
-     "Finds holes in different components that line up but are off centre.", "Hole\nAlignment"),
+     "Finds holes in different components that line up but are off center.", "Hole\nAlignment"),
     ("AssemblyVisualization", "Assembly Visualization", "SWStyle_AssemblyVisualization", "ASSEMBLIES_VISUALIZATION",
-     "Lists and colours the components by a property.", "Assembly\nVisualization"),
+     "Lists and colors the components by a property.", "Assembly\nVisualization"),
     ("MateXpert", "MateXpert", "SWStyle_MateXpert", "ASSEMBLIES_MATEXPERT",
      "Finds the mates that do not hold.", None),
     ("AssemblyPerformance", "Performance Evaluation", "SWStyle_AssemblyPerformance", "ASSEMBLIES_PERFORMANCE",

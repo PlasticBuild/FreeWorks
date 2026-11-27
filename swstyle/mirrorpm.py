@@ -74,6 +74,32 @@ def features_of(body):
     return [o for o in body.Group if o.isDerivedFrom("PartDesign::Feature") and hasattr(o, "AddSubShape")]
 
 
+def _hole_group(obj):
+    """A Hole Wizard feature holding holes on several faces (3D sketch positions, holegroup.py)."""
+    try:
+        from . import holegroup
+        return isinstance(getattr(obj, "Proxy", None), holegroup.HoleGroup)
+    except Exception:
+        return False
+
+
+def is_feature(obj, body):
+    ""
+
+
+    return obj in features_of(body) or (_hole_group(obj) and obj in body.Group)
+
+
+def originals(features):
+    """What FreeCAD's Mirrored / pattern copies: a Hole Wizard feature stands for its holes."""
+    out = []
+    for f in features:
+        for o in (list(getattr(f, "Holes", []) or []) if _hole_group(f) else [f]):
+            if o not in out:
+                out.append(o)
+    return out
+
+
 PATTERN_TYPES = ("PartDesign::LinearPattern", "PartDesign::PolarPattern", "PartDesign::MultiTransform",
                  "PartDesign::Scaled")
 
@@ -400,7 +426,7 @@ class MirrorPanel:
         self.propagate = QtWidgets.QCheckBox("Propagate visual properties", options)
         self.propagate.setObjectName("SWMirrorPropagate")
         self.propagate.setChecked(True)
-        self.propagate.setToolTip("The copies take the originals' colour")
+        self.propagate.setToolTip("The copies take the originals' color")
         self.propagate.toggled.connect(lambda on: self.update())
         lay.addWidget(self.propagate)
         self.full = QtWidgets.QRadioButton("Full preview", options)
@@ -449,7 +475,7 @@ class MirrorPanel:
         if obj is None:
             return
         obj, sub = refplane.resolve(obj, sub)
-        QtCore.QTimer.singleShot(0, lambda: self._picked(obj, sub))
+        from . import safe_later as _sl; _sl.later(0, lambda: self._picked(obj, sub), self, "message")
 
     def _picked(self, obj, sub):
         try:
@@ -560,7 +586,7 @@ class MirrorPanel:
             self.active = "plane"
             return
         feature = None
-        if not sub and (obj in features_of(self.body) or is_pattern(obj, self.body)):
+        if not sub and (is_feature(obj, self.body) or is_pattern(obj, self.body)):
             feature = obj
         elif sub.startswith("Face"):
             feature = feature_of_face(self.body, obj, sub)
@@ -956,7 +982,7 @@ class MirrorPanel:
                         m.TransformMode = "Whole shape"
                     else:
                         m.TransformMode = "Features"
-                        m.Originals = list(self.features)
+                        m.Originals = originals(self.features)
                     m.MirrorPlane = (obj, [sub])
                 else:
                     m.Plane = [(obj, [sub])]
