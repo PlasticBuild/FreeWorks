@@ -23,7 +23,7 @@ jobs:
             echo "package.xml version ${VERSION} does not match tag ${TAG}"; exit 1
           fi
           test -f InitGui.py
-          BAD=$(git ls-files | grep -E '^swstyle/resources/icons/|NOT-FOR-DISTRIBUTION|\.lck$|(^|/)\.~\$|\.(exe|dll|so|AppImage|sldprt|sldasm|slddrw)$|__pycache__|\.pyc$' || true)
+          BAD=$(git ls-files | grep -E 'NOT-FOR-DISTRIBUTION|\.lck$|(^|/)\.~\$|\.(exe|dll|so|AppImage|sldprt|sldasm|slddrw)$|__pycache__|\.pyc$' || true)
           if [ -n "$BAD" ]; then echo "Files that must not ship:"; echo "$BAD"; exit 1; fi
 
       - name: Build the zip

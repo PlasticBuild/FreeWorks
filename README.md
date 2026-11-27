@@ -12,7 +12,7 @@ FreeWorks is an independent add-on for FreeCAD. Install it into your existing Fr
 
 See the [0.4.0-alpha release notes](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.0-alpha) for what is new and for known issues.
 
-The add-on draws its own command icons. See [Icons](#icons).
+The alpha icons come in light and dark sets. See [Icons](#icons).
 
 [Download the six-column icon comparison PDF](https://raw.githubusercontent.com/PlasticBuild/FreeWorks/main/docs/FreeWorks-Icon-Comparison.pdf)
 
@@ -43,9 +43,9 @@ Orca, Bambu, PrusaSlicer, and Diotopo are optional in-app downloads. Each is dow
 
 ## Icons
 
-The add-on ships its own drawn command icons (`swstyle/resources/icons-drawn`). A command with no drawn icon uses FreeCAD's own icon, or a small tile with its initials. No icon pack is downloaded or included.
+The add-on ships its alpha icon set in `swstyle/resources/icons`: a light set (`png/`, `fc/`) and a dark set (`dark/`). It picks the set that matches FreeCAD's theme. These icons were made with AI tools for this alpha and are styled after the commercial-CAD look this add-on follows. A command that has no icon in the set uses the add-on's drawn icon (`swstyle/resources/icons-drawn`), then FreeCAD's own icon, then a tile with its initials.
 
-To use icons of your own, put them in a folder with one subfolder per command (`png/<NAME>/<size>.png`). Then set the `IconRoot` preference (Tools > Edit parameters > Preferences/Mod/FreeWorks) or the `SWSTYLE_ICONS` environment variable to that folder, and restart FreeCAD.
+To use icons of your own instead, set the `IconRoot` preference (Tools > Edit parameters > Preferences/Mod/FreeWorks) or the `SWSTYLE_ICONS` environment variable to a folder with the same layout, and restart FreeCAD.
 
 ## Repository layout
 

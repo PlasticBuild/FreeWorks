@@ -1,0 +1,6402 @@
+{
+  "kind": "FreeWorksIconPack",
+  "name": "V2 Dark",
+  "note": "Authored V2 silhouettes with dark-panel color decisions for each command.",
+  "source": {
+    "normalV2Sha256": "d2a1adae28778c0d0186471b17cecc2ba9ff53614bebc344d2c58b0a97b3593d",
+    "candidateL": "9f53a1ac4b59868f6141e5d90ee7b4837e29bc19d3564b90dbbc193c46c61b2a",
+    "publicReadComparison": false
+  },
+  "families": {
+    "2DTO3D_CREATE_SKETCH_FROM_SEL": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "ANNOTATIONS_AREA_HATCH": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "APPEARANCE_MANAGER_TAB_DISABLED": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "ASSEMBLIES_BOM": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "ASSEMBLIES_CLEARANCE_VERIFICATION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "ASSEMBLIES_HOLE_ALIGNMENT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "ASSEMBLIES_INTERFERENCE_DETECTION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "ASSEMBLIES_LARGE_ASSEMBLY_MODE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "ASSEMBLIES_MATEXPERT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "ASSEMBLIES_PERFORMANCE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "ASSEMBLIES_VISUALIZATION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "ASSEMBLY_LIBRARY": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "ASSEMBLY_TAB": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "ASSEM_SOLID_BODY_FOLDER": [
+      20,
+      32,
+      40
+    ],
+    "ASSY_VISUALIZATION_TAB": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "BLOCK_ADD_REMOVE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "BLOCK_EDIT": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "BLOCK_EXPLODE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "BLOCK_INSERT": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "BLOCK_MAKE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "BLOCK_REBUILD": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "BLOCK_SAVE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "CHECK_MARK": [
+      16,
+      24,
+      32
+    ],
+    "CMD_PROPERTIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "COLLAPSE_HORIZ": [
+      20,
+      32,
+      40
+    ],
+    "COLLAPSE_NORMAL": [
+      20,
+      32,
+      40
+    ],
+    "CONFIGURATION_TAB": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "CONFIGURATION_TABLE": [
+      20,
+      32,
+      40
+    ],
+    "CONFIG_HIDE_SHOW_CUSTOM_PROPS": [
+      20,
+      32,
+      40
+    ],
+    "CONTENT_MANAGER_TAB": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "CURVES_COMPOSITE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "CURVES_HELIX": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "CURVES_PROJECTED": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "CURVES_REF_POINTS": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "CURVES_THROUGH_REFERENCE_POINTS": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "D2TO3D_AUXILIARY": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "D2TO3D_BACK": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "D2TO3D_BOTTOM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "D2TO3D_CUT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "D2TO3D_EXTRUDE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "D2TO3D_FRONT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "D2TO3D_LEFT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "D2TO3D_RIGHT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "D2TO3D_TOP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "DATA_MIGRATION_IMPORTED_GEOMETRY": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "DATA_MIGRATION_RECOGNIZE_FEATURES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "DIMENSIONS_ANGULAR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "DIMENSIONS_ANGULAR_RUNNING": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "DIMENSIONS_BASELINE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "DIMENSIONS_CHAIN": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "DIMENSIONS_CHAMFER": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "DIMENSIONS_FULLY_DEFINE_SKETCH": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "DIMENSIONS_HORIZ": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "DIMENSIONS_ORDINATE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "DIMENSIONS_SCAN_EQUAL": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "DIMENSIONS_SYMMETRIC_DIAMETER": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "DIMENSIONS_VERT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "DISPLAY_MANAGER_TAB": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "DISPMGR_APPEAR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "DISPMGR_DECAL": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "DISPMGR_SCENE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "DOCUMENT_RECOVERY_TAB": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "DRAWINGS_SECTION_VIEW": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "DVE_TAB": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "EDITCOMP_EXIT": [
+      103,
+      154,
+      206,
+      257,
+      309,
+      413
+    ],
+    "EDIT_EXIT_NOSAVE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "EV_COSTING": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "EV_MANUFACTURABILITY_CHECK": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "EV_ON_DEMAND": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "EV_PART_REVIEWER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "EV_SUSTAINABILITY": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "EXIT_SKETCH_CANCEL": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "EXPANDER_NORMAL": [
+      20,
+      32,
+      40
+    ],
+    "EXPAND_HORIZ": [
+      20,
+      32,
+      40
+    ],
+    "FEATURES_ADVANCED_HOLE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_BOUNDARY_BOSS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_BOUNDARY_CUT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_BOUNDARY_SURFACE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_CAVITY": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_CHAMFER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_CHAMFER_DISTANCE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_CHAMFER_FACE_FACE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_CHAMFER_OFFSET_FACE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_CHAMFER_VERTEX": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_CIRCULAR_PATTERN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_COMBINE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_CONVERT_TO_MESH": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_COSMETIC_THREAD": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_CREATE_ASSEMBLY": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_CURVES": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_CURVE_DRIVEN_PATTERN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_CUT_WITH_SURFACE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_DEFORM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_DELETE_BODY": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_DELETE_FACE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_DOME": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_DRAFT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_EXTRUDE_BOSS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_EXTRUDE_CUT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_FACE_FILLET": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_FILLET": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_FILL_PATTERN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_FLEX": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_FREEFORM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_FULL_ROUND_FILLET": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_HEAL_EDGES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_HOLE_WIZARD": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_INDENT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_INTERSECT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_JOIN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_LINEAR_PATTERN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_LIP_GROOVE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_LOFTED_BOSS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_LOFTED_CUT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_MID_SURFACE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_MIRROR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_MIRROR_PATTERN": [
+      20,
+      32,
+      40
+    ],
+    "FEATURES_MOUNTING_BOSS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_MOVE_COPY_BODY": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_MOVE_FACE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_REPLACE_FACE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_REVOLVED_BOSS_BASE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_REVOLVED_CUT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_RIB": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_SCALE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_SEGMENT_MESH": [
+      20,
+      32,
+      40
+    ],
+    "FEATURES_SHELL": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_SKETCH_DRIVEN_PATTERN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_SNAP_HOOK": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_SNAP_HOOK_GROOVE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_SPLIT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_SPLIT_LINE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_STUD_WIZARD": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_SWEPT_BOSS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_SWEPT_CUT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_TABLE_DRIVEN_PATTERN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_THICKEN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_THICKENED_CUT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_THREAD": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_TRIM_SURFACE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_UNSUPPRESS_DEPENDENTS": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_UNTRIM_SURFACE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FEATURES_VARIABLE_FILLET": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_VARIABLE_PATTERN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FEATURES_WRAP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FILEMENU_COLLAPSE": [
+      20,
+      32,
+      40
+    ],
+    "FILEMENU_EXPAND": [
+      20,
+      32,
+      40
+    ],
+    "FILE_EXPLORER_TAB": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FLYOUT_2D_TO_3D": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FLYOUT_ADD_INS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FLYOUT_ANNOTATIONS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FLYOUT_DIMXPERT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FLYOUT_QUICK_SNAPS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FLYOUT_REF_GEO": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FLYOUT_SIMULATION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FLYOUT_SURFACES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FLYOUT_TOOLS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FONTTOOLBAR_LAYER_PROP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FORMAT_PAINTER": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FORUM_TAB": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_ALIGN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_BOX": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_CREASE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_CYLINDER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_DELETE_LOOPS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_DISK": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_EDIT_MERGE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_EXTRUDE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_EXTRUDE_FACE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_FILL_HOLE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_INSERT_LOOP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_MERGE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_QUADBALL": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_RECTANGLE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_REVOLVE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_RING": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_SUBDIVIDE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_SWEEP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_SYMMETRY": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FREESHAPE_TORUS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_AddComment": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_AddCurvatureControl": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_AddDisplayState": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_AddTangencyControl": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_AddToFavorites": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_AddToNewFolder": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_AddWalkThrough": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_AlignSketch": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ArrangeIcons": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_AsmDesignBuild": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_AsmDesignCheck": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_AsmDesignCheckFile": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_AsmDesignChecker": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_AsmDesignLearn": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_AsmGroundPlane": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_AsmMateReference": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_AsmRefCS": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_AsmRefGeometry": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_AsmRefPoint": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_AutoRepairRelation": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_BlendCurve": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_BoundingBox": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_CAM_Surface": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_CAM_Waterline": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_Cartoon": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_Cascade": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_CenterOfMass": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_ChangeDisplayStates": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ChangeTransparency": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_CheckActiveDocument": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_CheckSketchForFeature": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_CloseAll": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_CompositeCurve": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_ConvertToGenericSpline": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ConvertToMesh": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ConvertToSpline": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ConvertToStyleSpline": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_CreateConnectionPoint": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_CurveThroughXYZPoints": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_Curves": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_Defeature": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DeleteFace": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_DeleteHole": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_DeleteKeepBody": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DerivedSketch": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DesignCheckBuild": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_DesignCheckFile": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_DesignCheckFolder": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_DesignCheckLearn": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_DesignStudyParameters": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DetachSegmentOnDrag": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DeviationAnalysis": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_Dissolve": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DissolvePath": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DissolveSketchText": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_DraftQualityHLR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_Draw3DDrawingView": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawAddRevision": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawAddSheet": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawAlignHorizontalCenter": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawAlignHorizontalOrigin": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawAlignVerticalCenter": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawAlignVerticalOrigin": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawAlternatePosition": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawAreaHatch": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawAutoBalloon": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawAutodimension": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawAutomaticBorder": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawAuxiliaryView": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawBOM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawBalloon": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawBaselineDimension": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawBendTable": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawBreak": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawBreakAlignment": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawBrokenOut": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawCaterpillar": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawCenterMark": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawCenterline": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawChamferDimension": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawCircularNotePattern": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawCrop": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawDatumFeature": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawDatumTarget": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawDefaultAlignment": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawDetailView": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawDimAlignCollinear": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawDimAlignParallel": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawDimAutoArrange": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawDimBreakAlignment": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawDimSpaceEvenly": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawDowelPin": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawEditSheet": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawEditSheetFormat": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawEmptyView": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawEndTreatment": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawFormatPainter": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawGeneralTable": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawGeometricTolerance": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawHideView": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawHoleCallout": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawHoleTable": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawHorizontalOrdinate": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawLinearNotePattern": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawLocationLabel": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawLockViewPosition": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawMagneticLine": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawMakeSectionLine": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawMarkupColor": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawMarkupDraw": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawMarkupEraser": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawMarkupNote": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawMarkupOptions": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawMarkupSelect": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawMarkupToggle": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawMarkupTouch": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawModelItems": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawModelView": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawMultiJogLeader": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawNote": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawOpenModel": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawOrdinateDimension": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawPredefinedView": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawProjectedView": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawPunchTable": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawRelativeView": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawRemoveCrop": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawRemovedSection": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawReplaceModel": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawRevisionCloud": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawRevisionSymbol": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawRevisionTable": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawSaveSheetFormat": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawSectionView": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawSheetProperties": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawShowHiddenViews": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawSpellChecker": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawStackedBalloon": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawStandard3View": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawSurfaceFinish": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawTangentRemoved": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawTangentVisible": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawTangentWithFont": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawTangentWithHiddenEnds": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawTitleBlockFields": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawTitleBlockTable": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawUpdateTable": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawUpdateView": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawVerticalOrdinate": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawViewPalette": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawViewProperties": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawWeldSymbol": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawWeldTable": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DrawZoomToMarkup": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_DynamicAnnotationViews": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_EV_OnDemand": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_EditFeature": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_EditRoute": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_EditWires": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_ElecAuto": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_ElecStart": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_Equations": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_ExplodeLineSketch": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ExtendSurface": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ExtrudedSurface": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_FilledSurface": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_FlattenRoute": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_FloXpress": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_GridSystem": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_HelixSpiral": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_HideAllTypes": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_Hyperlink": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ImportFromTo": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_InsertConnector": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_InsertControlVertex": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_InsertObject": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_InsertPart": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_InsertSplinePoint": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_Instant3D": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_InvertSelection": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_Isolate": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_KnitSurface": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_Layout": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_LineColor": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_LineFormat": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_LineStyle": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_LineThickness": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_LoftedSurface": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_MBD_AutoPair": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MBD_Capture": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MBD_Compare": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MBD_CopyScheme": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MBD_Dynamic": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MBD_Note": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MBD_PDF": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MBD_PDFTemplate": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MBD_RefDim": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MBD_STEP": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MBD_SurfaceFinish": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MBD_Views": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MBD_Weld": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MagnifiedSelection": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MakePartFromBlock": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MergeSketches": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_MirrorSketch": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ModelBreakView": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ModifySketch": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_MoveFace": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_NewAssemblyInAssembly": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_NewWindow": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_NoSolveMove": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_Oblong": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_OffsetSurface": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_OpenDrawing": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_OverrideDimsOnDrag": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_PackAndGo": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_PipeAuto": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_PipeFitting": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_PipeStart": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_PlanarSurface": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_PlayWalkThrough": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_PowerSelect": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_PreviousSelection": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_Print3D": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ProjectedCurve": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RadiateSurface": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_Redraw": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_RelCollinear": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelConcentric": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelEqual": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelFix": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelFixPoint": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelHorizontal": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelMerge": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelMidpoint": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelOnEdge": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelParallel": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelPerpendicular": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelSymmetric": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelTangent": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelVertical": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RelaxSpline": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_Reload": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_RemoveAxesAlignment": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RepairDanglingRelations": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ReverseEndpointTangent": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RevolvedSurface": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RotateAboutSceneFloor": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_RouteLine": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_RuledSurface": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_S3D_Boundary": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_S3D_Cylinder": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_S3D_Deviation": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_S3D_Plane": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_S3D_Poisson": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_S3D_SegmentManual": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_S3D_Sphere": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_S3D_Triangulate": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_SIM_Wizard": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_SM_BaseShape": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SM_NewSketch": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SM_UnfoldUpdate": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SaveBodies": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_SelectAssociatedGeometry": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ShadedSketchContours": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_ShapeBinder": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ShortcutBar": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_ShowCurvatureCombs": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ShowInflectionPoints": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ShowMinimumRadius": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ShowSplineControlPolygon": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SilhouetteEntities": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_SimpleHole": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SimplifySpline": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SketchArcOverlay": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SketchDimensionDriven": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SketchPicture": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SketchXpert": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_Slicing": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SplineDecreaseDegree": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SplineDecreaseKnotMultiplicity": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SplineIncreaseDegree": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SplineIncreaseKnotMultiplicity": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SplineProportional": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SplineShowComb": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SplineShowDegree": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SplineShowKnotMultiplicity": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SplineShowPoleWeight": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SplineShowPolygon": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_Suppress": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_SurfaceChamfer": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SurfaceFlatten": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_SweptSurface": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_TakeSnapshot": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_TangentEdgesPhantom": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_TangentEdgesRemoved": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_TangentEdgesVisible": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_Texture3D": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_Thread": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_TileHorizontally": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_TileVertically": [
+      16,
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ToggleInternalGeometry": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_ToggleModelBreak": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_TubeAuto": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_TubeFitting": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_TubeStart": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_TurnCamera": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "FW_Unsuppress": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_UserAuto": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_UserStart": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_WireLibrary": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_WireList": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_YUpViewOrientation": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "FW_ZUpViewOrientation": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "I3DVIEW_APPLY_SCENE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_AXES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_BODYCOMPARISON": [
+      20,
+      32,
+      40
+    ],
+    "I3DVIEW_CAMERA_VIEW": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_CHANGE_VIEW_ORIENT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_CURVATURE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_DEVIATION_ANALYSIS": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "I3DVIEW_DISPLAY_STYLE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_DRAFT_ANALYSIS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_EDIT_APPEAR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_HIDE_SHOW_ITEMS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_HLR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_HLV": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_ORIGINS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_PAN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_PERSPECTIVE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_PLANES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_PREV_VIEW": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_REAL_VIEW_GRAPHICS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_ROTATE_VIEW": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_SECT_VIEW": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_SETTINGS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_SHADED": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_SHADED_EDGES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_SHADOWS_IN_SHADED": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_SKETCHES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_THICKNESS_ANALYSIS": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "I3DVIEW_UNDERCUT_ANALYSIS": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "I3DVIEW_WIREFRAME": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_ZEBRA": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_ZOOM_AREA": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_ZOOM_FIT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_ZOOM_IN_OUT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "I3DVIEW_ZOOM_SELECTION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "ICON_PINNED": [
+      20,
+      32,
+      40
+    ],
+    "ICON_UNPINNED": [
+      20,
+      32,
+      40
+    ],
+    "INFERENCE_PARALLEL_SNAP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "INFERENCE_PERP_SNAP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "INFERENCE_TANGENT_SNAP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "INK_COLOR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "LASSO_SELECTION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "LAYOUT_ADD_RELATION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "LAYOUT_DISPLAY_DEL_RELATION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "LAYOUT_SMART_DIM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MAKE_ASSEMBLY_FROM_PART": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MAKE_DRAWING_FROM_PART": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MARKUP_COLOR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MARKUP_DRAW": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MARKUP_ERASE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MARKUP_FILE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MARKUP_NOTE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MARKUP_SELECT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MARKUP_TOUCH": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MBD_ANGLE_DIMENSION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MBD_AUTO_SCHEME": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MBD_BASIC_LOCATION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MBD_BASIC_SIZE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MBD_DATUM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MBD_DATUM_TARGET": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MBD_GEOMETRIC_TOLERANCE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MBD_LOCATION_DIMENSION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MBD_PATTERN_FEATURE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MBD_SIZE_DIMENSION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MBD_STACK_UP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MBD_TOLERANCE_STATUS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MESH_DECIMATE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MINMAX_CLOSE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MINMAX_CLOSE_HOVER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MINMAX_HELP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MINMAX_LOGGED_OUT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MINMAX_MAXIMIZE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MINMAX_MINIMIZE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MINMAX_RESTORE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MOLD_CORE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MOLD_FOLDERS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MOLD_PARTING_LINE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MOLD_PARTING_LINE_ANALYSIS": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "MOLD_PARTING_SURFACE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MOLD_SHUT_OFF_SURFACES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "MOLD_TOOLING_SPLIT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "OVERLAY_EDUCATIONAL": [
+      20,
+      32,
+      40
+    ],
+    "OVERLAY_FMTREE_ERROR": [
+      20,
+      32,
+      40
+    ],
+    "OVERLAY_FMTREE_WARNING": [
+      20,
+      32,
+      40
+    ],
+    "PART": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PART_HIDDEN": [
+      20,
+      32,
+      40
+    ],
+    "PART_TAB": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_AUTO_SHAPE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_AUTO_SKETCH_ENTITIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_AUTO_SPLINE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_CONVERT_TO_ENTITIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_CONVERT_TO_SHAPE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_DRAW": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_ERASER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_POWER_MODIFY": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_PROTRACTOR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_RULER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_SELECT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_SKETCH": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PEN_TOUCH": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "PIN_ACTIVE": [
+      20
+    ],
+    "PIN_NORMAL": [
+      20
+    ],
+    "PM_DETAILED_PREVIEW": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "PM_HELP": [
+      16
+    ],
+    "PM_OK": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "PM_REVERSE_DIRECTION": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "PM_SK_CLOSE": [
+      103,
+      154,
+      206,
+      257,
+      309,
+      413
+    ],
+    "QS_ANGLE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_CENTER_POINT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_GRID": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_HV": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_HV_POINT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_INTERSECTION": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_LENGTH": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_MIDPOINT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_NEAREST": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_PARALLEL": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_PERPENDICULAR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_POINT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_QUADRANT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "QS_TANGENT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "RAPID_SKETCH": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "REFGEO_AXIS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "REFGEO_BOUNDING_BOX": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "REFGEO_CSYS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "REFGEO_MATE_REF": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "REFGEO_PLANE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "REFGEO_POINT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "RENDERING_EDIT_APPEARANCE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "RENDER_EDIT_DECAL": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SEARCH_COMMANDS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SELECTIONFILTER_FACES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SELECT_OTHER": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_3D_SKETCH": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_3PT_ARC": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_3PT_ARC_SLOT": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_3PT_CENTER_RECT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_3PT_CORNER_RECT": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_ADD_DIM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_ALIGN_GRID": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_AUTO_DIM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_BELT_CHAIN": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_CENTERLINE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_CHAMFER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_CIRCLE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_CIR_PATTERN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_CLOSE_SKETCH_TO_MODEL": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_CONIC": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_CONSTRUCT_GEOM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_CONVERT_ENTITIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_COPY_ENTITIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_CORNER_RECT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_CPRPT_ARC": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_CTRPT_ARC_SLOT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_CTRPT_CIRCLE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_CTRPT_STRAIGHT_SLOT": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_CTR_RECT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_DYNAMIC_MIRROR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_ELLIPSE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_EQUATION_CURVE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_EXTEND_ENTITIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_FACE_CURVES": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_FILLET": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_FIT_SPLINE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_GRID_SNAP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_INK": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_INSTANT_2D": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_INTERSECTION_CURVE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_JOG_LINE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_LINE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_LINEAR_PATTERN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_MAKE_PATH": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_MIDPT_LINE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_MIRROR_ENTITIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_MODIFY": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_MOVE_ENTITIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_NEW_SKETCH": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_NUMERIC_INPUT": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_OFFSET_ENTITIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_OFFSET_ON_SURFACE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_PARABOLA": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_PARALLELOGRAM": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_PARTIAL_ELLIPSE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_PATH_LENGTH_DIMENSION": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_POINT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_POLYGON": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_PREVIEW_DIMENSION": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_REPLACE_ENTITY": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_ROTATE_ENTITIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_SCALE_ENTITIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_SEGMENT": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_SELECT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_SKETCH": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_SPLINE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_SPLINE_ON_SURFACE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_SPLIT_ENTITIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_STRAIGHT_SLOT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_STRETCH_ENTITIES": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SKETCH_STYLE_SPLINE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_TANGET_ARC": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_TEXT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_TRIM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SKETCH_XPERT": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "SM_BASE_FLANGE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_BEND_NOTCH": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_BEND_TABLE_FROM_FILE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_BEND_TABLE_NEW": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_BREAK_CORNER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_CLOSED_CORNER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_CONVERT_TO_SHEET_METAL": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_CORNERS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_CORNER_RELIEF": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_CORNER_TRIM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_CROSS_BREAK": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_EDGE_FLANGE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_EXPORT_TO_DXF_DWG": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_FLATTEN": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_FOLD": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_FORMING_TOOL": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_GUSSET": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_HEM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_INSERT_BENDS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_JOG": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_LOFTED_BEND": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_MITER_FLANGE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_NORMAL_CUT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_NO_BENDS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_RIP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_SKETCHED_BEND": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_STAMP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_SWEPT_FLANGE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_TAB_AND_SLOT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_UNFOLD": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_VENT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SM_WELDED_CORNER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_CANCEL": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_CLOSE_DLG": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_COPY": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_CUT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_DELETE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_FILE_PROP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_HELP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_NEW": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_OPEN": [
+      20,
+      32,
+      64,
+      128
+    ],
+    "STANDARD_OPTIONS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_PAGE_SETUP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_PASTE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_PRINT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_PRINT_PREVIEW": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_PROPERTIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_REBUILD": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_REDO": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_SAVE": [
+      20,
+      32,
+      64,
+      128
+    ],
+    "STANDARD_SAVEALL": [
+      20,
+      32,
+      64,
+      128
+    ],
+    "STANDARD_SAVEAS": [
+      20,
+      32,
+      64,
+      128
+    ],
+    "STANDARD_SAVE_WITH_OPTIONS_SWXPB": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_SELECT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_SELECT_ENTIRE_DOC": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_SELECT_OVER_GEOMETRY": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "STANDARD_UNDO": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "SURFACES_FROM_MESH": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "TABLES_DESIGN_TABLE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "TASKPANE_COLLAPSE": [
+      20,
+      32,
+      40
+    ],
+    "TASKPANE_EXPAND": [
+      20,
+      32,
+      40
+    ],
+    "TASKPANE_HOME_TAB": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TASKPANE_OPTIONS": [
+      20,
+      32,
+      40
+    ],
+    "TOOLBOX": [
+      16,
+      64,
+      100
+    ],
+    "TOOLS_CHECK": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TOOLS_COMPARE": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "TOOLS_DESIGN_STUDY": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TOOLS_EQNS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TOOLS_FEATURE_PAINT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TOOLS_FIND_MODIFY": [
+      20,
+      32,
+      40,
+      64
+    ],
+    "TOOLS_GEOM_ANALYSIS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TOOLS_IMPORT_DIAGNOSTICS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TOOLS_MASS_PROPS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TOOLS_MEASURE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TOOLS_PREVIOUS_RELEASE_CHECK": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TOOLS_SECTION_PROPS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TOOLS_SENSOR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TOOLS_STATS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TOOLS_SYM_CHECK": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TREE_ANNOTATION_FOLDER": [
+      20,
+      32,
+      40
+    ],
+    "TREE_COLLAPSED_NORMAL": [
+      20,
+      32,
+      40
+    ],
+    "TREE_EXPANDED_NORMAL": [
+      20,
+      32,
+      40
+    ],
+    "TREE_FEATURE_FILTER": [
+      20,
+      32,
+      40
+    ],
+    "TREE_HISTORY_FOLDER": [
+      20,
+      32,
+      40
+    ],
+    "TREE_MATERIAL_FOLDER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "TREE_ORIGIN": [
+      20,
+      32,
+      40
+    ],
+    "TREE_SENSOR_FOLDER": [
+      20,
+      32,
+      40
+    ],
+    "TREE_SHEET_METAL": [
+      20,
+      32,
+      40
+    ],
+    "VIEWORIENT_BACK": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_BOTTOM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_DIAMETRIC": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_FRONT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_ISOMETRIC": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_LEFT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_NEW_VIEW": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_NORMAL_TO": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_RESET_STD": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_RIGHT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_SINGLE_VIEW": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_TOP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_TRIMETRIC": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_UPDATE_STD": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWORIENT_VIEW_SELECTOR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWPORT_FOUR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWPORT_LINK": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWPORT_SINGLE": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWPORT_TWO_H": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEWPORT_TWO_V": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_ALL_ANNOTATIONS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_BEND_LINES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_BODIES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_BOUNDING_BOX": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_CAMERAS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_CENTER_OF_MASS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_COORDINATE_SYSTEMS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_CURVES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_DIMENSION_NAMES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_GRID": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_LIGHTS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_MARKUPS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_PARTING_LINES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_POINTS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_PRIMARY_PLANES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_SELECTOR": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_SKETCH_DIMENSIONS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_SKETCH_PLANES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_SKETCH_RELATIONS": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_TEMPORARY_AXES": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "VIEW_WELD_BEAD": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_DEFINE_CONNECTION_ELEMENT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_END_CAP": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_GUSSET": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_INSERT_CONNECTION_ELEMENT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_PATTERN_CONNECTION_ELEMENT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_PIERCE_POINT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_PRIMARY_MEMBER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_SECONDARY_MEMBER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_STRUCTURAL_MEMBER": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_STRUCTURE_SYSTEM": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_TRIM_EXTEND": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_WELDMENT": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_WELDMENT_CUT_LIST": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ],
+    "WE_WELD_BEAD": [
+      20,
+      32,
+      40,
+      64,
+      96,
+      128
+    ]
+  },
+  "missing": [],
+  "freecadOverrides": {
+    "document-new": "STANDARD_NEW",
+    "document-open": "STANDARD_OPEN",
+    "document-save": "STANDARD_SAVE",
+    "document-save-as": "STANDARD_SAVEAS",
+    "Std_SaveAll": "STANDARD_SAVEALL",
+    "document-print": "STANDARD_PRINT",
+    "document-print-preview": "STANDARD_PRINT_PREVIEW",
+    "edit-undo": "STANDARD_UNDO",
+    "edit-redo": "STANDARD_REDO",
+    "edit-cut": "STANDARD_CUT",
+    "edit-copy": "STANDARD_COPY",
+    "edit-paste": "STANDARD_PASTE",
+    "edit-delete": "STANDARD_DELETE",
+    "view-refresh": "STANDARD_REBUILD",
+    "preferences-system": "STANDARD_OPTIONS",
+    "document-properties": "STANDARD_FILE_PROP",
+    "help-browser": "STANDARD_HELP",
+    "edit-select-all": "STANDARD_SELECT_ENTIRE_DOC",
+    "edit-select-box": "STANDARD_SELECT_OVER_GEOMETRY",
+    "zoom-all": "I3DVIEW_ZOOM_FIT",
+    "zoom-border": "I3DVIEW_ZOOM_AREA",
+    "zoom-selection": "I3DVIEW_ZOOM_SELECTION",
+    "zoom-in": "I3DVIEW_ZOOM_IN_OUT",
+    "zoom-out": "I3DVIEW_ZOOM_IN_OUT",
+    "view-front": "VIEWORIENT_FRONT",
+    "view-rear": "VIEWORIENT_BACK",
+    "view-left": "VIEWORIENT_LEFT",
+    "view-right": "VIEWORIENT_RIGHT",
+    "view-top": "VIEWORIENT_TOP",
+    "view-bottom": "VIEWORIENT_BOTTOM",
+    "view-axonometric": "VIEWORIENT_ISOMETRIC",
+    "view-isometric": "VIEWORIENT_ISOMETRIC",
+    "Std_ViewDimetric": "VIEWORIENT_DIAMETRIC",
+    "Std_ViewTrimetric": "VIEWORIENT_TRIMETRIC",
+    "align-to-selection": "VIEWORIENT_NORMAL_TO",
+    "Std_ToggleClipPlane": "I3DVIEW_SECT_VIEW",
+    "view-perspective": "I3DVIEW_PERSPECTIVE",
+    "Std_AxisCross": "I3DVIEW_AXES",
+    "DrawStyleFlatLines": "I3DVIEW_SHADED_EDGES",
+    "DrawStyleShaded": "I3DVIEW_SHADED",
+    "DrawStyleHiddenLine": "I3DVIEW_HLR",
+    "DrawStyleNoShading": "I3DVIEW_HLV",
+    "DrawStyleWireFrame": "I3DVIEW_WIREFRAME",
+    "Document": "PART",
+    "Std_CoordinateSystem": "TREE_ORIGIN",
+    "Std_Plane": "REFGEO_PLANE",
+    "Std_Axis": "REFGEO_AXIS",
+    "Std_Point": "REFGEO_POINT",
+    "Sketcher_Sketch": "SKETCH_SKETCH",
+    "PartDesign_Body": "PART",
+    "PartDesign_Pad": "FEATURES_EXTRUDE_BOSS",
+    "PartDesign_Pocket": "FEATURES_EXTRUDE_CUT",
+    "PartDesign_Revolution": "FEATURES_REVOLVED_BOSS_BASE",
+    "PartDesign_Groove": "FEATURES_REVOLVED_CUT",
+    "PartDesign_Hole": "FEATURES_HOLE_WIZARD",
+    "PartDesign_AdditivePipe": "FEATURES_SWEPT_BOSS",
+    "PartDesign_SubtractivePipe": "FEATURES_SWEPT_CUT",
+    "PartDesign_AdditiveLoft": "FEATURES_LOFTED_BOSS",
+    "PartDesign_SubtractiveLoft": "FEATURES_LOFTED_CUT",
+    "PartDesign_AdditiveHelix": "FEATURES_SWEPT_BOSS",
+    "PartDesign_SubtractiveHelix": "FEATURES_SWEPT_CUT",
+    "PartDesign_Fillet": "FEATURES_FILLET",
+    "PartDesign_Chamfer": "FEATURES_CHAMFER",
+    "PartDesign_Draft": "FEATURES_DRAFT",
+    "PartDesign_Thickness": "FEATURES_SHELL",
+    "PartDesign_Mirrored": "FEATURES_MIRROR",
+    "PartDesign_LinearPattern": "FEATURES_LINEAR_PATTERN",
+    "PartDesign_PolarPattern": "FEATURES_CIRCULAR_PATTERN",
+    "PartDesign_MultiTransform": "FEATURES_MIRROR_PATTERN",
+    "PartDesign_Scaled": "FEATURES_SCALE",
+    "PartDesign_Boolean": "FEATURES_COMBINE",
+    "PartDesign_Plane": "REFGEO_PLANE",
+    "PartDesign_Line": "REFGEO_AXIS",
+    "PartDesign_Point": "REFGEO_POINT",
+    "PartDesign_CoordinateSystem": "REFGEO_CSYS",
+    "PartDesign_ShapeBinder": "REFGEO_MATE_REF",
+    "PartDesign_SubShapeBinder": "REFGEO_MATE_REF",
+    "Sketcher_NewSketch": "SKETCH_SKETCH",
+    "Sketcher_LeaveSketch": "EXIT_SKETCH_CANCEL",
+    "Sketcher_EditSketch": "SKETCH_MODIFY",
+    "Sketcher_ViewSketch": "VIEWORIENT_NORMAL_TO",
+    "Sketcher_ViewSection": "I3DVIEW_SECT_VIEW",
+    "Sketcher_ValidateSketch": "TOOLS_CHECK",
+    "Sketcher_CreatePoint": "SKETCH_POINT",
+    "Sketcher_CreateLine": "SKETCH_LINE",
+    "Sketcher_CreatePolyline": "SKETCH_MIDPT_LINE",
+    "Sketcher_CreateArc": "SKETCH_CPRPT_ARC",
+    "Sketcher_Create3PointArc": "SKETCH_3PT_ARC",
+    "Sketcher_CreateElliptical_Arc": "SKETCH_PARTIAL_ELLIPSE",
+    "Sketcher_CreateHyperbolic_Arc": "SKETCH_CONIC",
+    "Sketcher_CreateParabolic_Arc": "SKETCH_PARABOLA",
+    "Sketcher_CreateCircle": "SKETCH_CIRCLE",
+    "Sketcher_Create3PointCircle": "SKETCH_CTRPT_CIRCLE",
+    "Sketcher_CreateEllipseByCenter": "SKETCH_ELLIPSE",
+    "Sketcher_CreateEllipse_3points": "SKETCH_ELLIPSE",
+    "Sketcher_CreateRectangle": "SKETCH_CORNER_RECT",
+    "Sketcher_CreateRectangle_Center": "SKETCH_CTR_RECT",
+    "Sketcher_CreateOblong": "SKETCH_3PT_CENTER_RECT",
+    "Sketcher_CreateHexagon": "SKETCH_POLYGON",
+    "Sketcher_CreateRegularPolygon": "SKETCH_POLYGON",
+    "Sketcher_CreateSlot": "SKETCH_STRAIGHT_SLOT",
+    "Sketcher_CreateArcSlot": "SKETCH_CTRPT_ARC_SLOT",
+    "Sketcher_CreateBSpline": "SKETCH_SPLINE",
+    "Sketcher_Create_Periodic_BSpline": "SKETCH_SPLINE",
+    "Sketcher_CreateBSplineByInterpolation": "SKETCH_STYLE_SPLINE",
+    "Sketcher_CreateFillet": "SKETCH_FILLET",
+    "Sketcher_CreateChamfer": "SKETCH_CHAMFER",
+    "Sketcher_Trimming": "SKETCH_TRIM",
+    "Sketcher_Extend": "SKETCH_EXTEND_ENTITIES",
+    "Sketcher_Split": "SKETCH_SPLIT_ENTITIES",
+    "Sketcher_Projection": "SKETCH_CONVERT_ENTITIES",
+    "Sketcher_Intersection": "SKETCH_INTERSECTION_CURVE",
+    "Sketcher_CarbonCopy": "SKETCH_COPY_ENTITIES",
+    "Sketcher_Symmetry": "SKETCH_MIRROR_ENTITIES",
+    "Sketcher_Offset": "SKETCH_OFFSET_ENTITIES",
+    "Sketcher_Rotate": "SKETCH_ROTATE_ENTITIES",
+    "Sketcher_Scale": "SKETCH_SCALE_ENTITIES",
+    "Sketcher_Translate": "SKETCH_MOVE_ENTITIES",
+    "Sketcher_ToggleConstruction": "SKETCH_CONSTRUCT_GEOM",
+    "Sketcher_RectangularArray": "SKETCH_LINEAR_PATTERN",
+    "umf-measurement": "TOOLS_MEASURE",
+    "Part_CheckGeometry": "TOOLS_CHECK"
+  }
+}
