@@ -656,7 +656,8 @@ class CircularPatternPanel(_Panel):
         self.axis = None            # (point, direction, label) of a picked axis
         box, lay = asmpm._box("Direction 1", "Circular Pattern", "ASSEMBLIES_CIRCULAR_PATTERN")
         row = QtWidgets.QHBoxLayout()
-        self.axis_box = QtWidgets.QLineEdit("Assembly Z axis")
+
+        self.axis_box = QtWidgets.QLineEdit("")
         self.axis_box.setObjectName("FW_PatternAxisPick")
         self.axis_box.setReadOnly(True)
         self.axis_box.setStyleSheet(asmpm.PICK_STYLE.replace("QListWidget", "QLineEdit"))
@@ -671,14 +672,14 @@ class CircularPatternPanel(_Panel):
         self.angle.setRange(0.001, 360.0)
         self.angle.setDecimals(2)
         self.angle.setSuffix("deg")
-        self.angle.setValue(360.0)
+        self.angle.setValue(15.0)
         self.count = QtWidgets.QSpinBox()
         self.count.setObjectName("FW_PatternCount")
         self.count.setRange(2, 1000)
-        self.count.setValue(4)
+        self.count.setValue(2)
         self.equal = QtWidgets.QCheckBox("Equal spacing")
         self.equal.setObjectName("FW_PatternEqual")
-        self.equal.setChecked(True)
+        self.equal.setChecked(False)
         self.equal.toggled.connect(self._equal)
         form = QtWidgets.QFormLayout()
         form.addRow("Angle:", self.angle)
@@ -713,7 +714,7 @@ class CircularPatternPanel(_Panel):
         self._symmetric(True)
         seeds = self._components_box("Components to Pattern")
         from . import asmcpattern
-        self.skip = asmcpattern.SkipBox(self.instance_labels)
+        self.skip = asmcpattern.SkipBox(self.instance_labels, "Instances to Override", "Skipped instances")
         for w in (self.count, self.count2):
             w.valueChanged.connect(self.skip.refresh)
         self.comps = []
@@ -757,6 +758,9 @@ class CircularPatternPanel(_Panel):
             from . import asmcpattern
             if self.editing is not None and not self.preview.hidden:
                 self.preview.hide_old(asmcpattern.instances(self.editing))
+            if self.axis is None:
+                self.preview.show(self.comps, [])
+                return
             point, direction = self.pattern_axis()
             moves = circular_moves(point, direction, self.angle.value(), self.count.value(),
                                    self.equal.isChecked(), self._second(), self.skip.skipped())
@@ -869,7 +873,17 @@ class CircularPatternPanel(_Panel):
         point, direction = (self.axis[0], self.axis[1]) if self.axis else (V(), V(0, 0, 1))
         return point, (direction * -1 if self.reverse.isChecked() else direction)
 
+    def _need_axis(self):
+        Gui.getMainWindow().statusBar().showMessage("Select an edge or axis for the direction reference.", 6000)
+        self._user_box = "axis"
+        for w in list(self.__dict__.get("_fw_boxes", [])):
+            mark_active(w, w is self.axis_box)
+        self.axis_box.setFocus()
+
     def accept(self):
+        if self.comps and self.axis is None:
+            self._need_axis()
+            return False
         Gui.Selection.removeObserver(self)
         self._end_preview(keep_old=False)
         if self.comps:
@@ -1501,8 +1515,9 @@ def _chord_step(path, s, pitch, sign=1.0):
 
 
 def chain_pattern(asm, comps, wire, spacing, count, fill=False, kind="Distance", links=None, plane=None,
-                  flip=False, reverse=False, group2=()):
+                  flip=False, reverse=False, group2=(), linear=False):
     ""
+
 
 
 
@@ -1510,7 +1525,7 @@ def chain_pattern(asm, comps, wire, spacing, count, fill=False, kind="Distance",
 
     out = []
     for comp in comps:
-        for src, move in chain_moves(comp, wire, spacing, count, fill, kind, links, plane, flip, reverse, group2):
+        for src, move in chain_moves(comp, wire, spacing, count, fill, kind, links, plane, flip, reverse, group2, linear):
             placement = move.multiply(src.Placement)
             link = ac.insert(asm, src.LinkedObject, placement)
             link.Placement = placement
@@ -1521,7 +1536,7 @@ def chain_pattern(asm, comps, wire, spacing, count, fill=False, kind="Distance",
 
 
 def chain_moves(comp, wire, spacing, count, fill=False, kind="Distance", links=None, plane=None,
-                flip=False, reverse=False, group2=()):
+                flip=False, reverse=False, group2=(), linear=False):
     """[(source component, move)] of each chain link after the seed (link = move x source)."""
     path = _Path(wire)
     if path.length < 1e-9:
@@ -1558,6 +1573,10 @@ def chain_moves(comp, wire, spacing, count, fill=False, kind="Distance", links=N
                 b = path.at(s2)[0]
                 t = (b - a).normalize()
                 p = a
+            elif linear:
+                s = _chord_step(path, s, spacing, sign)
+                p, t = path.at(s)
+                t = t * sign
             else:
                 s = s0 + sign * spacing * i
                 p, t = path.at(s)
@@ -2153,11 +2172,16 @@ class CurvePatternPanel(_DrivenPanel):
 
 
 class ChainPatternPanel(_DrivenPanel):
+
+    # Linkage), Options; Chain Group 1 holds the Spacing Method, the two unlabelled path link boxes and the Path
+    # Alignment Plane; Options holds Synchronize configuration (no Synchronize movement row)
+    NO_SYNC_MOVEMENT = True
+
     def __init__(self, asm, comps):
         from . import asmpm
         self.asm = asm
         self.wire = None
-        box, lay = asmpm._box("Chain Parameters", "Chain Pattern", "ASSEMBLIES_CHAIN_PATTERN")
+        box, lay = asmpm._box("Pitch Method", "Chain Pattern", "ASSEMBLIES_CHAIN_PATTERN")
         self.kinds = {}
         kg = QtWidgets.QButtonGroup(box)
         for name in ("Distance", "Distance Linkage", "Connection Linkage"):
@@ -2168,46 +2192,61 @@ class ChainPatternPanel(_DrivenPanel):
             self.kinds[name] = b
             b.toggled.connect(lambda *_: self._kind_changed())
         self.kinds["Distance"].setChecked(True)
-        lay.addWidget(QtWidgets.QLabel("Path:"))
+        pbox, play = asmpm._box("Chain Path")
+        row = QtWidgets.QHBoxLayout()
+        self.reverse = asmpm.reverse_button("FW_ChainReverse")
+        row.addWidget(self.reverse)
         self.path_box = self._pick_box("FW_ChainPath", "", "Pick the path: a sketch (its chain of edges)")
-        lay.addWidget(self.path_box)
+        row.addWidget(self.path_box, 1)
+        play.addLayout(row)
+        self.fill = QtWidgets.QCheckBox("Fill Path")
+        self.fill.setObjectName("FW_ChainFill")
+        play.addWidget(self.fill)
+        self.count = QtWidgets.QSpinBox()
+        self.count.setObjectName("FW_ChainCount")
+        self.count.setRange(2, 10000)
+        self.count.setValue(2)
+        _takes_over(self.count, self.fill, False)            # typing a count turns Fill Path off
+        cform = QtWidgets.QFormLayout()
+        cform.addRow("Instances:", self.count)
+        play.addLayout(cform)
         self.spacing = QtWidgets.QDoubleSpinBox()
         self.spacing.setObjectName("FW_ChainSpacing")
         self.spacing.setRange(0.001, 1.0e6)
         self.spacing.setDecimals(2)
         self.spacing.setSuffix("mm")
-        self.spacing.setValue(25.0)
-        self.count = QtWidgets.QSpinBox()
-        self.count.setObjectName("FW_ChainCount")
-        self.count.setRange(2, 10000)
-        self.count.setValue(4)
-        self.fill = QtWidgets.QCheckBox("Fill path")
-        self.fill.setObjectName("FW_ChainFill")
-        _takes_over(self.count, self.fill, False)            # typing a count turns Fill path off
-        form = QtWidgets.QFormLayout()
-        self._chain_form = form
-        form.addRow("Spacing:", self.spacing)
-        form.addRow("Instances:", self.count)
-        lay.addLayout(form)
-        lay.addWidget(self.fill)
-        self.reverse = QtWidgets.QCheckBox("Reverse direction")
-        self.reverse.setObjectName("FW_ChainReverse")
-        lay.addWidget(self.reverse)
-        lay.addWidget(QtWidgets.QLabel("Path alignment plane:"))
-        self.plane_box = self._pick_box("FW_ChainAlignPlane", "", "A plane or flat face: the links keep its normal as their up")
-        lay.addWidget(self.plane_box)
+        self.spacing.setValue(50.0)
         self.align = None
         seeds = self._components_box("Chain Group 1")
         lay1 = seeds.layout()
+        self.method_label = QtWidgets.QLabel("Spacing Method:")
+        lay1.addWidget(self.method_label)
+        self.along = QtWidgets.QRadioButton("Distance along path")
+        self.along.setObjectName("FW_ChainAlongPath")
+        self.linear = QtWidgets.QRadioButton("Linear distance")
+        self.linear.setObjectName("FW_ChainLinearDistance")
+        self.linear.setChecked(True)
+        mg = QtWidgets.QButtonGroup(seeds)
+        for b in (self.along, self.linear):
+            mg.addButton(b)
+            lay1.addWidget(b)
+        form = QtWidgets.QFormLayout()
+        self._chain_form = form
+        form.addRow("Spacing:", self.spacing)
+        lay1.addLayout(form)
 
-        self.link_label = QtWidgets.QLabel("Path link 1:")
-        lay1.addWidget(self.link_label)
         self.link_box = self._pick_box("FW_ChainLinks", "", "Path link 1: a round face or circular edge of the link's first pin")
         lay1.addWidget(self.link_box)
-        self.link_label2 = QtWidgets.QLabel("Path link 2:")
-        lay1.addWidget(self.link_label2)
         self.link_box2 = self._pick_box("FW_ChainLinks2", "", "Path link 2: a round face or circular edge of the link's second pin")
         lay1.addWidget(self.link_box2)
+        lay1.addWidget(QtWidgets.QLabel("Path Alignment Plane"))
+        prow = QtWidgets.QHBoxLayout()
+        self.flip = asmpm.reverse_button("FW_ChainFlip")
+        self.flip.setToolTip("Flip alignment direction")
+        prow.addWidget(self.flip)
+        self.plane_box = self._pick_box("FW_ChainAlignPlane", "", "A plane or flat face: the links keep its normal as their up")
+        prow.addWidget(self.plane_box, 1)
+        lay1.addLayout(prow)
         self.pins = []
         self._slots = [None, None]
         group2, lay2g = asmpm._box("Chain Group 2")
@@ -2220,14 +2259,11 @@ class ChainPatternPanel(_DrivenPanel):
         self.group2 = []
         self.group2_box = group2
         opts, olay = asmpm._box("Options")
-        self.flip = QtWidgets.QCheckBox("Flip alignment direction")
-        self.flip.setObjectName("FW_ChainFlip")
-        olay.addWidget(self.flip)
-        self._options_lay = olay        # asmpkg371: Synchronize movement goes in this one Options group (there were two)
+        self._options_lay = olay        # asmpkg371: the Options rows go in this one Options group
         self.comps = []
         for comp in comps:
             self._add(comp)
-        self.form = [box, seeds, group2, opts]
+        self.form = [box, pbox, seeds, group2, opts]
         self._kind_changed()
         from . import safe_later as _sl; _sl.later(0, self._kind_changed, self, "group2_list")    # asmpkg371: again once the groups have title bars
         Gui.Selection.addObserver(self, 0)
@@ -2240,11 +2276,12 @@ class ChainPatternPanel(_DrivenPanel):
             return          # (the type buttons are made before the rest of the PM)
         k = self.kind()
         linkage = k != "Distance"
-        self.spacing.setVisible(not linkage)    # a linkage's links set the spacing: the box is not shown
+        for w in (self.spacing, self.method_label, self.along, self.linear):
+            w.setVisible(not linkage)           # a linkage's links set the spacing: those rows are not shown
         label = self._chain_form.labelForField(self.spacing) if hasattr(self, "_chain_form") else None
         if label is not None:
             label.setVisible(not linkage)
-        for w in (self.link_label, self.link_box, self.link_label2, self.link_box2):
+        for w in (self.link_box, self.link_box2):
             w.setVisible(linkage)
         from . import asmpm
         try:
@@ -2271,6 +2308,7 @@ class ChainPatternPanel(_DrivenPanel):
         return {"kind": self.kind(), "wire": self.wire.exportBrepToString() if self.wire is not None else "",
                 "path": self.path_box.text(), "spacing": self.spacing.value(), "count": self.count.value(),
                 "fill": self.fill.isChecked(), "reverse": self.reverse.isChecked(), "flip": self.flip.isChecked(),
+                "spacing_method": "Linear distance" if self.linear.isChecked() else "Distance along path",
                 "align": list(self.align) if self.align is not None else None, "align_label": pick_raw(self.plane_box),
                 "pins": [list(p) for p in self.pins], "group2": [c.Name for c in self.group2],
                 "pin_labels": [pick_raw(self.link_box), pick_raw(self.link_box2)],
@@ -2290,6 +2328,8 @@ class ChainPatternPanel(_DrivenPanel):
         self.fill.setChecked(bool(v.get("fill")))
         self.reverse.setChecked(bool(v.get("reverse")))
         self.flip.setChecked(bool(v.get("flip")))
+        # a pattern made before the Spacing Method rows spaced its links along the path
+        (self.linear if v.get("spacing_method") == "Linear distance" else self.along).setChecked(True)
         if v.get("align"):
             self.align = V(*v["align"])
             show_pick(self.plane_box, v.get("align_label", ""))
@@ -2364,7 +2404,7 @@ class ChainPatternPanel(_DrivenPanel):
                                   lambda seed: asmcpattern.numbered(chain_pattern(
                                       self.asm, [seed], self.wire, self.spacing.value(), self.count.value(),
                                       self.fill.isChecked(), k, links, self.align, self.flip.isChecked(),
-                                      self.reverse.isChecked(), self.group2)),
+                                      self.reverse.isChecked(), self.group2, self.linear.isChecked())),
                                   self.values(), (), label)
             finally:
                 doc.commitTransaction()
@@ -2700,7 +2740,8 @@ def refollow(feat, v):
             own = {}
             for i, (src, m) in enumerate(chain_moves(seed, wire, v.get("spacing", 25.0), v.get("count", 4),
                                                      v.get("fill", False), k, links, V(*v["align"]) if v.get("align") else None,
-                                                     v.get("flip", False), v.get("reverse", False), group2)):
+                                                     v.get("flip", False), v.get("reverse", False), group2,
+                                                     v.get("spacing_method") == "Linear distance")):
                 own["(%d)" % (i + 2)] = m if src is seed else m.multiply(src.Placement).multiply(seed.Placement.inverse())
             moves[seed.Name] = own
         v = dict(v, stamp=stamp, wire=wire.exportBrepToString())

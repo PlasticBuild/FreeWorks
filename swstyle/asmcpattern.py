@@ -171,7 +171,11 @@ def build(asm, kind, comps, generate, values, skip=(), label=None, mirror=None):
     if not entries and label is None:
         return None
     values = dict(values, skip=sorted(skip), seeds=[c.Name for c in comps])
-    return make_feature(asm, kind, entries, values, label)
+    feat = make_feature(asm, kind, entries, values, label)
+    if values.get("sync_cfg"):
+        for seed, _index, link, _m in entries:
+            sync_configuration(seed, link)
+    return feat
 
 
 def numbered(links, first=2):
@@ -202,6 +206,7 @@ def follow(asm):
             except Exception as error:
                 App.Console.PrintLog("FreeCAD: driven pattern: %s\n" % error)
         sync = bool(v.get("sync"))
+        sync_cfg = bool(v.get("sync_cfg"))
         for link in instances(feat):
             seed = getattr(link, SEED_PROP, None)
             if seed is None:
@@ -221,6 +226,8 @@ def follow(asm):
                     link.Placement = want
                 if sync:
                     sync_flexible(seed, link)
+                if sync_cfg:
+                    sync_configuration(seed, link)
             except Exception as error:
                 App.Console.PrintLog("FreeCAD: pattern instance: %s\n" % error)
 
@@ -242,6 +249,7 @@ def sync_flexible(seed, inst):
 
 
 SYNC_TEXT = "Synchronize movement of flexible subassembly components"
+SYNC_CFG_TEXT = "Synchronize configuration of patterned components to seed"
 
 
 def add_options(panel):
@@ -257,22 +265,67 @@ def add_options(panel):
     panel.sync = QtWidgets.QCheckBox(SYNC_TEXT)
     panel.sync.setObjectName("FW_PatternSync")
     panel.sync.setToolTip("Instances of a flexible subassembly move their components as the seed's do")
-    lay.addWidget(panel.sync)
+    if not getattr(panel, "NO_SYNC_MOVEMENT", False):
+        lay.addWidget(panel.sync)
+
+    panel.sync_cfg = QtWidgets.QCheckBox(SYNC_CFG_TEXT)
+    panel.sync_cfg.setObjectName("FW_PatternSyncConfig")
+    panel.sync_cfg.setToolTip("The instances show the configuration the seed shows, and follow it when it changes")
+    lay.addWidget(panel.sync_cfg)
     if box is not None:
         panel.form = list(panel.form) + [box]
     values0, load0 = panel.values, getattr(panel, "load", None)
 
     def values():
         v = values0()
-        v["sync"] = panel.sync.isChecked()
+        v["sync"] = panel.sync.isChecked() and not getattr(panel, "NO_SYNC_MOVEMENT", False)
+        v["sync_cfg"] = panel.sync_cfg.isChecked()
         return v
     panel.values = values
     if load0 is not None:
         def load(v):
             load0(v)
             panel.sync.setChecked(bool(v.get("sync")))
+            panel.sync_cfg.setChecked(bool(v.get("sync_cfg")))
         panel.load = load
     return panel
+
+
+def seed_configuration_changed(seed):
+    """A component shown in another configuration: the patterns that keep their instances in their seed's
+    configuration (Synchronize configuration of patterned components to seed) bring this seed's along."""
+    asm = ac.assembly_of(seed.Document)
+    if asm is None:
+        return False
+    changed = False
+    for feat in patterns(asm):
+        if not data(feat).get("sync_cfg") or seed not in seeds(feat):
+            continue
+        for link in instances(feat):
+            if getattr(link, SEED_PROP, None) is seed:
+                changed = sync_configuration(seed, link) or changed
+    return changed
+
+
+def sync_configuration(seed, inst):
+    """Synchronize configuration of patterned components to seed: the instance shows the seed's
+    configuration. True when it changed."""
+    try:
+        from . import asmcfginst
+        src = asmcfginst.source(seed)
+        if src is None or asmcfginst.is_subassembly(seed) != asmcfginst.is_subassembly(inst):
+            return False
+        want = asmcfginst.configuration(seed)
+        changed = False
+        if asmcfginst.source(inst) is not src and not asmcfginst.is_copy(inst):
+            inst.LinkedObject = src             # made from the seed's own copy: the part itself, shown in want
+            changed = True
+        if want and asmcfginst.configuration(inst) != want:
+            changed = bool(asmcfginst.set_configuration(inst, want, recompute=False)) or changed
+        return changed
+    except Exception as _fw_err:
+        _fw_log("asmcpattern.py:sync configuration", _fw_err)
+    return False
 
 
 def delete(feat):
@@ -423,10 +476,12 @@ if Gui is not None:
     class SkipBox:
         ""
 
-        def __init__(self, labels_fn):
+        def __init__(self, labels_fn, title="Instances to Skip", caption=""):
             from . import asmpm
             self.labels_fn = labels_fn
-            self.box, lay = asmpm._box("Instances to Skip")
+            self.box, lay = asmpm._box(title)
+            if caption:
+                lay.addWidget(QtWidgets.QLabel(caption))
             self.list = QtWidgets.QListWidget()
             self.list.setObjectName("FW_PatternSkip")
             self.list.setFixedHeight(asmpm._rows(self.list, 4))

@@ -81,7 +81,7 @@ def _icon_of(app):
 
 def _icon(path):
     try:
-        icon = QtGui.QIcon(path) if isinstance(path, str) and path else QtGui.QIcon()
+        icon = _v2(path) if isinstance(path, str) and path else QtGui.QIcon()
         if icon.isNull():
             from . import addintabs
             icon = addintabs._safe_icon(path) if path else icon
@@ -252,3 +252,9 @@ def extend(layout):
         layout += [SEP] + add
     layout += [SEP, ("large", TABS_KEY, None)]          # addintabs2-1127: the extra tabs, on and off
     return tuple(layout)
+
+
+def _v2(path):
+    """v2last-1127: the V2 pack's themed picture for one of the add-on's own drawings, else the file itself."""
+    from . import icons
+    return icons.family(str(path))

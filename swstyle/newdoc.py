@@ -88,7 +88,38 @@ def template_tabs():
         except OSError as _fw_err:
             _fw_log("newdoc.py:87", _fw_err)
         tabs.append((name, entries))
+    mbd = mbd_entries()
+    if mbd:
+        tabs.insert(1, ("MBD", mbd))
     return tabs
+
+
+MBD_PREFIX = "mbd:"
+
+
+def mbd_entries():
+    ""
+
+    try:
+        from . import addins
+        if not addins.module_active("mbd"):
+            return []
+    except Exception as _fw_err:
+        _fw_log("newdoc.py:mbd", _fw_err)
+        return []
+    return [(kind, MBD_PREFIX + kind) for kind in ("Part", "Assembly")]
+
+
+def mbd_tab(kind):
+    """fh269: after a New from the MBD tab, the CommandManager shows the MBD tab."""
+    try:
+        from . import swmenus
+        sh = swmenus._shell()
+        bar = getattr(sh, "topbar", None)
+        if bar is not None:
+            bar.select("MBD Dimensions" if kind == "Part" else "MBD") or bar.select("MBD Dimensions")
+    except Exception as _fw_err:
+        _fw_log("newdoc.py:mbd-tab", _fw_err)
 
 
 FROM_TEMPLATE = set()       # documents New made as a copy of a template (Options > Default Templates)
@@ -342,6 +373,8 @@ class NewDocumentDialog(QtWidgets.QDialog):
                 item = QtWidgets.QListWidgetItem(label)
                 item.setData(Qt.UserRole, target)
                 kind = target if target in self.tiles else _kind_of_template(target)
+                if str(target).startswith(MBD_PREFIX) and not available(kind):
+                    continue                     # fh269: left out rather than greyed
                 spec = next((k for k in KINDS if k[0] == kind), KINDS[0])
                 item.setIcon(_icon(spec[2], spec[3]))
                 if target in self.tiles and not available(target):
@@ -350,6 +383,7 @@ class NewDocumentDialog(QtWidgets.QDialog):
             lst.currentItemChanged.connect(lambda cur, _p: self._template_picked(cur))
             lst.itemDoubleClicked.connect(lambda item: (self._template_picked(item), QtCore.QTimer.singleShot(0, self.accept)))
             if not lst.count() and self.tabs.count():
+                lst.hide()                  # fh269: deleteLater waits for the box to close; until then it sat over the tabs
                 lst.deleteLater()           # fh266: a template folder with no templates in it: no empty tab
                 continue
             self.tabs.addTab(lst, name)
@@ -501,6 +535,12 @@ class NewDocumentDialog(QtWidgets.QDialog):
             spec = next(k for k in KINDS if k[0] == target)
             self.preview.setPixmap(_icon(spec[2], spec[3]).pixmap(QtCore.QSize(96, 96)))
             self.preview.setText("")
+        elif str(target).startswith(MBD_PREFIX):
+            self.template = target             # fh269: an MBD tab entry
+            self.chosen = _kind_of_template(target)
+            spec = next(k for k in KINDS if k[0] == self.chosen)
+            self.preview.setPixmap(_icon(spec[2], spec[3]).pixmap(QtCore.QSize(96, 96)))
+            self.preview.setText("")
         else:
             self.template = target
             self.chosen = _kind_of_template(target)
@@ -631,6 +671,9 @@ def pick_template(kind):
     box._set_view("advanced")
     if box.exec() != QtWidgets.QDialog.Accepted:
         return None
+    if box.template and str(box.template).startswith(MBD_PREFIX):
+        QtCore.QTimer.singleShot(400, lambda: mbd_tab(kind))     # fh269: the default template, opened on MBD
+        return default
     if box.template and _kind_of_template(box.template) == kind:
         return box.template
     return default                       # the Assembly tile: the default assembly template
@@ -1183,7 +1226,10 @@ def ask():
         return None
     paths.params().SetString(LAST, box.chosen)
     try:
-        if box.template:
+        if box.template and str(box.template).startswith(MBD_PREFIX):
+            make(box.chosen)                  # fh269: MBD tab: the document, then the MBD tab shown
+            QtCore.QTimer.singleShot(400, lambda kind=box.chosen: mbd_tab(kind))
+        elif box.template:
             make_from_template(box.template)
         else:
             make(box.chosen)
@@ -1194,6 +1240,8 @@ def ask():
 
 
 def _kind_of_template(path):
+    if str(path).startswith(MBD_PREFIX):
+        return path[len(MBD_PREFIX):]
     try:
         from . import fcstdinfo
         k = fcstdinfo.kind(path)

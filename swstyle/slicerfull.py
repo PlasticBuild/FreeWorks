@@ -23,7 +23,8 @@ from . import slicer as backend
 def _picture(key):
     """The button's own drawing (resources/slicer/full_<key>.svg)."""
     from pathlib import Path
-    return str(Path(__file__).resolve().parent / "resources" / "slicer" / ("full_%s.svg" % key))
+    from . import icons     # v2last-1127: the V2 pack's PNG for this theme
+    return icons.v2_file(str(Path(__file__).resolve().parent / "resources" / "slicer" / ("full_%s.svg" % key)))
 
 
 SAID = []       # what the full buttons last told the person (newest last; checks read it)

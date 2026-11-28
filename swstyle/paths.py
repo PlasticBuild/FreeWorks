@@ -37,6 +37,11 @@ def icon_root():
         candidates.append(Path(env))
     try:
         saved = params().GetString("IconRoot", "")
+        if saved and (Path(saved) / "png").is_dir() and not (Path(saved) / "dark" / "png").is_dir():
+            # v2audit-1127: a saved older pack (V1 or the exact set, no dark/) gives way to the bundled V2 pack
+            params().SetString("IconRoot", "")
+            _fw_log("paths.py:old-pack", "IconRoot %s cleared (older icon pack)" % saved)
+            saved = ""
         if saved:
             candidates.append(Path(saved))
     except Exception as _fw_err:

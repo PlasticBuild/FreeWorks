@@ -537,6 +537,39 @@ def tinted(icon, colour):
     return result
 
 
+def trimmed(icon, side=64, fill=0.86):
+    ""
+
+
+
+    if icon is None or icon.isNull():
+        return icon
+    try:
+        img = icon.pixmap(side, side).toImage().convertToFormat(QtGui.QImage.Format_ARGB32)
+        w, h = img.width(), img.height()
+        xs, ys = [], []
+        for y in range(h):
+            for x in range(w):
+                if QtGui.qAlpha(img.pixel(x, y)) > 24:
+                    xs.append(x)
+                    ys.append(y)
+        if not xs:
+            return icon
+        box = QtCore.QRect(min(xs), min(ys), max(xs) - min(xs) + 1, max(ys) - min(ys) + 1)
+        part = img.copy(box)
+        inner = int(side * fill)
+        part = part.scaled(inner, inner, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        out = QtGui.QImage(side, side, QtGui.QImage.Format_ARGB32_Premultiplied)
+        out.fill(Qt.transparent)
+        p = QtGui.QPainter(out)
+        p.drawImage((side - part.width()) // 2, (side - part.height()) // 2, part)
+        p.end()
+        return QtGui.QIcon(QtGui.QPixmap.fromImage(out))
+    except Exception as _fw_err:
+        _fw_log("chrome.py:trimmed", _fw_err)
+        return icon
+
+
 def glyph_check(painter, rect, widget):
     painter.save()
     painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
@@ -668,10 +701,10 @@ class ConfirmationCorner(QtWidgets.QWidget):
             effect.setOpacity(self.faint())
             b.setGraphicsEffect(effect)
             b.installEventFilter(self)
-        self._icons = {
-            "ok": tinted(icons.family("CHECK_MARK"), OK_GREEN),
-            "cancel": icons.family("STANDARD_CANCEL"),
-            "exit": icons.family("EXIT_SKETCH_CANCEL"),
+        self._icons = {         # ccsize-1127: each cropped to its drawing, so the check and the X match in size
+            "ok": trimmed(tinted(icons.family("CHECK_MARK"), OK_GREEN)),
+            "cancel": trimmed(icons.family("STANDARD_CANCEL")),
+            "exit": trimmed(icons.family("EXIT_SKETCH_CANCEL")),
             "component": icons.family("ASSEMBLIES_EDIT_COMPONENT"),
         }
         if self._icons["component"] is None or self._icons["component"].isNull():
@@ -1882,7 +1915,9 @@ class StatusInfo(QtWidgets.QLabel):
             self.setMinimumWidth(max(self.minimumWidth(), want, base) if sketching else base)
             beside = self.parentWidget().findChild(QtWidgets.QWidget, "SWSimplifiedInterface") \
                 if self.parentWidget() is not None else None
-            gap = scaled(12) if beside is not None and beside.isVisible() else scaled(84)
+
+            # here (with the units box's own padding and the bar's spacing) came to about 190, "very spread apart"
+            gap = scaled(12) if beside is not None and beside.isVisible() else scaled(16)
             if self.contentsMargins().right() != gap:
                 self.setContentsMargins(0, 0, gap, 0)
         except Exception as _fw_err:

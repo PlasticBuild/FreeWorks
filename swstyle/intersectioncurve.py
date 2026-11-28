@@ -140,6 +140,7 @@ class IntersectionPage(sketchtoolpm.ToolPage):
     ICON = "SKETCH_INTERSECTION_CURVE"
     PIXMAP = "Sketcher_Intersection"
     TRANSACTION = TITLE
+    TAKES_MODEL_CLICKS = True     # a click on a face or body goes into Selections (fwsketch/modelpick.py)
 
     def build(self):
         self.picks = []

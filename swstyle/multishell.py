@@ -71,11 +71,12 @@ def native_ok(solid, removed, t, outward=False, intersection=None):
     return None
 
 
-def _offset_hollow(solid, removed, t):
+def _offset_hollow(solid, removed, t, inside_of=None):
     """Inward shell another way: the solid less its inside (the solid offset inward by t), opened
-    through each removed flat face."""
+    through each removed flat face. inside_of: the shape whose inward offset is the inside (features-481:
+    the solid with its thin outside rounds taken off, see _sharp_hollow)."""
     import Part
-    inner = solid.Solids[0].makeOffsetShape(-t, TOL, False, False, 0, 0, False)
+    inner = (inside_of or solid).Solids[0].makeOffsetShape(-t, TOL, False, False, 0, 0, False)
     if not inner.Solids:
         inner = Part.Solid(Part.Shell(inner.Faces))
     tools = [inner]
@@ -293,6 +294,44 @@ def _round_radius(face):
     return r if out.Length > 1e-12 and out.dot(n) > 0 else None
 
 
+def _sharp_hollow(solid, removed, t):
+    ""
+
+
+
+    rounds = []
+    for f in solid.Solids[0].Faces:
+        if any(_same(f, r) for r in removed):
+            continue
+        r = _round_radius(f)
+        if r is not None and t >= r - 1e-9:
+            rounds.append(f)
+    if not rounds:
+        return None
+    try:
+        sharp = solid.Solids[0].defeaturing(rounds)
+        if sharp.isNull() or not sharp.isValid():
+            # one round at a time: a round that cannot come off (a boss's whole side) is left, and refused below
+            sharp = solid.Solids[0]
+            for f in rounds:
+                g = next((g for g in sharp.Faces if _same(g, f)), None)
+                if g is None:
+                    continue
+                try:
+                    trial = sharp.defeaturing([g])
+                    if not trial.isNull() and trial.Solids and trial.isValid():
+                        sharp = trial
+                except Exception:
+                    continue
+        if sharp.isNull() or not sharp.Solids or not sharp.isValid() or any(_round_radius(f) is not None and t >= _round_radius(f) - 1e-9
+                                                                            for f in sharp.Faces):
+            return None
+        return _offset_hollow(solid, removed, t, inside_of=sharp)
+    except Exception as _fw_err:
+        _fw_log("multishell.py:sharp_hollow", _fw_err)
+        return None
+
+
 def too_thick(solid, removed, t):
     ""
 
@@ -319,6 +358,9 @@ def hollow(solid, removed, t, outward=False):
         raise RuntimeError("The shell could not be made: try a smaller thickness.")
     radius = too_thick(solid, removed, t)
     if radius is not None:
+        out = _sharp_hollow(solid, removed, t)
+        if out is not None:
+            return out
         raise RuntimeError("The shell could not be made: the thickness is more than the %.2fmm radius of a round "
                            "face. Try a smaller thickness." % radius)
     try:

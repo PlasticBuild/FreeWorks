@@ -1689,6 +1689,9 @@ if GUI:
                     return Snap((info["x"], info["y"], info["z"]), relation=("OnEdge", o.Name, comp),
                                 label="Coincident")
                 if comp.startswith("Face"):
+                    on_edge = self._face_edge_snap(o, comp, info, x, y)
+                    if on_edge is not None:
+                        return on_edge
                     flat = plane_of(self.doc, o.Name, comp) is not None
                     return Snap((info["x"], info["y"], info["z"]), relation=("OnPlane" if flat else "OnSurface",
                                                                           o.Name, comp),
@@ -1696,6 +1699,36 @@ if GUI:
             except Exception:
                 return None
             return None
+
+        def _face_edge_snap(self, o, comp, info, x, y):
+            ""
+
+            try:
+                sh = o.Shape
+                face = sh.getElement(comp)
+                if len(face.Edges) > 200:
+                    return None
+                import Part
+                at = Part.Vertex(App.Vector(info["x"], info["y"], info["z"]))
+                best = None
+                for e in face.Edges:
+                    if e.Length < 1e-9:
+                        continue
+                    d, pairs, _i = e.distToShape(at)
+                    q = pairs[0][0]
+                    q = (q.x, q.y, q.z)
+                    px = self._screen_dist(q, x, y)
+                    if px < self.px() and (best is None or px < best[0]):
+                        best = (px, q, e)
+                if best is None:
+                    return None
+                k = next((i for i, f in enumerate(sh.Edges) if f.isSame(best[2])), None)
+                if k is None:
+                    return None
+                return Snap(best[1], relation=("OnEdge", o.Name, "Edge%d" % (k + 1)), label="Coincident")
+            except Exception as _fw_err:
+                _fw_log("sketch3d.py:face_edge_snap", _fw_err)
+                return None
 
         @staticmethod
         def _vertex_name(shape, v):

@@ -48,10 +48,13 @@ GLOBAL = "FwGlobalInteraction"  # on the study: Bonded / Contact / Free
 GLOBAL_GAP = "FwGlobalGap"      # on the study: the global Bonded interaction's gap range for bonding, mm
 AUTO = "FwAutoInteraction"      # on the Tie / Contact objects made from the interactions (remade on each run)
 CONNECTOR = "FwConnector"       # on a connector: Bolt / Pin / Spring / Bearing
+FORCES = "FwConnectorForces"    # on a bolt or spring after a run: its axial and shear force, bending moment and torque
+SPRINGS = {}                    # study name: (.frd path, [(connector name, axis, pre-load, pairs)]) of its last input
 INTERACTION = "FwInteraction"   # on a component interaction: its type
 TYPES = ("Bonded", "Contact", "Free")
 CONNECTORS = ("Bolt", "Pin", "Spring", "Bearing", "Rigid")
 SHARED = ("Spring", "Pin", "Bolt")
+CONNECTIONS = ("Rigid", "Distributed")   # a bolt's Connection Type: its ends rigid, or spread over the faces (they deform)
 PRELOADS = ("Axial", "Torque")   # a bolt's pre-load: the axial force, or the tightening torque with a friction factor
 STIFFNESS = ("Rigid", "Flexible")  # a bearing
 TOUCH = 1e-4                    # mm
@@ -437,7 +440,8 @@ def connectors(a):
 
 def add_connector(a, kind, faces, edit=None, **values):
     """A Bolt, Pin, Spring or Bearing between two faces of the geometry (FaceN names).
-    Bolt: diameter (mm); preload (Axial: N, Torque: N.mm), preload_type (Axial / Torque), friction_factor (K, Torque).
+    Bolt: diameter (mm); preload (Axial: N, Torque: N.mm), preload_type (Axial / Torque), friction_factor (K, Torque);
+    connection (Rigid / Distributed).
     Pin: ring (bool), key (bool). Spring: axial, tangential (N/mm, total).
     Bearing (shaft face, housing face, both round on one axis): stiffness (Rigid / Flexible), lateral, axial (N/mm,
     Flexible), align (self-aligning: the shaft may tilt), stabilize (a soft spring against free shaft rotation)."""
@@ -473,6 +477,10 @@ def add_connector(a, kind, faces, edit=None, **values):
         if ptype not in PRELOADS:
             raise simpms.SetupError("Unknown pre-load %r." % ptype)
         values["preload_type"] = ptype
+        conn = values.get("connection") or "Rigid"
+        if conn not in CONNECTIONS:
+            raise simpms.SetupError("Unknown connection type %r." % conn)
+        values["connection"] = conn
         values["preload"] = float(values.get("preload") or 0.0)
         if values["preload"] < 0:
             raise simpms.SetupError("The pre-load cannot be negative.")
@@ -596,6 +604,50 @@ def _offset_node(node, at, n2, q2, c2):
     return lines
 
 
+def _skew(e):
+    """[e]x: the matrix with [e]x u = e x u."""
+    return ((0.0, -e[2], e[1]), (e[2], 0.0, -e[0]), (-e[1], e[0], 0.0))
+
+
+def _distributed(femmesh, face, ids):
+    """A Distributed connector end: the face's nodes with their area weights w, the weighted centre cw, and for each
+    node the 3 x 3 matrix A with theta = sum A u (the face's mean rotation, the least-squares rotation of the nodes
+    about cw). The end follows the face on average, and the face keeps deforming (a rigid end would hold it flat)."""
+    import numpy as np
+    from . import simroutes
+    share = simroutes._node_areas(femmesh, face, ids)
+    total = sum(share.values())
+    if len(share) < 3 or total <= 0:
+        raise ValueError("too few mesh nodes on the face for a distributed connection")
+    nodes = sorted(share)
+    w = np.array([share[n] / total for n in nodes])
+    pts = np.array([[femmesh.getNodeById(n).x, femmesh.getNodeById(n).y, femmesh.getNodeById(n).z] for n in nodes])
+    cw = (w[:, None] * pts).sum(0)
+    d = pts - cw
+    J = (w[:, None, None] * ((d * d).sum(1)[:, None, None] * np.eye(3) - d[:, :, None] * d[:, None, :])).sum(0)
+    if abs(np.linalg.det(J)) < 1e-12 * max(1.0, np.trace(J)) ** 3:
+        J = J + 1e-9 * max(1.0, np.trace(J)) * np.eye(3)     # nodes on one line: no turn about it
+    Ji = np.linalg.inv(J)
+    A = [wi * Ji.dot(np.array(_skew(di))) for wi, di in zip(w, d)]
+    return {"nodes": nodes, "w": w, "cw": App.Vector(*cw), "A": A}
+
+
+def _distributed_lines(node, at, end, rotation=False):
+    """*NODE and *EQUATION lines of a node following a Distributed end: its rotation (rotation=True: the three dofs
+    are theta) or a point at `at` carried by it (u = sum (w I - [at - cw]x A) u_i)."""
+    import numpy as np
+    lines = ["*NODE", "%d, %.12g, %.12g, %.12g" % (node, at.x, at.y, at.z)]
+    e = at - end["cw"]
+    sk = np.array(_skew((e.x, e.y, e.z)))
+    coef = [a if rotation else wi * np.eye(3) - sk.dot(a) for wi, a in zip(end["w"], end["A"])]
+    for k in range(3):
+        terms = [(node, k + 1, 1.0)]
+        for n, c in zip(end["nodes"], coef):
+            terms += [(n, b + 1, -float(c[k][b])) for b in range(3) if abs(c[k][b]) > 1e-12]
+        lines += _eq_lines(terms)
+    return lines
+
+
 def _hold_k(face, e_mpa):
     """A connector end's holding stiffness: far stiffer than the parts there (1000 E L, L the face's size) and far
     from what upsets the solver. Returns (N/mm, N.mm/rad)."""
@@ -681,7 +733,7 @@ def bolt_axial(v):
     return p
 
 
-def connector_input(a, femmesh, node0, elem0, skip_nodes=(), step=None):
+def connector_input(a, femmesh, node0, elem0, skip_nodes=(), step=None, record=None):
     """The CalculiX model lines for the study's connectors (before *STEP). node0 / elem0: the first free ids.
     step: a list that takes the lines for inside the step (a bolt's pre-load)."""
     lines = []
@@ -713,6 +765,8 @@ def connector_input(a, femmesh, node0, elem0, skip_nodes=(), step=None):
             lines.append("*RIGID BODY, NSET=%s, REF NODE=%d, ROT NODE=%d" % (nset, ref, rot))
             continue
         ends = []
+        spread = kind == "Bolt" and v.get("connection") == "Distributed"
+        dist = []
         for j, face in enumerate((face1, face2)):
             ids = [n for n in side_nodes(femmesh, (g1, g2)[j], (f1, f2)[j]) if n not in skip_nodes]
             if not ids:
@@ -720,6 +774,17 @@ def connector_input(a, femmesh, node0, elem0, skip_nodes=(), step=None):
             c = _centre(face)
             ref, rot = node, node + 1
             node += 2
+            if spread:
+
+                # coupling, written as equations: CalculiX's own *COUPLING needs element faces)
+                try:
+                    end = _distributed(femmesh, face, ids)
+                except ValueError as error:
+                    raise ValueError("%s: %s %d." % (o.Label, error, j + 1))
+                lines += _distributed_lines(ref, c, end) + _distributed_lines(rot, c, end, rotation=True)
+                dist.append(end)
+                ends.append((ref, rot, c))
+                continue
             nset = "FW_CN%d_%d" % (k, j + 1)
             lines += ["*NODE", "%d, %.12g, %.12g, %.12g" % (ref, c.x, c.y, c.z), "%d, %.12g, %.12g, %.12g" % (rot, c.x, c.y, c.z)]
             lines.append("*NSET, NSET=%s" % nset)
@@ -784,7 +849,10 @@ def connector_input(a, femmesh, node0, elem0, skip_nodes=(), step=None):
         # first end (two-node springs between points apart would drop the lever's moment)
         mid = node
         node += 1
-        lines += _offset_node(mid, c1, r2, q2, c2)
+        if spread:
+            lines += _distributed_lines(mid, c1, dist[1])     # straight from end 2's nodes: no equation on equations
+        else:
+            lines += _offset_node(mid, c1, r2, q2, c2)
         r2 = mid
         pairs_ = []                           # (node 1, node 2, along-axis stiffness, across stiffness)
         if kind == "Bolt":
@@ -811,6 +879,8 @@ def connector_input(a, femmesh, node0, elem0, skip_nodes=(), step=None):
                             step.append("%d, %d, %.12g" % (node_, dof, sign * pre * comp))
         else:
             pairs_.append((r1, r2, float(v.get("axial") or 0.0), float(v.get("tangential") or 0.0)))
+        if record is not None:                # what the connector forces are read back from after the run
+            record.append((o.Name, (axis.x, axis.y, axis.z), bolt_axial(v) if kind == "Bolt" else 0.0, list(pairs_)))
         for p, (n1, n2, ka, ks) in enumerate(pairs_):
             for dof, comp in ((1, axis.x), (2, axis.y), (3, axis.z)):
                 kk = ka * comp * comp + ks * (1.0 - comp * comp)
@@ -821,6 +891,55 @@ def connector_input(a, femmesh, node0, elem0, skip_nodes=(), step=None):
                           "%d, %d" % (dof, dof), repr(float("%.12g" % kk))]    # CalculiX wants a real ("100000" is no data)
                 elem += 1
     return lines
+
+
+def connector_forces(a):
+    ""
+
+
+    import os
+    import numpy as np
+    from . import addintabs
+    frd, rec = SPRINGS.get(a.Name, (None, []))
+    for o in connectors(a):
+        if FORCES in o.PropertiesList:
+            setattr(o, FORCES, "")            # a connector the run left out shows no stale forces
+    if not frd or not rec or not os.path.exists(frd):
+        return {}
+    disp = addintabs._frd_disp(frd)
+    out = {}
+    for name, axis, pre, pairs in rec:
+        o = a.Document.getObject(name)
+        if o is None or len(pairs) < 1:
+            continue
+        ax = np.array(axis, float)
+        ax = ax / (np.linalg.norm(ax) or 1.0)
+        def pull(pair):
+            n1, n2, ka, ks = pair
+            k = np.array([ka * c * c + ks * (1.0 - c * c) for c in ax])
+            return k * (np.array(disp.get(n2, (0, 0, 0))) - np.array(disp.get(n1, (0, 0, 0))))
+        f = pull(pairs[0])
+        axial = float(f.dot(ax)) + pre
+        shear = f - f.dot(ax) * ax
+        m = pull(pairs[1]) if len(pairs) > 1 else np.zeros(3)
+        torque = float(m.dot(ax))
+        bend = m - torque * ax
+        row = lambda v_: [float(v_[0]), float(v_[1]), float(v_[2]), float(np.linalg.norm(v_))]
+        res = {"axial": row(axial * ax), "axial_value": axial, "shear": row(shear), "bending": row(bend),
+               "torque": row(torque * ax), "torque_value": torque}
+        if FORCES not in o.PropertiesList:
+            o.addProperty("App::PropertyString", FORCES, "FreeCAD", "the connector's forces after the last run (JSON)")
+            o.setPropertyStatus(FORCES, ["Hidden"])
+        setattr(o, FORCES, json.dumps(res))
+        out[name] = res
+    return out
+
+
+def forces_of(o):
+    try:
+        return json.loads(getattr(o, FORCES, "") or "{}")
+    except ValueError:
+        return {}
 
 
 def patch_input(a, path, femmesh):
@@ -851,7 +970,9 @@ def patch_input(a, path, femmesh):
             if s.startswith("Face"):
                 skip.update(side_nodes(femmesh, g, s))
     step = []
-    lines = connector_input(a, femmesh, node0, elem0, skip, step)
+    rec = []
+    lines = connector_input(a, femmesh, node0, elem0, skip, step, rec)
+    SPRINGS[a.Name] = (path[:-4] + ".frd", rec)
     i = text.upper().find("\n*STEP")
     if i < 0:
         raise ValueError("The solver input has no *STEP.")
@@ -1055,14 +1176,20 @@ def _patch_run():
         if is_assembly_study(analysis):
             made = prepare(analysis)
             loose = unheld(analysis, made)
-            if loose:
+            if loose and not getattr(addintabs, "uses_soft", lambda _a: False)(analysis):   # soft springs hold them
                 raise RuntimeError(
                     "The model is not adequately restrained: %s %s held by no fixture, connector or interaction, "
                     "so the solver cannot place %s. Add a fixture, a connector (Bolt, Pin, Spring) or an "
                     "interaction (Bonded or Contact) that joins %s to a held part." % (
                         ", ".join(loose), "is" if len(loose) == 1 else "are", "it" if len(loose) == 1 else "them",
                         "it" if len(loose) == 1 else "them"))
-        return run0(analysis)
+        r = run0(analysis)
+        try:
+            if is_assembly_study(analysis):
+                connector_forces(analysis)
+        except Exception as _fw_err:
+            _fw_log("asmsim.py:forces", _fw_err)
+        return r
 
     addintabs.run_study = run_study
     addintabs._fw_asmsim = True
@@ -1522,6 +1649,20 @@ if Gui is not None:
                 d.setToolTip("Shank diameter; 0 takes the hole's")
                 ol.addRow("Bolt shank diameter:", d)
                 self.values["diameter"] = d
+
+                # over the faces, which deform)
+                ct = sx._box("Connection Type")
+                ct.setObjectName("SWSimBoltConnectionBox")
+                cl = QtWidgets.QHBoxLayout(ct)
+                self.conn = QtWidgets.QButtonGroup(ct)
+                for i, t in enumerate(CONNECTIONS):
+                    rb = QtWidgets.QRadioButton(t)
+                    rb.setObjectName("SWSimBoltConnection_" + t)
+                    rb.setToolTip("The bolt's ends hold the faces rigid" if t == "Rigid" else
+                                  "The bolt's ends are spread over the faces, which keep deforming")
+                    self.conn.addButton(rb, i)
+                    cl.addWidget(rb)
+                self.conn.button(CONNECTIONS.index(v.get("connection") or "Rigid")).setChecked(True)
                 pre = sx._box("Pre-load")
                 pl = QtWidgets.QFormLayout(pre)
                 self.ptype = QtWidgets.QButtonGroup(pre)
@@ -1581,6 +1722,7 @@ if Gui is not None:
                 self.lib.toggled.connect(lambda *_: self._enable())
                 self.material.currentTextChanged.connect(self._library_values)
                 self.extra.insert(0, mat)
+                self.extra.insert(0, ct)
                 self.extra.append(pre)
             elif self.kind == "Bearing":
                 self.stiff = QtWidgets.QButtonGroup(opt)
@@ -1682,6 +1824,7 @@ if Gui is not None:
             if self.kind == "Bolt":
                 torque = self.ptype.checkedId() == 1
                 vals["preload_type"] = PRELOADS[1 if torque else 0]
+                vals["connection"] = CONNECTIONS[max(0, self.conn.checkedId())]
                 vals["preload"] = self.pre.value() * (1000.0 if torque else 1.0)      # N.m in the box, N.mm kept
                 if torque:
                     vals["friction_factor"] = self.kf.value()
@@ -1693,6 +1836,67 @@ if Gui is not None:
             elif self.kind == "Bearing":
                 vals["stiffness"] = STIFFNESS[max(0, self.stiff.checkedId())]
             return add_connector(self.a, self.kind, self.faces.values(), self.edit, **vals)
+
+    class ForcesDialog(QtWidgets.QDialog):
+        ""
+
+
+        def __init__(self, a):
+            super().__init__(Gui.getMainWindow())
+            self.setObjectName("SWSimConnectorForces")
+            self.setWindowTitle("Pin/Bolt/Bearing Force")
+            self.head = ["Connector", "Type", "X-Component", "Y-Component", "Z-Component", "Resultant"]
+            self.rows = []
+            for o in connectors(a):
+                fv = forces_of(o)
+                if not fv:
+                    continue
+                for label, key_, s in (("Axial Force (N)", "axial", 1.0), ("Shear Force (N)", "shear", 1.0),
+                                       ("Bending moment (N.m)", "bending", 1e-3), ("Torque (N.m)", "torque", 1e-3)):
+                    self.rows.append([o.Label, label] + ["%.4g" % (x * s) for x in fv[key_]])
+            lay = QtWidgets.QVBoxLayout(self)
+            lay.addWidget(QtWidgets.QLabel("Study name: %s" % a.Label))
+            self.table = QtWidgets.QTableWidget(len(self.rows), len(self.head))
+            self.table.setObjectName("SWSimConnectorForcesTable")
+            self.table.setHorizontalHeaderLabels(self.head)
+            self.table.verticalHeader().hide()
+            self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+            for r, row in enumerate(self.rows):
+                for c, text in enumerate(row):
+                    self.table.setItem(r, c, QtWidgets.QTableWidgetItem(text))
+            self.table.resizeColumnsToContents()
+            lay.addWidget(self.table)
+            bb = QtWidgets.QHBoxLayout()
+            self.save_btn = QtWidgets.QPushButton("Save")
+            self.save_btn.setObjectName("SWSimConnectorForcesSave")
+            self.save_btn.clicked.connect(lambda: self.save())
+            close = QtWidgets.QPushButton("Close")
+            close.clicked.connect(self.accept)
+            bb.addStretch(1)
+            bb.addWidget(self.save_btn)
+            bb.addWidget(close)
+            lay.addLayout(bb)
+            self.resize(640, 320)
+
+        def save(self, path=None):
+            import csv
+            if not path:
+                path, _f = QtWidgets.QFileDialog.getSaveFileName(self, "Save", "Pin-Bolt-Bearing Force.csv", "CSV (*.csv)")
+            if not path:
+                return None
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(self.head)
+                w.writerows(self.rows)
+            return path
+
+    FORCE_LISTS = []
+
+    def list_forces(a):
+        d = ForcesDialog(a)
+        FORCE_LISTS[:] = [d]
+        d.show()
+        return d
 
     class UnderconstrainedPM:
         ""

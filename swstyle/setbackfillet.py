@@ -43,7 +43,7 @@ def _fw_log(site, err):
 import FreeCAD as App
 
 TYPE = "PartDesign::FeaturePython"
-PARTIAL_CONDITIONS = ("None", "Distance", "Percentage")
+PARTIAL_CONDITIONS = ("None", "Distance", "Percentage", "Reference")
 ICON = "FEATURES_FILLET"
 SEP = "/"
 
@@ -497,6 +497,15 @@ class SetbackFilletFeature:
                                 "%s offset: a distance in mm, or a percentage of the edge" % end)
             obj.addProperty("App::PropertyBool", "PartialFlip", "Partial Edge Parameters",
                             "Measure from the edge's other end")
+        if "PartialStartRef" not in props:
+
+            # a plane or a flat face meets the edge
+            for end in ("Start", "End"):
+                kept = str(getattr(obj, "Partial" + end, "None") or "None")
+                setattr(obj, "Partial" + end, list(PARTIAL_CONDITIONS))
+                setattr(obj, "Partial" + end, kept if kept in PARTIAL_CONDITIONS else "None")
+                obj.addProperty("App::PropertyLinkSub", "Partial%sRef" % end, "Partial Edge Parameters",
+                                "%s reference of a Reference Offset: a vertex, a point, a plane or a flat face" % end)
         if "SetbackRefs" not in props:
             # the setback and corner names as a link, so FreeCAD renames them with the part
             obj.addProperty("App::PropertyLinkSub", "SetbackRefs", "Setback Parameters",
@@ -507,7 +516,8 @@ class SetbackFilletFeature:
             obj.setEditorMode("SetbackRefNames", 2)
 
     def execute(self, obj):
-        if "PartialStart" not in obj.PropertiesList or "SetbackRefs" not in obj.PropertiesList:
+        if "PartialStart" not in obj.PropertiesList or "SetbackRefs" not in obj.PropertiesList \
+                or "PartialStartRef" not in obj.PropertiesList:
             self.setup(obj)
         follow_names(obj)
         whole = self._execute(obj)
@@ -657,8 +667,55 @@ def partial_span(obj):
     for end in ("Start", "End"):
         kind = str(getattr(obj, "Partial" + end, "None") or "None")
         value = float(getattr(obj, "Partial%sValue" % end, 0.0) or 0.0)
+        if kind == "Reference":
+            value = _reference_shape(obj, getattr(obj, "Partial%sRef" % end, None))
         out.append((kind, value))
     return out[0], out[1], bool(getattr(obj, "PartialFlip", False))
+
+
+def _reference_shape(obj, link):
+    """The shape a Reference Offset names, in the body's coordinates (as the fillet's base), or None."""
+    try:
+        if not link or link[0] is None:
+            return None
+        import Part
+        target, subs = link[0], [s for s in (link[1] or []) if s]
+        shape = Part.getShape(target, subs[0] if subs else "", needSubElement=bool(subs), noElementMap=True)
+        body = obj.getParentGeoFeatureGroup()
+        if body is not None and not body.getGlobalPlacement().isIdentity():
+            shape = shape.copy()
+            shape.Placement = body.getGlobalPlacement().inverse().multiply(shape.Placement)
+        return None if shape.isNull() else shape
+    except Exception as _fw_err:
+        _fw_log("setbackfillet.py:reference", _fw_err)
+        return None
+
+
+def _reference_at(edge, shape):
+    """Where along the edge (0 its start, 1 its end) the reference meets it, or the nearest point to it."""
+    if shape is None:
+        raise RuntimeError("Reference Offset: pick a vertex, a point, a plane or a flat face for the reference.")
+    faces = shape.Faces
+    if len(faces) == 1 and faces[0].Surface.TypeId == "Part::GeomPlane":
+        import Part
+        face = faces[0]
+        u0, u1, v0, v1 = face.ParameterRange
+        at = face.valueAt(0.5 * (u0 + u1), 0.5 * (v0 + v1))        # the face's own placement included
+        shape = Part.Plane(at, face.normalAt(0.5 * (u0 + u1), 0.5 * (v0 + v1))).toShape(-1e5, 1e5, -1e5, 1e5)
+    _d, pairs, _info = edge.distToShape(shape)
+    u = edge.Curve.parameter(pairs[0][0])
+    u0, u1 = edge.FirstParameter, edge.LastParameter
+    return min(1.0, max(0.0, (u - u0) / (u1 - u0))) if abs(u1 - u0) > 1e-12 else 0.0
+
+
+def _end_fraction(edge, cond, which, flip):
+    """The offset of one end as a fraction measured from that end (Reference: where the reference meets the
+    edge, whichever way the edge is measured)."""
+    kind, value = cond
+    if kind == "Reference":
+        t = _reference_at(edge, value)
+        return t if (which == "start") != bool(flip) else 1.0 - t
+    return _fraction(edge, kind, value)
 
 
 def _fraction(edge, kind, value):
@@ -679,8 +736,8 @@ def partial_edge(base, whole, pairs, start, end, flip):
     import Part
     edge = base.Edges[pairs[0][0] - 1]
     radius = float(pairs[0][1])
-    a = _fraction(edge, *start)
-    b = 1.0 - _fraction(edge, *end)
+    a = _end_fraction(edge, start, "start", flip)
+    b = 1.0 - _end_fraction(edge, end, "end", flip)
     if flip:
         a, b = 1.0 - b, 1.0 - a
     if b - a < 1e-6:

@@ -1172,7 +1172,8 @@ def uses_inertial(analysis):
     """A Static study with "Use inertial relief" ticked."""
     try:
         from . import simtypes
-        return (simtypes.study_type(analysis) in simtypes.SOFT_TYPES and simtypes.study_type(analysis) != "frequency"
+        return (simtypes.study_type(analysis) in simtypes.SOFT_TYPES
+                and simtypes.study_type(analysis) not in ("frequency", "buckling")
                 and bool(getattr(analysis, simtypes.INERTIAL, False)))
     except Exception as _fw_err:
         _fw_log("addintabs.py:inertial", _fw_err)
@@ -1291,9 +1292,9 @@ def buckling_prerequisites(analysis):
         if simtypes.study_type(analysis) != "buckling":
             return ""
         out = []
-        if not _folder_items(analysis, "fixtures"):
+        if not _folder_items(analysis, "fixtures") and not uses_soft(analysis):   # soft springs hold it
             out.append("The part is not held: add a fixture (Fixtures in the study tree, or the Fixtures Advisor), "
-                       "then run again.")
+                       "or tick Use soft spring to stabilize the model in the study's Properties, then run again.")
         if not _folder_items(analysis, "loads"):
             out.append("A buckling study needs a load: add one under External Loads (the factor found multiplies it), "
                        "then run again.")

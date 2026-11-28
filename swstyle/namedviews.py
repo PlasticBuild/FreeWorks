@@ -243,7 +243,7 @@ def reset_standard(doc=None, ask=True):
 
 
 def arm_update():
-    """Update Standard Views: the next standard view picked takes the current view."""
+    """Update Standard Views: the next of the six standard views picked (Front ... Right) takes the current view."""
     _armed[:] = [True]
     try:
         Gui.getMainWindow().statusBar().showMessage("Select the standard view to update with the current view", 6000)
@@ -273,7 +273,11 @@ def go_standard(key, doc=None, view=None):
     doc, view = doc or App.ActiveDocument, view or _view()
     if _armed:
         _armed[:] = []
-        return set_current_as(key, doc, view, ask=True) if key in STANDARD else False
+
+        # Isometric, Trimetric and Dimetric cannot be updated: they turn as always and the update is dropped
+        # (a tester saw the update's question box pop up on Isometric / Trimetric / Dimetric)
+        if key in SETTABLE:
+            return set_current_as(key, doc, view, ask=True)
     if key not in STANDARD or view is None:
         return False
     _push_current()

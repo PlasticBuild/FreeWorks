@@ -472,7 +472,27 @@ def overlay(bom):
     w.move(int(bom.FwAt.x), int(bom.FwAt.y))
     w.show()
     w.raise_()
+    _clear_of_bars(w, parent)
     return w
+
+
+def _clear_of_bars(w, parent):
+    """The table's top left corner and title stay in the open: a bar floating over the graphics area there (the
+    CommandManager tab row, a heads-up toolbar) would hide the title, the table's handle. The table goes just
+    below it; the stored place is kept."""
+    try:
+        app = QtWidgets.QApplication.instance()
+        for _ in range(4):
+            g = w.mapToGlobal(QtCore.QPoint(6, 4))
+            top = app.widgetAt(g)
+            if top is None or top is w or w.isAncestorOf(top) or top is parent or parent.isAncestorOf(top):
+                return
+            bottom = parent.mapFromGlobal(top.mapToGlobal(QtCore.QPoint(0, top.height()))).y()
+            if bottom <= w.y() or bottom > parent.height() - w.height():
+                return
+            w.move(w.x(), bottom + 6)
+    except Exception as _fw_err:
+        _fw_log("asmbom.py:clear of bars", _fw_err)
 
 
 def _drop_overlay(bom):

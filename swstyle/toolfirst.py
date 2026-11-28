@@ -81,7 +81,9 @@ NEEDS = {
     "PenDraw": _INK, "PenEraser": _INK, "PenSelect": _INK, "PenPowerModify": _INK, "PenRuler": _INK,
     "PenProtractor": _INK,
     "WE_PrimaryMember": _WELD, "WE_SecondaryMember": _WELD, "WE_InsertConnection": _WELD,
-    "WE_PatternConnection": _WELD, "WE_PiercePoint": _WELD, "WE_TrimExtend": _WELD,
+    "WE_PatternConnection": _WELD, "WE_PiercePoint": _WELD,
+    # pkg470: Trim/Extend is on the Weldments tab and trims structural members (not only a structure system's)
+    "WE_TrimExtend": ("Insert a structural member first.", None, [("Structural Member", "SWStyle_WEStructuralMember")]),
     "WE_EndCap": ("Select an end face of a structural member.", "any", []),
     "WE_Gusset": ("Select two touching faces of structural members.", "any", []),
     "DrawProjectedView": _VIEW, "DrawAuxiliaryView": ("Select a straight edge of a drawing view.", "viewgeo", []),

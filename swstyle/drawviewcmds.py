@@ -48,7 +48,13 @@ def model_centre_on_sheet(v):
     k = DV.view_scale(v)
     d, x, y = D.view_frame(v)
     c = DV.model_centre(v)
-    return x0 - c.dot(x) * k, y0 - c.dot(y) * k
+    u, w = c.dot(x) * k, c.dot(y) * k
+    r = float(getattr(v, "Rotation", 0) or 0)
+    if r:                       # a turned view (an Auxiliary View, Rotate View) turns its model about the view's centre
+        import math
+        cr, sr = math.cos(math.radians(r)), math.sin(math.radians(r))
+        u, w = u * cr - w * sr, u * sr + w * cr
+    return x0 - u, y0 - w
 
 
 def view_centre(v):

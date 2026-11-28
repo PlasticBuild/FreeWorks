@@ -384,7 +384,14 @@ class DrawingViewPanel:
                 for o in self._arrow_items(v):
                     self.doc.removeObject(o.Name)
                 if on and letter:
-                    D.view_arrow(self.page, parent, v, letter)
+                    D.view_arrow(self.page, parent, v, letter, D.aux_arrow_at(v, parent))
+                    if getattr(v, "SWAuxiliary", "") and v.SWAuxiliary != letter:
+                        v.SWAuxiliary = letter          # an auxiliary view's VIEW X follows its arrow's letter
+                        try:
+                            from . import drawdocprops as DDP
+                            DDP.label_view(v, dict(DDP.defaults(), **DDP.stored(self.doc)))
+                        except Exception as error:
+                            App.Console.PrintLog("FreeCAD: auxiliary label: %s\n" % error)
             self.change(fn)
         self.arrow.toggled.connect(redo)
         self.arrow_label.editingFinished.connect(redo)

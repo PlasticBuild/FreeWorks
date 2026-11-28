@@ -116,7 +116,11 @@ FILLET, CHAMFER = "PartDesign::Fillet", "PartDesign::Chamfer"
 SHELL, DRAFT = "PartDesign::Thickness", "PartDesign::Draft"
 PREVIEWS = ("Full preview", "Partial preview", "No preview")
 
-PARTIAL_SHOWN = (("Distance Offset", "Distance"), ("Distance Offset Percentage", "Percentage"))
+
+PARTIAL_SHOWN = (("None", "None"), ("Distance Offset", "Distance"), ("Percentage Offset", "Percentage"),
+                 ("Reference Offset", "Reference"))
+PARTIAL_PERCENT, PARTIAL_REFERENCE = 2, 3
+PARTIAL_PURPLE = "#a03cc8"
 FILLET_TYPES = (    # (tooltip, icon family, command): Constant Size is this page
     ("Constant Size Fillet", "FEATURES_FILLET", None),
     ("Variable Size Fillet", "FEATURES_VARIABLE_FILLET", "SWStyle_VariableFillet"),
@@ -245,6 +249,31 @@ def to_base(base, obj, sub):
         for i, f in enumerate(base.Shape.Faces, 1):
             if _same_face(element, f):
                 return "Face%d" % i
+        # a face the preview has trimmed (its neighbour's edges rounded): the base face it is part of,
+
+        inside = _point_inside(element)
+        if inside is not None:
+            for i, f in enumerate(base.Shape.Faces, 1):
+                if f.Surface.TypeId == element.Surface.TypeId and _on_face(f, inside):
+                    return "Face%d" % i
+    return None
+
+
+def _point_inside(face):
+    """A point well inside the face (its centre when that is on it), else None."""
+    try:
+        p = face.CenterOfMass
+        u, v = face.Surface.parameter(p)
+        if face.isPartOfDomain(u, v) and (App.Vector(face.Surface.value(u, v)) - p).Length < 1e-5:
+            return p
+        u0, u1, v0, v1 = face.ParameterRange
+        for fu in (0.5, 0.35, 0.65, 0.2, 0.8):
+            for fv in (0.5, 0.35, 0.65, 0.2, 0.8):
+                u, v = u0 + fu * (u1 - u0), v0 + fv * (v1 - v0)
+                if face.isPartOfDomain(u, v):
+                    return App.Vector(face.valueAt(u, v))
+    except Exception as _fw_err:
+        _fw_log("filletpm.py:point inside", _fw_err)
     return None
 
 
@@ -2295,6 +2324,9 @@ class FilletPanel(DressUpPanel):
         parms.layout().addWidget(kind)
         self.radius = _spin(parms, "SWFilletRadius", "mm", 0.001, 1e6)
         self.radius.setValue(params().GetFloat("FilletRadius", 10.0) if self.edit is None else self.edit.Radius.Value)
+        if self.edit is not None and "Radius" in self.edit.PropertiesList:
+            from . import pmvalues
+            pmvalues.show_pending_of(self.radius, self.edit, "Radius")
         self.radius.valueChanged.connect(self._radius_changed)
         self.list.currentRowChanged.connect(self._row_changed)
         r_row = QtWidgets.QHBoxLayout()
@@ -2415,6 +2447,7 @@ class FilletPanel(DressUpPanel):
 
         box = _box("Partial Edge Parameters", collapsed=False)
         self.partial = {}
+        self.partial_ref_box, self.partial_refs = {}, {}
         self.partial_tick = QtWidgets.QCheckBox("Partial Edge Parameters", box)
         self.partial_tick.setObjectName("SWFilletPartialOn")   # pmlayout puts it in the group title
         self.partial_tick.setToolTip("Partial Edge Parameters: the fillet runs only part of the edge")
@@ -2432,10 +2465,10 @@ class FilletPanel(DressUpPanel):
             kind = QtWidgets.QComboBox(box)
             kind.setObjectName("SWFilletPartial%s" % end)
             kind.addItems([shown for shown, _stored in PARTIAL_SHOWN])
-            kind.setToolTip("%s condition: an offset from the %s of the edge, in mm or in %% of its length"
-                            % (end, "start" if end == "Start" else "end"))
+            kind.setToolTip("%s condition: an offset from the %s of the edge, in mm or in %% of its length, or where "
+                            "a reference meets the edge" % (end, "start" if end == "Start" else "end"))
             stored = str(getattr(e, "Partial" + end, "None")) if e is not None else "None"
-            kind.setCurrentIndex(1 if stored == "Percentage" else 0)
+            kind.setCurrentIndex({"Distance": 1, "Percentage": 2, "Reference": 3}.get(stored, 1))
             value = QtWidgets.QDoubleSpinBox(box)
             value.setObjectName("SWFilletPartial%sValue" % end)
             value.setRange(0.0, 1e6)
@@ -2445,7 +2478,17 @@ class FilletPanel(DressUpPanel):
             box.layout().addWidget(kind)
             box.layout().addWidget(value)
             self.partial[end] = (kind, value)
-            kind.activated.connect(lambda i: self._partial_changed())
+            # Reference Offset: a pick box in the value's place (a vertex, a point, a plane or a flat face)
+            ref = QtWidgets.QListWidget(box)
+            ref.setObjectName("SWFilletPartial%sRef" % end)
+            ref.setToolTip("%s reference: a vertex, a point, a plane or a flat face" % end)
+            ref.setFixedHeight(26)
+            ref.installEventFilter(_Activate(self, "partial:" + end, ref))
+            box.layout().addWidget(ref)
+            self.partial_ref_box[end] = ref
+            link = getattr(e, "Partial%sRef" % end, None) if e is not None else None
+            self.partial_refs[end] = (link[0], (list(link[1]) or [""])[0]) if link and link[0] is not None else None
+            kind.activated.connect(lambda i, end=end: self._partial_kind_picked(end, i))
             typed = set()       # the user typed in it (the value arrives once the focus has gone); used once
             value.lineEdit().textEdited.connect(lambda text, s=typed: s.add(1))
             value.valueChanged.connect(lambda v, w=value, s=typed: self._partial_value(w, s))
@@ -2469,9 +2512,35 @@ class FilletPanel(DressUpPanel):
             return "None"
         return PARTIAL_SHOWN[max(0, parts[end][0].currentIndex())][1]
 
+    def _partial_kind_picked(self, end, index):
+        ""
+        if index == PARTIAL_REFERENCE:
+            self.active = "partial:" + end
+            self._fill()
+        self._partial_changed()
+
+    def _partial_ref_rows(self):
+        for end, ref in getattr(self, "partial_ref_box", {}).items():
+            if not alive(ref):
+                continue
+            picked = self.partial_refs.get(end)
+            text = ("%s%s" % (picked[0].Label, "." + picked[1] if picked[1] else "")) if picked else ""
+            if [ref.item(i).text() for i in range(ref.count())] != ([text] if text else []):
+                ref.clear()
+                if text:
+                    ref.addItem(text)
+            ref.setStyleSheet("QListWidget { background: %s; border-left: 4px solid %s; }"
+                              % (PICK_BLUE if getattr(self, "active", "") == "partial:" + end else "white", PARTIAL_PURPLE))
+
     def _partial_rows(self):
-        for kind, value in self.partial.values():
-            value.setSuffix(" %" if kind.currentIndex() == 1 else " mm")
+        for end, (kind, value) in self.partial.items():
+            value.setSuffix(" %" if kind.currentIndex() == PARTIAL_PERCENT else " mm")
+            by_ref = kind.currentIndex() == PARTIAL_REFERENCE
+            value.setVisible(not by_ref)
+            ref = getattr(self, "partial_ref_box", {}).get(end)
+            if ref is not None and alive(ref):
+                ref.setVisible(by_ref)
+        self._partial_ref_rows()
         on = self.partial_on(False)
         self.partial_note.setVisible(on and not self.partial_on())
 
@@ -2590,7 +2659,27 @@ class FilletPanel(DressUpPanel):
         return out
 
     def other_pick(self, obj, sub):
-        if getattr(self, "active", "items") != "setback":
+        active = getattr(self, "active", "items")
+        if active.startswith("partial:"):
+            # features-481: a Reference Offset's box takes a vertex, a point, a plane or a flat face
+            end = active.split(":", 1)[1]
+            ok = (sub or "").startswith("Vertex") or (sub or "").startswith("Face") or (not sub and (
+                obj.TypeId in ("App::Plane", "PartDesign::Plane", "PartDesign::Point", "App::Point")))
+            if ok and (sub or "").startswith("Face"):
+                try:
+                    ok = obj.Shape.getElement(sub).Surface.TypeId == "Part::GeomPlane"
+                except Exception:
+                    ok = False
+            if ok and obj is getattr(self, "feature", None):
+                ok = False          # the fillet itself cannot be its own reference
+            if ok:
+                self.partial_refs[end] = (obj, sub or "")
+                tick = getattr(self, "partial_tick", None)
+                if tick is not None and alive(tick) and not tick.isChecked():
+                    tick.setChecked(True)
+                self._partial_rows()
+            return True
+        if active != "setback":
             return False
         if not sub or not sub.startswith("Vertex") or self.base is None:
             return True         # the box takes vertices only
@@ -2960,6 +3049,7 @@ class FilletPanel(DressUpPanel):
         self._fill_distances()
         self.list.setStyleSheet("QListWidget { background: %s; }" % (PICK_BLUE if self.active == "items" else "white"))
         sl.setStyleSheet("QListWidget { background: %s; }" % (PICK_BLUE if self.active == "setback" else "white"))
+        self._partial_ref_rows()
 
     def remove_item(self, row):
         self._row = None
@@ -3022,7 +3112,14 @@ class FilletPanel(DressUpPanel):
 
     def apply(self, f):
         from . import multiradius, conicfillet, simplefeature
-        simplefeature.put_value(f, "Radius", self.radius.value())    # a radius per configuration stays per configuration
+        from . import pmvalues
+        if not pmvalues.pending(self.radius):
+            simplefeature.put_value(f, "Radius", self.radius.value())    # a radius per configuration stays per configuration
+        try:
+            pmvalues.link_pending(self.radius, f, "Radius")      # "=R1": the radius follows the Global Variable (Σ)
+        except Exception as error:
+            _fw_log("filletpm.py:radius equation", error)
+            simplefeature.put_value(f, "Radius", self.radius.value())
         if conicfillet.is_conic_fillet(f):
             f.Kind = "Fillet"
             f.TangentPropagation = self.tangent.isChecked()
@@ -3046,10 +3143,18 @@ class FilletPanel(DressUpPanel):
             f.SetbackEdges = keys
             f.SetbackDistances = dists
             if "PartialStart" in f.PropertiesList and getattr(self, "partial", None):
+                if "PartialStartRef" not in f.PropertiesList:
+                    try:
+                        f.Proxy.setup(f)        # features-481: an older feature gets the Reference Offset rows
+                    except Exception as _fw_err:
+                        _fw_log("filletpm.py:partial_setup", _fw_err)
                 on = self.partial_on()
                 for end, (kind, value) in self.partial.items():
                     setattr(f, "Partial" + end, self.partial_kind(end) if on else "None")
                     setattr(f, "Partial%sValue" % end, float(value.value()))
+                    if "Partial%sRef" % end in f.PropertiesList:
+                        picked = self.partial_refs.get(end)
+                        setattr(f, "Partial%sRef" % end, (picked[0], [picked[1]]) if picked else None)
                 f.PartialFlip = self.partial_flip.isChecked()
             return
         if multiradius.is_multi_radius(f):
@@ -3657,8 +3762,8 @@ class ShellPanel(DressUpPanel):
         row.addWidget(QtWidgets.QLabel("D1", multi))
         self.multi_thickness = _spin(multi, "SWShellMultiThickness", "mm", 0.001, 1e6)
         self.multi_thickness.setToolTip("Multi-thickness(es)")
-        self.multi_thickness.setValue(self.multi[-1][1] if self.multi else
-                                      params().GetFloat("ShellMultiThickness", 2.0 * value))
+
+        self.multi_thickness.setValue(self.multi[-1][1] if self.multi else value)
         self.multi_thickness.valueChanged.connect(self._multi_value)
         row.addWidget(self.multi_thickness)
         multi.layout().addLayout(row)
@@ -4189,7 +4294,7 @@ class DraftPanel(DressUpPanel):
         faces.layout().addWidget(prop)
         self.show_preview = QtWidgets.QCheckBox("Show preview", faces)
         self.show_preview.setObjectName("SWDraftShowPreview")
-        self.show_preview.setChecked(params().GetBool("DraftPreview", True))
+        self.show_preview.setChecked(params().GetBool("DraftPreview", False))
         self.show_preview.toggled.connect(self._preview_toggled)
         faces.layout().addWidget(self.show_preview)
         # Parting Line / Step Draft: Direction of Pull (a plane, Reverse) and Parting Lines (edges,

@@ -2454,6 +2454,23 @@ def draw_break_lines(bv):
     return tags
 
 
+def _across(base, axis):
+    """(min, max) of base's model along the view direction axis, measured from the model centre (view geometry)."""
+    c = model_centre(base)
+    vals = []
+    for o in source_shapes(base):
+        try:
+            bb = o.Shape.BoundBox
+            pts = [V(bb.XMax if i & 1 else bb.XMin, bb.YMax if i & 2 else bb.YMin, bb.ZMax if i & 4 else bb.ZMin)
+                   for i in range(8)]
+            vals += [(p - c).dot(axis) for p in pts]
+        except Exception as _fw_err:
+            _fw_log("drawviews.py:break across", _fw_err)
+    if not vals:
+        return -10.0, 10.0
+    return min(vals), max(vals)
+
+
 def make_break(page, base, vertical, a, b, gap=10.0, style="Zig Zag Cut"):
     """Break base between sheet points a and b (vertical break lines at a.x and b.x, else horizontal ones at a.y
     and b.y): the view becomes a broken view, gap mm between the pieces on the sheet."""
@@ -2471,17 +2488,16 @@ def make_break(page, base, vertical, a, b, gap=10.0, style="Zig Zag Cut"):
     m = App.Matrix(x.x, y.x, d.x, 0, x.y, y.y, d.y, 0, x.z, y.z, d.z, 0, 0, 0, 0, 1)
     cut = doc.addObject("Sketcher::SketchObject", "Break")
     cut.Placement = App.Placement(model_centre(base), App.Rotation(m))
-    L = 10.0
-    for o in source_shapes(base):
-        try:
-            L = max(L, o.Shape.BoundBox.DiagonalLength)
-        except Exception as _fw_err:
-            _fw_log("drawviews.py:2321", _fw_err)
+
+    # ways: TechDraw draws them as long as these sketch lines
+    lo, hi = _across(base, y if vertical else x)
+    k0 = view_scale(base) or 1.0
+    lo, hi = lo - 3.0 / k0, hi + 3.0 / k0
     for u, w in ((ua, wa), (ub, wb)):
         if vertical:
-            cut.addGeometry(Part.LineSegment(V(u, -L, 0), V(u, L, 0)))
+            cut.addGeometry(Part.LineSegment(V(u, lo, 0), V(u, hi, 0)))
         else:
-            cut.addGeometry(Part.LineSegment(V(-L, w, 0), V(L, w, 0)))
+            cut.addGeometry(Part.LineSegment(V(lo, w, 0), V(hi, w, 0)))
     cut.Label = "Break%d" % (1 + len([o for o in doc.Objects if o.Label.startswith("Break")]))
     try:
         cut.ViewObject.Visibility = False
@@ -4228,11 +4244,81 @@ def make_broken_out(page, base, a, b, depth):
     if not hasattr(base, "SWOriginalSource"):
         base.addProperty("App::PropertyXLinkList", "SWOriginalSource", "FreeCAD", "the model before the break-out")
         base.SWOriginalSource = src
+    try:
+        before = len(base.getVisibleEdges() or [])
+    except Exception:
+        before = -1
     _shape_swapped(base)
     base.XSource = []
     base.Source = [bo]
     doc.recompute()
+    hatch_broken_out_later(page, base, bo, before)
     return bo
+
+
+def hatch_broken_out(page, base, bo):
+    ""
+
+    from . import drawannot as DA
+    doc = page.Document
+    for o in [o for o in doc.Objects if getattr(o, "SWHatchView", "") == base.Name and
+              getattr(o, "SWBrokenOutHatch", "") == bo.Name]:
+        doc.removeObject(o.Name)
+    n = D._unit(bo.Normal)
+    whole = [o.Shape for o in (bo.Base or []) if hasattr(o, "Shape")]
+    if not whole or bo.Shape.isNull():
+        return []
+    front = max(n.dot(v.Point - bo.Origin) for sh in whole for v in sh.Vertexes) + 0.01
+    level = front - max(0.01, bo.Depth)
+    faces = [f for f in bo.Shape.Faces if f.Surface.__class__.__name__ == "Plane" and
+             abs(abs(f.normalAt(0, 0).dot(n)) - 1) < 1e-6 and abs((f.CenterOfMass - bo.Origin).dot(n) - level) < 1e-4]
+    centre = base.projectPoint(model_centre(base))
+    pattern = "ANSI31 (Iron BrickStone)"
+    made, seen = [], []
+    for f in faces:
+        u0, u1, v0, v1 = f.ParameterRange
+        for a in range(1, 10):
+            for b in range(1, 10):
+                q = f.valueAt(u0 + (u1 - u0) * a / 10.0, v0 + (v1 - v0) * b / 10.0)
+                if not f.isInside(q, 1e-6, True):
+                    continue
+                p2 = base.projectPoint(q)
+                g = (p2.x - centre.x, p2.y - centre.y)
+                if any(r.isInside(V(g[0], g[1], 0), 1e-6, True) for r in seen):
+                    continue
+                region = DA.region_at(base, g)
+                if region is None:
+                    continue
+                seen.append(region)
+                body, R, where = DA.hatch_svg(region, base, pattern=pattern)
+                h = DA.svg_symbol(page, "AreaHatch", body, R, where, "%s hatch" % bo.Label, "AreaHatch")
+                for name, kind, val in (("SWHatchArea", "App::PropertyFloat", region.Area),
+                                        ("SWHatchPattern", "App::PropertyString", pattern),
+                                        ("SWHatchView", "App::PropertyString", base.Name),
+                                        ("SWHatchCentre", "App::PropertyVector", region.CenterOfMass),
+                                        ("SWBrokenOutHatch", "App::PropertyString", bo.Name)):
+                    h.addProperty(kind, name, "FreeCAD", "broken-out section hatch")
+                    setattr(h, name, val)
+                made.append(h)
+    if made:
+        doc.recompute()
+    return made
+
+
+def hatch_broken_out_later(page, base, bo, before=-1, tries=40):
+    """Once TechDraw has drawn the view with the break-out (it projects in the background: its lines change)."""
+    try:
+        now = len(base.getVisibleEdges() or [])
+        ready = now > 0 and now != before
+    except Exception:
+        ready = False
+    if not ready and tries > 0:
+        QtCore.QTimer.singleShot(250, lambda: hatch_broken_out_later(page, base, bo, before, tries - 1))
+        return
+    try:
+        hatch_broken_out(page, base, bo)
+    except Exception as error:
+        App.Console.PrintWarning("FreeCAD: broken-out hatch: %s\n" % error)
 
 
 def broken_out_scope(bo):

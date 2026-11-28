@@ -299,6 +299,7 @@ def _connectors(a):
         if kind == "Bolt":
             e_mpa, nu = asmsim.bolt_material(v)
             rows.append(("Nominal shank diameter", "%.4g mm" % float(v.get("diameter") or 0.0)))
+            rows.append(("Connection type", v.get("connection") or "Rigid"))
             if float(v.get("preload") or 0.0) > 0:
                 if v.get("preload_type") == "Torque":
                     rows.append(("Preload (Torque)", "%.4g N.m" % (float(v["preload"]) / 1000.0)))
@@ -322,7 +323,13 @@ def _connectors(a):
             rows.append(("Self-aligning", "Yes" if v.get("align") else "No"))
         if getattr(o, "Suppressed", False):
             rows.append(("Suppressed", "Yes"))
-        out.append({"name": _name(o), "type": kind, "entities": _refs(o), "rows": rows})
+        forces = []
+        fv = asmsim.forces_of(o) if hasattr(asmsim, "forces_of") else {}
+        if fv:
+            n = lambda r, s=1.0: ["%.4g" % (x * s) for x in r]
+            forces = [["Axial Force (N)"] + n(fv["axial"]), ["Shear Force (N)"] + n(fv["shear"]),
+                      ["Bending moment (N.m)"] + n(fv["bending"], 1e-3), ["Torque (N.m)"] + n(fv["torque"], 1e-3)]
+        out.append({"name": _name(o), "type": kind, "entities": _refs(o), "rows": rows, "forces": forces})
     return out
 
 
@@ -673,6 +680,7 @@ def build_html(a, data, o, pics):
                     rows.append(("Time increment", "%.6g s" % props.get("increment", 0)))
             elif data.get("kind") == "buckling":
                 rows.append(("Number of buckling modes", props.get("count", "")))
+                rows.append(("Soft Spring", "On" if props.get("soft") else "Off"))
             elif data.get("kind") == "nonlinear":
                 rows.append(("Solution type", "Static, end time %.4g s, time increment %.4g s" % (
                     float(props.get("end", 1.0)), float(props.get("increment", 0.05)))))
@@ -808,6 +816,9 @@ def build_html(a, data, o, pics):
         elif s == "Connector Definitions":
             for c in data.get("connectors") or []:
                 parts.append("<h3>%s</h3>" % e(c["name"]) + _t(c["rows"], ("Connector Details", "")))
+                if c.get("forces"):
+                    parts.append("<h4>Connector Forces</h4>" + _t([tuple(r) for r in c["forces"]],
+                                                                   ("Type", "X-Component", "Y-Component", "Z-Component", "Resultant")))
         elif s == "Contact Information":
             parts.append(_t([(c["name"], c["type"], c["entities"]) for c in data["contacts"]], ("Contact", "Type", "Entities")))
         elif s == "Mesh information":

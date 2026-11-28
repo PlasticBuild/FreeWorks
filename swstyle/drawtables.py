@@ -1839,7 +1839,49 @@ class BomPanel(D._Panel):
         if self.attach.isChecked():
             return True
         self.make(p)
+        self._place_top_left(p)
         return True
+
+
+    # pointer), and its outline follows the pointer until that click
+    def _place_top_left(self, p):
+        try:
+            from . import drawtableedit
+            drawtableedit.place_corner(self.table, "Top Left", p)
+        except Exception as _fw_err:
+            _fw_log("drawtables.py:BOM place top left", _fw_err)
+        self._ghost_off()
+
+    def _ghost_size(self):
+        key = (self.view, self.bom_type.checkedButton().text(), self.template.currentText())
+        kept = getattr(self, "_bom_ghost", None)
+        if kept is None or kept[0] != key:
+            from . import drawtableedit
+            try:
+                n = len(bom_rows(self.view, key[1], 1, 1, key[2]))
+            except Exception:
+                n = 3
+            k = drawtableedit.K
+            kept = self._bom_ghost = (key, (sum(bom_widths(key[2])) * k, max(2, n) * 20.0 * k))
+        return kept[1]
+
+    def _ghost_off(self):
+        try:
+            self.clicks.ghost(None)
+        except Exception as _fw_err:
+            _fw_log("drawtables.py:BOM ghost off", _fw_err)
+
+    def sheet_move(self, p):
+        if getattr(self, "edit_table", None) is not None:
+            return
+        if self.table is not None or self.view is None or self.attach.isChecked():
+            self._ghost_off()
+            return
+        try:
+            w, h = self._ghost_size()
+            self.clicks.ghost((p[0] + w / 2.0, p[1] - h / 2.0), (w, h))
+        except Exception as _fw_err:
+            _fw_log("drawtables.py:BOM ghost", _fw_err)
 
 
 class BomEditPanel(BomPanel):

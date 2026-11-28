@@ -1272,6 +1272,70 @@ def third_angle(page):
         return True
 
 
+def _edge_arrow_at(view, edge_index, dx, dy, flip=False):
+    """Where an Auxiliary View's arrow stands: (the edge's middle on the sheet, the unit normal on the sheet towards
+    the side of offset (dx, dy), turned round when flipped), or None."""
+    try:
+        from . import drawviews as DV
+        e = view.getEdgeByIndex(edge_index)
+        a, b = e.Vertexes[0].Point, e.Vertexes[-1].Point
+        k = DV.view_scale(view)
+        x0, y0 = view_position(view)
+        ex, ey = b.x - a.x, b.y - a.y
+        L = math.hypot(ex, ey)
+        if L < 1e-9:
+            return None
+        nx, ny = -ey / L, ex / L
+        if nx * dx + ny * dy < 0:
+            nx, ny = -nx, -ny
+        if flip:
+            nx, ny = -nx, -ny
+        mid = (x0 + (a.x + b.x) / 2 * k, y0 + (a.y + b.y) / 2 * k)
+        return mid, (nx, ny)
+    except Exception as _fw_err:
+        _fw_log("drawings.py:aux arrow", _fw_err)
+        return None
+
+
+def aux_arrow_at(v, parent):
+    """An Auxiliary View's arrow place on parent (see view_arrow), None for other views."""
+    if parent is None or not hasattr(v, "SWAuxEdge"):
+        return None
+    px, py = view_position(parent)
+    vx, vy = view_position(v)
+    return _edge_arrow_at(parent, v.SWAuxEdge, vx - px, vy - py, bool(getattr(v, "SWAuxFlip", False)))
+
+
+def aux_turn(parent, edge_index, d, along):
+    ""
+
+    try:
+        pd = view_frame(parent)[0]
+        e = parent.getEdgeByIndex(edge_index)
+        a, b = e.Vertexes[0].Point, e.Vertexes[-1].Point
+        ex, ey = b.x - a.x, b.y - a.y
+        L = math.hypot(ex, ey)
+        if L < 1e-9:
+            return 0.0, along
+        ex, ey = ex / L, ey / L
+        _pd, px, py = view_frame(parent)
+        n = (d.dot(px), d.dot(py))                 # towards the new view on the sheet
+        side = n[0] * -ey + n[1] * ex              # > 0: the new view is on the n0 = (-ey, ex) side
+        theta = math.degrees(math.atan2(ey, ex)) + float(getattr(parent, "Rotation", 0) or 0)
+        up = d.cross(along)                        # the new view's up (Direction x XDirection) shows along n0 at theta
+        if (up.dot(pd) < 0) == (side > 0):
+            return _deg(theta), along
+        return _deg(theta + 180.0), -along
+    except Exception as _fw_err:
+        _fw_log("drawings.py:aux_turn", _fw_err)
+        return 0.0, along
+
+
+def _deg(a):
+    a = math.fmod(a, 360.0)
+    return a + 360.0 if a < 0 else a
+
+
 def auxiliary_frame(view, edge_index, dx, dy):
     """(direction, XDirection) of the Auxiliary View square to the view's straight edge edge_index, on the side
     of sheet offset (dx, dy)."""
@@ -1872,23 +1936,30 @@ def arrow_group(panel, page, prefix="SWView"):
     panel.arrow_box = box
 
 
-def view_arrow(page, parent, v, letter):
+def view_arrow(page, parent, v, letter, at=None):
     ""
+
+
 
     from . import drawannot as DA
     from . import drawviews as DV
     px, py = view_position(parent)
     vx, vy = view_position(v)
-    dx, dy = vx - px, vy - py
-    L = math.hypot(dx, dy) or 1.0
-    ux, uy = dx / L, dy / L
-    try:
-        w, h = DV.view_extent(parent) if hasattr(DV, "view_extent") else (40.0, 40.0)
-    except Exception:
-        w, h = 40.0, 40.0
-    reach = abs(ux) * w / 2 + abs(uy) * h / 2 + 8
-    tail = (px + ux * (reach + 10), py + uy * (reach + 10))
-    tip = (px + ux * reach, py + uy * reach)
+    if at is not None:
+        (ex, ey), (ux, uy) = at
+        tail = (ex + ux * 15, ey + uy * 15)
+        tip = (ex + ux * 3, ey + uy * 3)
+    else:
+        dx, dy = vx - px, vy - py
+        L = math.hypot(dx, dy) or 1.0
+        ux, uy = dx / L, dy / L
+        try:
+            w, h = DV.view_extent(parent) if hasattr(DV, "view_extent") else (40.0, 40.0)
+        except Exception:
+            w, h = 40.0, 40.0
+        reach = abs(ux) * w / 2 + abs(uy) * h / 2 + 8
+        tail = (px + ux * (reach + 10), py + uy * (reach + 10))
+        tip = (px + ux * reach, py + uy * reach)
     ax, ay = tip[0] - tail[0], -(tip[1] - tail[1])
     body = DA._arrow(ax / 2, ay / 2, -ax / 2, -ay / 2) + (
         '<text x="%g" y="%g" font-family="osifont, Arial" font-size="5" text-anchor="middle">%s</text>'
@@ -1897,6 +1968,8 @@ def view_arrow(page, parent, v, letter):
     arrow = DA.svg_symbol(page, "ViewArrow", body, 14, mid, "View Arrow %s" % letter, "ViewArrow")
     arrow.addProperty("App::PropertyString", "SWArrowOf", "FreeCAD", "the view this arrow names")
     arrow.SWArrowOf = v.Name
+    if at is not None:
+        return (arrow,)
     try:
         vw, vh = DV.view_extent(v) if hasattr(DV, "view_extent") else (40.0, 40.0)
     except Exception:
@@ -2918,8 +2991,11 @@ def _finish_child(panel, v):
         from . import drawviews as DV
         letter = panel.arrow_label.text().strip() or DV.take_label(panel.page)
         if letter == getattr(panel.page, "FreeWorksNextViewLabel", None):
-            DV.take_label(panel.page)
-        made = view_arrow(panel.page, panel.parent, v, letter)
+            if getattr(v, "SWAuxiliary", "") == letter:
+                panel.page.FreeWorksNextViewLabel = DV._next_letter(letter)    # taken once, by the view's label
+            else:
+                DV.take_label(panel.page)
+        made = view_arrow(panel.page, panel.parent, v, letter, getattr(panel, "arrow_at", None))
         panel.made += list(made)
         _setp(v, "SWViewLetter", letter)
     run_import(panel, v)
@@ -3029,6 +3105,7 @@ class AuxiliaryViewPanel(_Panel):
             return
         self.say("Click in the graphics area to place the new view.")
         arrow_group(self, self.page)
+        self.arrow.setChecked(True)
         self.flip = QtWidgets.QCheckBox("Flip direction", self.form)
         self.flip.setObjectName("SWViewArrowFlip")
         self.lay.itemAt(self.lay.count() - 1).widget().layout().addWidget(self.flip)
@@ -3084,12 +3161,23 @@ class AuxiliaryViewPanel(_Panel):
         if self.flip.isChecked():
             d, x = -d, -x
         scale = float(self.parent.getScale()) if hasattr(self.parent, "getScale") else float(self.parent.Scale)
+        turn, x = aux_turn(self.parent, self.edge, d, x)
         v = new_view(self.page, self.parent.XSource or self.parent.Source, d, x, p, scale, self.style.currentText())
+        try:
+            v.Rotation = turn
+        except Exception as _fw_err:
+            _fw_log("drawings.py:aux turn", _fw_err)
         # an auxiliary view: labelled as Document Properties > Views > Auxiliary says (VIEW A)
         v.addProperty("App::PropertyString", "SWAuxiliary", "FreeCAD", "Auxiliary view letter")
+        v.addProperty("App::PropertyInteger", "SWAuxEdge", "FreeCAD", "Auxiliary view: the parent's reference edge")
+        v.SWAuxEdge = int(self.edge)
+        v.addProperty("App::PropertyBool", "SWAuxFlip", "FreeCAD", "Auxiliary view: Flip direction")
+        v.SWAuxFlip = bool(self.flip.isChecked())
+        self.arrow_at = aux_arrow_at(v, self.parent)
         try:
             from . import drawviews as DV
-            v.SWAuxiliary = DV.take_label(self.page)
+            typed = self.arrow_label.text().strip() if self.arrow.isChecked() else ""
+            v.SWAuxiliary = typed or DV.take_label(self.page)     # VIEW X under the view = the arrow's X
         except Exception:
             v.SWAuxiliary = chr(ord("A") + len([o for o in self.doc.Objects if getattr(o, "SWAuxiliary", "")]) % 26)
         try:

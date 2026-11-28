@@ -943,7 +943,7 @@ def background_look(on_done=None):
 class UpdateCommand:
     def GetResources(self):
         n = available_count()
-        return {"MenuText": "Slicer Updates" + (" (%d)" % n if n else ""), "Pixmap": str(
+        return {"MenuText": "Slicer Updates" + (" (%d)" % n if n else ""), "Pixmap": _v2file(
                     Path(__file__).resolve().parent / "resources" / "slicer" / "update.svg"),
                 "ToolTip": "Downloads Orca Slicer, Bambu Studio and PrusaSlicer from their release pages and updates "
                            "them. Roll Back returns to the version before."}
@@ -962,3 +962,9 @@ BUTTONS = (
      "Downloads Orca Slicer, Bambu Studio or PrusaSlicer from their release pages, or updates them.",
      "Slicer\nUpdates", "update"),
 )
+
+
+def _v2file(path):
+    """v2last-1127: the V2 pack's PNG (this theme) for a command Pixmap, else the drawing."""
+    from . import icons
+    return icons.v2_file(str(path))

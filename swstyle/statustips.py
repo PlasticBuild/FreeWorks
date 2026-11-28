@@ -166,8 +166,53 @@ def _fix_readout(label):
             new = readout_text(text)
             if new != text:
                 label.setText(new)
+        _tidy_bar(label)
     except Exception as _fw_err:
         _fw_log("statustips.py:_fix_readout", _fw_err)
+
+
+def _tidy_bar(label):
+    ""
+
+
+
+    bar = label.parentWidget()
+    if bar is None:
+        return
+    empty = not label.text().strip()
+    want = 0 if empty else 120
+    if label.minimumWidth() != want:
+        label.setMinimumWidth(want)
+    if label.isVisible() == empty:
+        label.setVisible(not empty)
+    hint = bar.findChild(QtWidgets.QLabel, "hintLabel", QtCore.Qt.FindDirectChildrenOnly)
+    if hint is not None:
+        has = bool(hint.text().strip())
+        if hint.isVisible() != has:
+            hint.setVisible(has)
+    info = bar.findChild(QtWidgets.QWidget, "SWStatusInfo", QtCore.Qt.FindDirectChildrenOnly)
+    if info is not None and not empty and label.x() > info.x():
+        _place_before(bar, label, info)
+
+
+def _place_before(bar, label, info):
+    order = []
+    lay = bar.layout()
+    stack = [lay] if lay is not None else []
+    while stack:
+        sub = stack.pop(0)
+        for i in range(sub.count()):
+            item = sub.itemAt(i)
+            if item.widget() is not None:
+                order.append(item.widget())
+            elif item.layout() is not None:
+                stack.insert(0, item.layout())
+    order = [w for w in order if not isinstance(w, QtWidgets.QSizeGrip) and w is not label]
+    if info not in order:
+        return
+    bar.removeWidget(label)
+    bar.insertPermanentWidget(order.index(info), label, 0)
+    label.show()
 
 
 class _Readout(QtCore.QObject):

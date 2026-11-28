@@ -1141,6 +1141,12 @@ def menu_entries(row, a):
                 pass
             except Exception as _fw_err:
                 _fw_log("simtree.py:simforce", _fw_err)
+            try:
+                from . import asmsim
+                if hasattr(asmsim, "list_forces") and any(asmsim.forces_of(c) for c in asmsim.connectors(a)):
+                    out.append(("List Pin/Bolt/Bearing Force...", lambda: asmsim.list_forces(a)))
+            except Exception as _fw_err:
+                _fw_log("simtree.py:connforces", _fw_err)
             out.append(("-", None))
             compare(row.plot if w == "plot" else None)
             out.append(("-", None))
@@ -1321,7 +1327,7 @@ if Gui is not None:
         if key.endswith(MESHED):
             return _checked(icon(key[:-len(MESHED)]))
         path = os.path.join(ICONS, key + ".svg")
-        return QtGui.QIcon(path) if os.path.isfile(path) else QtGui.QIcon()
+        return _v2(path) if os.path.isfile(path) else QtGui.QIcon()
 
     def _checked(base):
         ""
@@ -2001,3 +2007,9 @@ if Gui is not None:
 else:
     def install():
         return None
+
+
+def _v2(path):
+    """v2last-1127: the V2 pack's themed picture for one of the add-on's own drawings, else the file itself."""
+    from . import icons
+    return icons.family(str(path))

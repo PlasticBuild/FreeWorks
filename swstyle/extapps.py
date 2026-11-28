@@ -811,7 +811,7 @@ def _show_url(app, url):
     _edge[app] = panel
     sub = _mdi().addSubWindow(panel)
     sub.setWindowTitle(app)
-    sub.setWindowIcon(QtGui.QIcon(_icon(app.lower())))
+    sub.setWindowIcon(_v2(_icon(app.lower())))
     sub.showMaximized()
 
 
@@ -1034,7 +1034,7 @@ def _hub_tab(app, url):
     _panels[app] = panel
     sub = _mdi().addSubWindow(panel)
     sub.setWindowTitle(app)
-    sub.setWindowIcon(QtGui.QIcon(_icon(app.lower())))
+    sub.setWindowIcon(_v2(_icon(app.lower())))
     sub.showMaximized()
     _launch_page(app, url)
 
@@ -1071,7 +1071,7 @@ def open_app(app):
     _panels[app] = panel
     sub = _mdi().addSubWindow(panel)
     sub.setWindowTitle(app)
-    sub.setWindowIcon(QtGui.QIcon(_icon(app.lower())))
+    sub.setWindowIcon(_v2(_icon(app.lower())))
     sub.showMaximized()
     panel.open_home()
     if APPS[app]["mode"] == "local" and extupdate.current(_root(), APPS[app]["repo"]) is None:
@@ -1361,3 +1361,9 @@ def install():
         QtCore.QTimer.singleShot(FIRST_CHECK_MS, startup_check)
     except Exception as error:
         App.Console.PrintError("FreeCAD: add-in apps not added (%s)\n" % error)
+
+
+def _v2(path):
+    """v2last-1127: the V2 pack's themed picture for one of the add-on's own drawings, else the file itself."""
+    from . import icons
+    return icons.family(str(path))

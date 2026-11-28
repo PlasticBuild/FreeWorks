@@ -87,6 +87,7 @@ class _State:
         self.label = None        # (index, LabelDistance, LabelPosition) at the press
         self.ending = False      # the release went to FreeCAD; the step closes in a moment
         self.swallow = False     # the release kept from the tool (it comes twice)
+        self.clicked = []        # dimensions clicked (no drag): their Modify box, for tests
 
 
 def state(tool):
@@ -232,6 +233,7 @@ def _after_native(tool):
     s = state(tool)
     s.native = s.ending = False
     doc = tool.sketch.Document
+    clicked = None
     try:
         index, distance, position = s.label
         c = tool.sketch.Constraints[index]
@@ -241,9 +243,23 @@ def _after_native(tool):
             doc.commitTransaction()
         else:
             _drop_step(doc)
+            from .modifybox import DIMENSIONAL
+            if c.Type in DIMENSIONAL:
+                clicked = index
     except Exception:
         _drop_step(doc)
     try:
         Gui.Selection.clearSelection()
     except Exception as _fw_err:
         _fw_log("fwsketch/dimdrag.py:192", _fw_err)
+    if clicked is not None:
+
+        # box and the tool stays on (user report via Ati 11-27: placed dimensions did not take clicks)
+        sketch = tool.sketch
+        s.clicked.append(clicked)
+
+        def edit():
+            from . import dimedit, toolbase as TB
+            if TB.active() is tool:
+                dimedit.edit(sketch, clicked)
+        QtCore.QTimer.singleShot(0, edit)

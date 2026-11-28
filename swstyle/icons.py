@@ -12,6 +12,48 @@ def available():
     return _ROOT is not None
 
 
+# v2extra-1127b: ChatGPT's V2 extra families (png/FWV2_<key>) take the place of FW_<key> for their commands, and of
+# the two catalog pictures below; the FW_ and catalog families stay in the pack untouched
+FWV2_ICONS = {"STANDARD_PRINT3D": "FWV2_Print3D", "SKETCH_MIDPOINT_LINE": "FWV2_MidpointLine"}
+_fwv2_map = {}
+
+
+def fwv2(name):
+    """The FWV2_ family that replaces this family name, or the name itself."""
+    if not name or _ROOT is None:
+        return name
+    if not _fwv2_map:
+        try:
+            for p in (_ROOT / "png").iterdir():
+                if p.name.startswith("FWV2_") and p.is_dir():
+                    _fwv2_map["FW_" + p.name[5:]] = p.name
+            for old, new in FWV2_ICONS.items():
+                if (_ROOT / "png" / new).is_dir():
+                    _fwv2_map[old] = new
+            for colour in ("Black", "Blue", "Green", "Orange", "Purple", "Red"):
+                new = "FW_INK_" + colour.lower()      # ink-1127: the Ink Color swatches (exact fills, themed rim)
+                if (_ROOT / "png" / new).is_dir():
+                    _fwv2_map["FW_InkColor" + colour] = new
+        except OSError:
+            pass
+        _fwv2_map.setdefault("", "")
+    return _fwv2_map.get(name, name)
+
+
+_stock = {}
+
+
+def stock():
+    """stockicons-1127: Options > Colors > Icon color = FreeCAD stock icons, as it was when FreeCAD started."""
+    if "on" not in _stock:
+        try:
+            from . import optionsextras4
+            _stock["on"] = bool(optionsextras4.is_stock_icons())
+        except Exception:
+            _stock["on"] = False
+    return _stock["on"]
+
+
 def root():
     return _ROOT
 
@@ -22,6 +64,7 @@ def pixmap_path(name, fallback=""):
     hidpi-1119: the largest file up to 64 px, never the 20 px one when a bigger one exists. FreeCAD
     never enlarges a Pixmap file, so a 20 px file drew at 20 screen px in a 28 px slot at 175 %."""
     path = None
+    name = fwv2(name)
     if name and _ROOT is not None:
         for size in (64, 40, 32, 24, 20, 16):
             cand = _ROOT / "png" / name / ("%d.png" % size)
@@ -59,12 +102,16 @@ def family(name, large=False):
 
 
     if name and name.lower().endswith((".svg", ".png")):
+        own = _pack_for_drawn(name)       # v2audit-1127: an old drawn SVG the V2 pack now has, themed
+        if own:
+            return family(own, large)
         icon = _cache.get(name)
         if icon is None:
             icon = _cache[name] = QtGui.QIcon(name)
         return icon
     if not name:
         return QtGui.QIcon()
+    name = fwv2(name)
     if _ROOT is None:
         # drawnfb-1127 (Menus): no icon pack (a public install has none): the drawn set straight away. Before, this
         # returned an empty icon, so the drawn <FAMILY>.svg pictures were only ever reached with a pack installed,
@@ -226,9 +273,51 @@ def dark_pixmap(path):
 _DRAWN = __import__("pathlib").Path(__file__).resolve().parent / "resources" / "icons-drawn"
 
 
+# v2last-1127: the add-on's own drawing folders and the V2 family prefix that replaces each
+_V2_FOLDERS = {"slicer": "FW_SLICER_", "ink": "FW_INK_", "extapps": "FW_EXTAPP_"}
+
+
+def _pack_for_drawn(path):
+    """v2audit-1127: the pack family that replaces resources/icons-drawn/<NAME>.svg, or "".
+    v2last-1127: also resources/simicons/<key>.svg (FW_<key>; MOTION_ and FW_ names as they are) and
+    resources/slicer|ink|extapps/<name>.svg (FW_SLICER_/FW_INK_/FW_EXTAPP_<name>)."""
+    try:
+        p = __import__("pathlib").Path(path)
+        if _ROOT is None or p.suffix.lower() != ".svg":
+            return ""
+        folder = p.parent.name
+        if folder == "icons-drawn":
+            fam = p.stem
+        elif folder == "simicons":
+            fam = p.stem if p.stem.startswith(("FW_", "MOTION_")) else "FW_" + p.stem
+        elif folder in _V2_FOLDERS and p.parent.parent.name == "resources":
+            fam = _V2_FOLDERS[folder] + "".join(ch if ch.isalnum() else "_" for ch in p.stem)
+        else:
+            return ""
+        return fam if (_ROOT / "png" / fwv2(fam)).is_dir() else ""
+    except Exception:
+        return ""
+
+
+def v2_file(path):
+    """v2last-1127: a file for a FreeCAD command Pixmap: the V2 family's PNG for this theme when the pack replaces
+    this drawing, else the drawing itself."""
+    fam = _pack_for_drawn(path)
+    return pixmap_path(fam, str(path)) if fam else str(path)
+
+
+# v2audit-1127: commands whose V2 picture is a pack family of another name
+DRAWN_V2 = {"EditComponent": "ASSEMBLIES_EDIT_COMPONENT", "ExplodedView": "ASSEMBLIES_EXPLODED_VIEW",
+            "ExplodeLineSketch": "ASSEMBLIES_EXPLODE_LINE_SKETCH", "AsmHoleSeries": "FEATURES_HOLE_SERIES"}
+
+
 def drawn(key):
     ""
 
+
+    own = DRAWN_V2.get(key, "FW_%s" % key)
+    if _ROOT is not None and (_ROOT / "png" / fwv2(own)).is_dir():
+        return family(own)
     name = "drawn:" + str(key)
     icon = _cache.get(name)
     if icon is None:
@@ -302,6 +391,8 @@ def install_freecad_overrides():
     replace command, tree and view icons by name. It must run before the icons
     are first loaded, i.e. from InitGui.
     """
+    if stock():                       # stockicons-1127: FreeCAD's own icons stay on its commands and icon names
+        return False
     _schedule_command_icons()         # icons-exact-1122b; pkg172: also with no pack, so our drawn pictures reach the buttons
     if _ROOT is None:
         return False

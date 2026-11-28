@@ -400,6 +400,129 @@ def modify_sketch(sketch, dx=0.0, dy=0.0, angle=0.0):
     sketch.recompute()
 
 
+def turn_sketch(sketch, angle, about=(0.0, 0.0)):
+    """Turns the whole sketch on its plane by angle (degrees) about a point of the sketch (Modify
+    Sketch's right-drag: about the sketch origin, or the moveable origin when that is chosen)."""
+    turn = App.Placement(App.Vector(), App.Rotation(App.Vector(0, 0, 1), angle), App.Vector(about[0], about[1], 0))
+    if sketch.MapMode != "Deactivated" and sketch.AttachmentSupport:
+        sketch.AttachmentOffset = sketch.AttachmentOffset.multiply(turn)
+    else:
+        sketch.Placement = sketch.Placement.multiply(turn)
+    sketch.recompute()
+
+
+class _ModifyDrag(QtCore.QObject):
+    ""
+
+
+
+    TYPES = (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseMove, QtCore.QEvent.MouseButtonRelease,
+             QtCore.QEvent.ContextMenu)
+
+    def __init__(self, box):
+        super().__init__()
+        self.box = box
+        self.drag = None
+        from .fwsketch import appevents
+        appevents.listen(self, self.TYPES)
+
+    def stop(self):
+        try:
+            from .fwsketch import appevents
+            appevents.stop(self)
+        except Exception as _fw_err:
+            _fw_log("sketchextras.py:modifydrag.stop", _fw_err)
+        if self.drag is not None:
+            self._put_back()
+        self.drag = None
+
+    def _viewport(self):
+        try:
+            gdoc = Gui.ActiveDocument
+            if gdoc is None or sketch_in_edit() is not self.box.sketch:
+                return None
+            return gdoc.ActiveView.graphicsView().viewport()
+        except Exception:
+            return None
+
+    def _point(self):
+        p, _px = self.drag["vm"].pointer()
+        return p
+
+    def _put_back(self):
+        sk, (offset, placement) = self.box.sketch, self.drag["start"]
+        sk.AttachmentOffset = offset
+        sk.Placement = placement
+
+    def _show(self, final=False):
+        d = self.drag
+        p = self._point()
+        if p is None:
+            return None
+        if d["kind"] == "move":
+            value = (p[0] - d["p0"][0], p[1] - d["p0"][1])
+        else:
+            c = d["about"]
+            a0 = math.atan2(d["p0"][1] - c[1], d["p0"][0] - c[0])
+            a1 = math.atan2(p[1] - c[1], p[0] - c[0])
+            value = math.degrees((a1 - a0 + math.pi) % (2.0 * math.pi) - math.pi)
+        self._put_back()
+        if final:
+            return value
+        if d["kind"] == "move":
+            modify_sketch(self.box.sketch, value[0], value[1], 0.0)
+        else:
+            turn_sketch(self.box.sketch, value, d["about"])
+        return value
+
+    def eventFilter(self, obj, event):
+        try:
+            return self._filter(obj, event)
+        except Exception as _fw_err:
+            _fw_log("sketchextras.py:modifydrag", _fw_err)
+            return False
+
+    def _filter(self, obj, event):
+        box = self.box
+        if not alive(box) or not box.isVisible():
+            return False
+        viewport = self._viewport()
+        if viewport is None or obj is not viewport:
+            return False
+        t = event.type()
+        if t == QtCore.QEvent.ContextMenu:
+            return True                  # the right button turns the sketch here, no menu
+        if t == QtCore.QEvent.MouseButtonPress and self.drag is None:
+            button = event.button()
+            if button not in (QtCore.Qt.LeftButton, QtCore.Qt.RightButton):
+                return False
+            from .fwsketch.toolbase import ViewMath
+            vm = ViewMath()
+            vm.setup_view(Gui.ActiveDocument, box.sketch)
+            sk = box.sketch
+            self.drag = {"vm": vm, "button": button, "kind": "move" if button == QtCore.Qt.LeftButton else "turn",
+                         "start": (sk.AttachmentOffset, sk.Placement),
+                         "about": (box.mx.value(), box.my.value()) if box.about_moveable.isChecked() else (0.0, 0.0)}
+            self.drag["p0"] = self._point()
+            if self.drag["p0"] is None:
+                self.drag = None
+                return False
+            return True
+        if self.drag is None:
+            return False
+        if t == QtCore.QEvent.MouseMove:
+            self._show()
+            return True
+        if t == QtCore.QEvent.MouseButtonRelease and event.button() == self.drag["button"]:
+            value = self._show(final=True)
+            kind, about = self.drag["kind"], self.drag["about"]
+            self.drag = None
+            if value is not None:
+                box.dragged(kind, value, about)
+            return True
+        return True
+
+
 def scale_sketch(sketch, factor, about=(0.0, 0.0)):
     ""
 
@@ -593,6 +716,34 @@ class ModifySketchDialog(QtWidgets.QDialog):
         self.restore.clicked.connect(self._restore)
         self.close_button.clicked.connect(self.close)
         self.done_scale, self.done_move, self.done_turn = 1.0, (0.0, 0.0), 0.0
+        self.mouse = _ModifyDrag(self)
+
+    def hideEvent(self, event):
+        try:
+            self.mouse.stop()
+        except Exception as _fw_err:
+            _fw_log("sketchextras.py:modify.hide", _fw_err)
+        super().hideEvent(event)
+
+    def dragged(self, kind, value, about):
+        """A drag in the view moved (value dx, dy) or turned (value degrees) the sketch: one undo step,
+        and the Translate or Rotate values follow."""
+        if kind == "move":
+            if abs(value[0]) < 1e-12 and abs(value[1]) < 1e-12:
+                return
+            self._step("Modify Sketch", lambda: modify_sketch(self.sketch, value[0], value[1], 0.0))
+            self.done_move = (self.done_move[0] + value[0], self.done_move[1] + value[1])
+            pairs = ((self.tx, self.done_move[0]), (self.ty, self.done_move[1]))
+        else:
+            if abs(value) < 1e-9:
+                return
+            self._step("Modify Sketch", lambda: turn_sketch(self.sketch, value, about))
+            self.done_turn = (self.done_turn + value + 180.0) % 360.0 - 180.0
+            pairs = ((self.rotate, self.done_turn),)
+        for w, v in pairs:
+            w.blockSignals(True)
+            w.setValue(v)
+            w.blockSignals(False)
 
     def _spin(self, parent, value, lo, hi, suffix, name):
         b = unitbox.UnitSpinBox(parent)

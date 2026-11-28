@@ -594,7 +594,7 @@ def _command_entry(shell, key, detail=""):
     if not cmd.natives and not (cmd.call and shell.special_enabled(cmd.call)):
         return None
     icon = binding.icon()
-    if key in ("RelCoradial", "RelEqualCurvature"):     # coradial-1127: no FreeCAD command draws it; the Properties panel's picture
+    if key in ("RelCoradial", "RelEqualCurvature") and not icons.paints(icons.family("FW_" + key)):     # coradial-1127; v2audit-1127: the V2 pack's first
         try:
             from . import relationspm
             icon = relationspm.relation_icon("Coradial" if key == "RelCoradial" else "Equal Curvature")

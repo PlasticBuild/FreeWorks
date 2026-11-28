@@ -780,12 +780,75 @@ def set_scope(feature, all_bodies, auto, picked):
 
 
 def helper_of(feature):
+    """The feature's hidden merge step. Looked for in its own document, not through feature.InList: stock
+    FreeCAD 1.1 can leave a closed document's objects in InList (a drawing view of this part, closed
+    after a save), and reading them crashes FreeCAD."""
     if feature is None:
         return None
-    for obj in feature.InList:
-        if getattr(getattr(obj, "Proxy", None), "Type", None) == NOMERGE_TYPE and obj.Source == feature:
+    try:
+        objs = feature.Document.Objects
+    except Exception:
+        return None
+    for obj in objs:
+        if getattr(getattr(obj, "Proxy", None), "Type", None) == NOMERGE_TYPE and getattr(obj, "Source", None) == feature:
             return obj
     return None
+
+
+LINK_TYPES = ("App::PropertyLink", "App::PropertyLinkChild", "App::PropertyLinkGlobal", "App::PropertyLinkHidden",
+              "App::PropertyLinkList", "App::PropertyLinkListChild", "App::PropertyLinkListGlobal",
+              "App::PropertyLinkListHidden", "App::PropertyLinkSub", "App::PropertyLinkSubChild",
+              "App::PropertyLinkSubGlobal", "App::PropertyLinkSubHidden", "App::PropertyLinkSubList",
+              "App::PropertyLinkSubListChild", "App::PropertyLinkSubListGlobal", "App::PropertyLinkSubListHidden",
+              "App::PropertyXLink", "App::PropertyXLinkSub", "App::PropertyXLinkSubHidden",
+              "App::PropertyXLinkList", "App::PropertyXLinkSubList")
+
+
+def unlink_other_documents(doc):
+    """A document closing: its links to objects of other open documents are let go first. Stock FreeCAD
+    1.1 otherwise leaves its objects in those objects' InList (a drawing of a part, closed after a save)
+    and the next read of that InList, by anything, crashes FreeCAD. The closing document is not saved
+    again, so its file keeps the links."""
+    if doc is None:
+        return 0
+    cut = 0
+    for obj in list(getattr(doc, "Objects", [])):
+        try:
+            outside = [o for o in obj.OutList if o.Document is not doc]
+        except Exception:
+            continue
+        if not outside:
+            continue
+        for prop in obj.PropertiesList:
+            try:
+                kind = obj.getTypeIdOfProperty(prop)
+                if kind not in LINK_TYPES:
+                    continue
+                value = getattr(obj, prop)
+                if value is None or value == [] or value == ():
+                    continue
+                if _points_outside(value, doc):
+                    setattr(obj, prop, [] if isinstance(value, (list, tuple)) and "List" in kind else None)
+                    cut += 1
+            except Exception as _fw_err:
+                _fw_log("multibody.py:unlink", _fw_err)
+    return cut
+
+
+def _points_outside(value, doc):
+    """True when a link property's value names an object of another document."""
+    stack = [value]
+    while stack:
+        v = stack.pop()
+        if isinstance(v, (list, tuple)):
+            stack.extend(v)
+        elif hasattr(v, "Document") and hasattr(v, "Name"):
+            try:
+                if v.Document is not doc:
+                    return True
+            except Exception:
+                return True
+    return False
 
 
 def _refined(shape, source):
@@ -3387,6 +3450,12 @@ class _Focus(QtCore.QObject):
 # ---- observers ---------------------------------------------------------------------------
 
 class _Observer:
+    def slotDeletedDocument(self, doc):
+        try:
+            unlink_other_documents(doc)
+        except Exception as _fw_err:
+            _fw_log("multibody.py:closing", _fw_err)
+
     def slotRecomputedDocument(self, doc):
         for body in bodies(doc):
             if not body.AllowCompound:

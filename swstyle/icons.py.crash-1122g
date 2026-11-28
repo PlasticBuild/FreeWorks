@@ -1,0 +1,635 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+"""Icons: the private SolidWorks copy when present, FreeCAD's own otherwise."""
+from PySide import QtCore, QtGui
+
+from . import paths
+
+_ROOT = paths.icon_root()
+_cache = {}
+
+
+def available():
+    return _ROOT is not None
+
+
+def root():
+    return _ROOT
+
+
+def pixmap_path(name, fallback=""):
+    """The bundled file for a command Pixmap, or its stock fallback. In a dark theme, a copy
+    made light for the dark panes (in FreeCAD's cache folder; remade when the pack's file changes).
+    hidpi-1119: the largest file up to 64 px, never the 20 px one when a bigger one exists. FreeCAD
+    never enlarges a Pixmap file, so a 20 px file drew at 20 screen px in a 28 px slot at 175 %."""
+    path = None
+    if name and _ROOT is not None:
+        for size in (64, 40, 32, 24, 20, 16):
+            cand = _ROOT / "png" / name / ("%d.png" % size)
+            if cand.is_file():
+                path = cand
+                break
+    if path is None or not path.is_file():
+        return fallback
+    if _dark():
+        try:
+            import FreeCAD as App
+            import os
+            folder = os.path.join(App.getUserCachePath(), "FreeWorksDarkIcons", name)
+            out = os.path.join(folder, path.name)
+            if not os.path.isfile(out) or os.path.getmtime(out) < os.path.getmtime(str(path)):
+                os.makedirs(folder, exist_ok=True)
+                img = adapt_for_dark(QtGui.QImage(str(path)))
+                if not img.save(out):
+                    return str(path)
+            return out
+        except Exception:
+            return str(path)
+    return str(path)
+
+
+def family(name, large=False):
+    """Multi-size QIcon for one SolidWorks icon family (20, 32, 40, 64, ... px files).
+    large (welcomefit-1120): a big picture (Welcome and New tiles, 48-100 px): in a dark theme every size is
+    turned light, not only the button sizes up to DARK_MAX_PX, so the tile stays sharp at 150-175 %.
+    A path to a picture file is loaded as it is (the 3D Slicer tab's slicer and tool icons)."""
+    if name and name.lower().endswith((".svg", ".png")):
+        icon = _cache.get(name)
+        if icon is None:
+            icon = _cache[name] = QtGui.QIcon(name)
+        return icon
+    if not name or _ROOT is None:
+        return QtGui.QIcon()
+    dark = _dark()
+    key = (name + ("|dark|large" if large else "|dark")) if dark else name
+    icon = _cache.get(key)
+    if icon is None:
+        icon = QtGui.QIcon()
+        folder = _ROOT / "png" / name
+        if folder.is_dir():
+            files = []
+            for item in folder.glob("*.png"):
+                try:
+                    files.append((int(item.stem), item))
+                except ValueError:
+                    continue
+            for size, item in sorted(files):
+                if dark and (large or size <= DARK_MAX_PX):
+                    pix = dark_pixmap(str(item))
+                    if pix is not None:
+                        icon.addPixmap(pix)
+                        continue
+                if not dark or large or size <= DARK_MAX_PX:
+                    icon.addFile(str(item), QtCore.QSize(size, size))
+        if icon.isNull():
+            icon = _family_fallback(name)
+        _cache[key] = icon
+    return icon
+
+
+# drawnfam-1119: a family the pack lacks falls back to a pack family of the same picture, then to FreeWorks'
+# drawn set (resources/icons-drawn/<FAMILY>.svg, or the FW_<key> drawing of that command), so a PropertyManager
+# header or button asking for it is never empty
+PACK_ALIAS = {"REFGEO_MATE_REFERENCE": "REFGEO_MATE_REF", "CURVES_THROUGH_XYZ_POINTS": "FW_CurveThroughXYZPoints",
+              "TABLES_BOM": "ASSEMBLIES_BOM", "SURFACES_EXTEND_SURFACE": "FW_ExtendSurface",
+              "SURFACES_FILLED_SURFACE": "FW_FilledSurface", "SURFACES_FLATTEN": "FW_SurfaceFlatten",
+              "FEATURES_REPLACE_FACE": "FW_ReplaceFace",
+              "SKETCH_MIDPOINT_LINE": "SKETCH_MIDPT_LINE"}      # icons-exact-1122b: the pack names this picture MIDPT
+DRAWN_ALIAS = {"SURFACES_CHAMFER": "FW_SurfaceChamfer", "SURFACES_EXTEND_SURFACE": "FW_ExtendSurface",
+               "SURFACES_FILLED_SURFACE": "FW_FilledSurface", "SURFACES_FLATTEN": "FW_SurfaceFlatten",
+               "FEATURES_REPLACE_FACE": "FW_ReplaceFace"}
+
+
+def _family_fallback(name):
+    other = PACK_ALIAS.get(name)
+    if other and other != name:
+        icon = family(other)
+        if not icon.isNull():
+            return icon
+    path = _DRAWN / ("%s.svg" % DRAWN_ALIAS.get(name, name))
+    return QtGui.QIcon(str(path)) if path.is_file() else QtGui.QIcon()
+
+
+# ---------------------------------------------------------------- the dark themes
+# SolidWorks' Background: Dark redraws its icons light (white outlines, the colours kept). The pack's
+# pictures are drawn for a light pane: their near-black outlines and marks vanish on #494949. In a
+# dark theme the dark, grey (unsaturated) pixels are turned light; coloured fills stay as they are.
+DARK_MAX_PX = 64                  # larger sizes are not used on buttons; leaving them out keeps start-up quick
+DARK_LUM = 110                    # pixels darker than this, and grey, are outlines and marks
+DARK_SAT = 0.35
+DARK_DEEP = 60                    # darker than this, whatever the colour: an outline too
+
+
+def _dark():
+    try:
+        from . import style
+        return style.dark()
+    except Exception:
+        return False
+
+
+def adapt_for_dark(image):
+    """A copy of the QImage with its dark grey ink made light (alpha and colours kept)."""
+    try:
+        import numpy as np
+    except Exception:
+        return image
+    img = image.convertToFormat(QtGui.QImage.Format_ARGB32)
+    w, h, bpl = img.width(), img.height(), img.bytesPerLine()
+    if w == 0 or h == 0:
+        return img
+    a = np.frombuffer(img.constBits(), np.uint8, count=img.sizeInBytes()).reshape(h, bpl // 4, 4)[:, :w, :].copy()
+    b, g, r, alpha = (a[:, :, i].astype(np.int32) for i in range(4))
+    mx = np.maximum(np.maximum(r, g), b)
+    mn = np.minimum(np.minimum(r, g), b)
+    lum = (r * 30 + g * 59 + b * 11) // 100
+    sat = (mx - mn) / np.maximum(mx, 1)
+    ink = (alpha > 0) & (lum < DARK_LUM) & (sat < DARK_SAT)
+    light = np.clip(235 - lum * 6 // 10, 0, 255)
+    # very dark coloured outlines (navy, dark red) keep their hue, lifted three quarters to white
+    deep = (alpha > 0) & (lum < DARK_DEEP) & ~ink
+    for i, c in enumerate((b, g, r)):
+        lifted = c + (255 - c) * 3 // 4
+        a[:, :, i] = np.where(ink, light, np.where(deep, lifted, a[:, :, i]))
+    out = QtGui.QImage(a.tobytes(), w, h, w * 4, QtGui.QImage.Format_ARGB32)
+    return out.copy()
+
+
+def dark_pixmap(path):
+    try:
+        img = QtGui.QImage(path)
+        if img.isNull():
+            return None
+        return QtGui.QPixmap.fromImage(adapt_for_dark(img))
+    except Exception:
+        return None
+
+
+_DRAWN = __import__("pathlib").Path(__file__).resolve().parent / "resources" / "icons-drawn"
+
+
+def drawn(key):
+    """FreeWorks' own SolidWorks-style picture for a command the pack has none for:
+    resources/icons-drawn/FW_<key>.svg (drawnicons-1119; a set of its own, so it can be swapped later)."""
+    name = "drawn:" + str(key)
+    icon = _cache.get(name)
+    if icon is None:
+        path = _DRAWN / ("FW_%s.svg" % key)
+        icon = _cache[name] = QtGui.QIcon(str(path)) if path.is_file() else QtGui.QIcon()
+    return icon
+
+
+_painted = {}
+
+
+def paints(icon):
+    """True when the icon draws something (a QIcon from a missing file is not null but empty)."""
+    if icon is None or icon.isNull():
+        return False
+    key = icon.cacheKey()
+    if key not in _painted:
+        if len(_painted) > 4000:
+            _painted.clear()
+        img = icon.pixmap(24, 24).toImage()
+        _painted[key] = any(img.pixelColor(x, y).alpha() > 0
+                            for y in range(0, img.height(), 2) for x in range(0, img.width(), 2))
+    return _painted[key]
+
+
+def initials(label):
+    """Neutral stand-in picture: a rounded grey tile with up to two initials of the command's name."""
+    words = [w for w in label.replace("/", " ").replace("-", " ").split() if w[:1].isalnum()]
+    text = "".join(w[0] for w in words[:2]).upper() or "?"
+    key = "initials:" + text
+    icon = _cache.get(key)
+    if icon is None:
+        icon = QtGui.QIcon()
+        for size in (16, 20, 24, 32, 40, 64):
+            pix = QtGui.QPixmap(size, size)
+            pix.fill(QtCore.Qt.transparent)
+            p = QtGui.QPainter(pix)
+            p.setRenderHint(QtGui.QPainter.Antialiasing)
+            p.setPen(QtGui.QPen(QtGui.QColor("#5a6470"), max(1.0, size / 20.0)))
+            p.setBrush(QtGui.QColor("#d9dee4"))
+            r = QtCore.QRectF(0.5, 0.5, size - 1, size - 1).adjusted(size * .08, size * .08, -size * .08, -size * .08)
+            p.drawRoundedRect(r, size * .15, size * .15)
+            font = p.font()
+            font.setBold(True)
+            font.setPixelSize(max(6, int(size * (.42 if len(text) > 1 else .55))))
+            p.setFont(font)
+            p.setPen(QtGui.QColor("#2b3540"))
+            p.drawText(r, QtCore.Qt.AlignCenter, text)
+            p.end()
+            icon.addPixmap(pix)
+        _cache[key] = icon
+    return icon
+
+
+def has(name):
+    return not family(name).isNull()
+
+
+def command_icon(cmd, native_action=None):
+    icon = family(cmd.icon) if cmd.icon else QtGui.QIcon()
+    if icon.isNull() and native_action is not None:
+        icon = native_action.icon()
+    return icon
+
+
+def install_freecad_overrides():
+    """Put the private FreeCAD-name overrides first on the 'icons' search path.
+
+    FreeCAD's BitmapFactory tries 'icons:<name>' (no extension) and then
+    'icons:<name>.svg' before its built-in resources, so files in this folder
+    replace command, tree and view icons by name. It must run before the icons
+    are first loaded, i.e. from InitGui.
+    """
+    if _ROOT is None:
+        return False
+    _schedule_command_icons()         # icons-exact-1122b
+    folder = _ROOT / "fc"
+    if not folder.is_dir():
+        return False
+    text = folder.as_posix()
+    first = [text]
+    if _dark():
+        dark = dark_names_folder()
+        if dark:
+            build_dark_names(pack_only=True)        # the pack's own names now, FreeCAD's in the background
+            first = [dark, text]
+            _later_dark_names()
+    if not _dark_names.get("follows"):
+        try:
+            from . import style
+            style.signals.theme_changed.connect(lambda *_a: install_freecad_overrides())
+            _dark_names["follows"] = True
+        except Exception:
+            pass
+    paths = list(QtCore.QDir.searchPaths("icons"))
+    if paths[:len(first)] == first and (len(first) > 1 or _dark_dir_text() not in paths):
+        return True
+    current = [item for item in paths if item not in first and item != _dark_dir_text()]
+    QtCore.QDir.setSearchPaths("icons", first + current)
+    return True
+
+
+# ---------------------------------------------------------------- icons FreeCAD loads by name, in dark
+# FreeCAD's BitmapFactory looks for "icons:<name>" before its built-in pictures, so a folder first on
+# that search path replaces the tree, view and command icons FreeCAD itself loads. In a dark theme
+# that folder holds light-ink copies (adapt_for_dark) of the pack's fc/ icons and of FreeCAD's own
+# built-in icons (:/icons), as 64 px PNG files named like the icon. The pack's are made at start;
+# FreeCAD's in small batches once the window is idle (and again after a workbench brings new ones).
+DARK_NAMES_PX = 64
+_dark_names = {"queue": None, "timer": None}
+
+
+def _dark_dir_text():
+    try:
+        import FreeCAD as App
+        import os
+        return os.path.join(App.getUserCachePath(), "FreeWorksDarkIcons", "_names").replace("\\", "/")
+    except Exception:
+        return ""
+
+
+def dark_names_folder():
+    import os
+    text = _dark_dir_text()
+    if not text:
+        return ""
+    try:
+        os.makedirs(text, exist_ok=True)
+    except OSError:
+        return ""
+    return text
+
+
+def _write_dark(name, image, folder):
+    import os
+    if image.isNull():
+        return False
+    out = os.path.join(folder, name)
+    return adapt_for_dark(image).save(out, "PNG")
+
+
+def _stamp(folder):
+    """The FreeCAD version and the pack's newest fc/ file: when either changes the copies are remade."""
+    import os
+    try:
+        import FreeCAD as App
+        version = ".".join(App.Version()[:4])
+    except Exception:
+        version = "?"
+    newest = 0
+    pack = _ROOT / "fc" if _ROOT is not None else None
+    if pack is not None and pack.is_dir():
+        newest = max([int(f.stat().st_mtime) for f in pack.iterdir()] or [0])
+    return "%s|%d" % (version, newest)
+
+
+def build_dark_names(pack_only=False):
+    """Writes the light copies; returns how many were written (the pack's names always, FreeCAD's
+    built-in ones unless pack_only). Copies already there and current are kept."""
+    import os
+    folder = dark_names_folder()
+    if not folder:
+        return 0
+    stamp_file = os.path.join(folder, ".stamp")
+    stamp = _stamp(folder)
+    try:
+        old = open(stamp_file).read()
+    except OSError:
+        old = ""
+    fresh = old != stamp
+    written = 0
+    pack = _ROOT / "fc" if _ROOT is not None else None
+    if pack is not None and pack.is_dir():
+        for f in sorted(pack.iterdir()):
+            name = f.name[:-4] if f.name.lower().endswith((".svg", ".png")) else f.name
+            if not name or name.startswith("."):
+                continue
+            if not fresh and os.path.isfile(os.path.join(folder, name)):
+                continue
+            image = QtGui.QIcon(str(f)).pixmap(DARK_NAMES_PX, DARK_NAMES_PX).toImage()
+            written += bool(_write_dark(name, image, folder))
+    if fresh:
+        try:
+            with open(stamp_file, "w") as fh:
+                fh.write(stamp)
+        except OSError:
+            pass
+        _dark_names["fresh"] = True
+    if not pack_only:
+        written += _queue_builtin(folder, run_all=True)
+    return written
+
+
+def _builtin_names():
+    """(name, resource path) of FreeCAD's built-in icons, the top folder first (as the search path)."""
+    seen = {}
+    it = QtCore.QDirIterator(":/icons", QtCore.QDirIterator.Subdirectories)
+    paths = []
+    while it.hasNext():
+        paths.append(it.next())
+    paths.sort(key=lambda p: (p.count("/"), p))
+    for p in paths:
+        base = p.rsplit("/", 1)[-1]
+        if not base.lower().endswith((".svg", ".png")):
+            continue
+        name = base[:-4]
+        if name not in seen:
+            seen[name] = p
+    return list(seen.items())
+
+
+def _queue_builtin(folder, run_all=False):
+    """FreeCAD's built-in icons that have no light copy yet: all now (run_all) or 60 per idle tick."""
+    import os
+    pack = _ROOT / "fc" if _ROOT is not None else None
+    have_pack = set()
+    if pack is not None and pack.is_dir():
+        have_pack = {f.name[:-4] if f.name.lower().endswith((".svg", ".png")) else f.name for f in pack.iterdir()}
+    todo = [(n, p) for n, p in _builtin_names()
+            if n not in have_pack and not os.path.isfile(os.path.join(folder, n))]
+    if run_all:
+        n = 0
+        for name, path in todo:
+            n += bool(_write_dark(name, QtGui.QIcon(path).pixmap(DARK_NAMES_PX, DARK_NAMES_PX).toImage(), folder))
+        return n
+    _dark_names["queue"] = todo
+    return len(todo)
+
+
+def _tick():
+    queue = _dark_names.get("queue") or []
+    folder = dark_names_folder()
+    for _ in range(60):
+        if not queue:
+            break
+        name, path = queue.pop()
+        try:
+            _write_dark(name, QtGui.QIcon(path).pixmap(DARK_NAMES_PX, DARK_NAMES_PX).toImage(), folder)
+        except Exception:
+            continue
+    if not queue and _dark_names.get("timer") is not None:
+        _dark_names["timer"].stop()
+
+
+def _later_dark_names():
+    """FreeCAD's own icons, in batches once the window is up; again when a workbench is activated
+    (its icons are registered then)."""
+    def start(*_args):
+        if not _dark():
+            return
+        folder = dark_names_folder()
+        if not folder or not _queue_builtin(folder):
+            return
+        timer = _dark_names.get("timer")
+        if timer is None:
+            timer = _dark_names["timer"] = QtCore.QTimer()
+            timer.setInterval(30)
+            timer.timeout.connect(_tick)
+        timer.start()
+    QtCore.QTimer.singleShot(4000, start)
+    try:
+        import FreeCADGui as Gui
+        mw = Gui.getMainWindow()
+        if mw is not None and not _dark_names.get("hooked"):
+            mw.workbenchActivated.connect(lambda *_a: QtCore.QTimer.singleShot(1500, start))
+            _dark_names["hooked"] = True
+    except Exception:
+        pass
+
+
+# icons-exact-1122b: our own commands (FreeWorks_*, SWStyle_*) are registered with a stock FreeCAD icon in places
+# (Insert Spline Point and other spline tools in drawsketchmore.py / sketch3d.py); once every command is there the picture
+# the catalog gives (pack, else FW_<key>, else our drawn one) is put on their actions, as drawings.drawn_command_icons does for Draw*.
+_cmd_icons = {"timer": False, "hooked": False, "ticks": 0, "logged": 0}
+NATIVE_OWNER = {"Sketcher_BSplineInsertKnot": "InsertSplinePoint"}
+
+
+def _command_pictures():
+    """{command name: QIcon}: the pack's picture for a catalog command, else its FW_<key>, else our drawn one. Our own
+    commands (FreeWorks_*, SWStyle_*) always; FreeCAD's own natives only for a command with no pack picture (first catalog entry wins)."""
+    from . import catalog
+    out = {}
+    owners = {}
+    for cmd in catalog.ALL:
+        for x in cmd.natives:
+            owners.setdefault(x, []).append(cmd.key)
+    for cmd in catalog.ALL:
+        try:
+            pic = family(cmd.icon) if cmd.icon else QtGui.QIcon()
+            if not paints(pic):
+                pic = family("FW_" + cmd.key)
+            if not paints(pic):
+                pic = drawn(cmd.key)
+            if not paints(pic):
+                continue
+            names = [x for x in cmd.natives if x.startswith(("FreeWorks_", "SWStyle_"))]
+            names += ["FreeWorks_" + cmd.key, "FreeWorks_Draw" + cmd.key, "FreeWorks_Sketch3D" + cmd.key]
+            # icons-exact-1122f: FreeCAD's own command (menus) shows this command's picture, pack first. A native that several
+            # catalog commands list (Sketcher_BSplineInsertKnot) goes to the owner named in NATIVE_OWNER, else it is left alone.
+            for x in cmd.natives:
+                if x in names or x.startswith(("FreeWorks_", "SWStyle_")):
+                    continue
+                boss = NATIVE_OWNER.get(x)
+                if (boss == cmd.key) or (boss is None and len(owners.get(x, ())) == 1):
+                    names.append(x)
+            for name in names:
+                out.setdefault(name, pic)
+        except Exception:
+            continue
+    return out
+
+
+MENU_TITLES = ("Spline Tools", "Sketch Tools", "Sketch Entities")
+
+
+def _label_pictures():
+    """{catalog label: QIcon} for the commands that have a picture, pack first."""
+    from . import catalog
+    out = {}
+    for cmd in catalog.ALL:
+        try:
+            pic = family(cmd.icon) if cmd.icon else QtGui.QIcon()
+            if not paints(pic):
+                pic = family("FW_" + cmd.key)
+            if not paints(pic):
+                pic = drawn(cmd.key)
+            if paints(pic):
+                out.setdefault(cmd.label.replace("&", "").rstrip("."), pic)
+        except Exception:
+            continue
+    return out
+
+
+def _fix_menu(menu, labels):
+    """icons-exact-1122g: the entries of Tools > Spline Tools / Sketch Tools / Sketch Entities keep the picture they were
+    copied with (FreeCAD's own), so each entry named like a catalog command gets that command's picture."""
+    n = 0
+    for a in menu.actions():
+        try:
+            label = a.text().split("\t")[0].replace("&", "").rstrip(".")
+            pic = labels.get(label)
+            if pic is not None:
+                a.setIcon(pic)
+                n += 1
+        except Exception:
+            continue
+    return n
+
+
+def _fix_menus():
+    hooked = 0
+    try:
+        import FreeCADGui as Gui
+        from PySide import QtWidgets
+        mw = Gui.getMainWindow()
+        labels = _label_pictures()
+        for menu in (mw.findChildren(QtWidgets.QMenu) if mw is not None else ()):
+            if menu.title().replace("&", "").strip() not in MENU_TITLES and menu.menuAction().text().replace("&", "").strip() not in MENU_TITLES:
+                continue
+            _fix_menu(menu, labels)
+            if not menu.property("fw_icons_hooked"):
+                menu.setProperty("fw_icons_hooked", True)
+                menu.aboutToShow.connect(lambda m=menu: _fix_menu(m, _label_pictures()))
+                hooked += 1
+    except Exception:
+        pass
+    return hooked
+
+
+def apply_command_icons():
+    """icons-exact-1122d: puts those pictures on the commands' actions, and on every action of that object name in the window
+    (menus hold the command's own action, a copy keeps its object name). Retried a few times while the workbenches load."""
+    n, found, missing = 0, 0, []
+    try:
+        import FreeCADGui as Gui
+        pics = _command_pictures()
+    except Exception:
+        return 0
+    action_type = getattr(QtGui, "QAction", None)
+    if action_type is None:
+        from PySide import QtWidgets
+        action_type = QtWidgets.QAction
+    by_name = {}
+    try:
+        mw = Gui.getMainWindow()
+        for a in (mw.findChildren(action_type) if mw is not None else ()):
+            by_name.setdefault(a.objectName(), []).append(a)
+    except Exception:
+        pass
+    for name, pic in pics.items():
+        try:
+            acts = list(by_name.get(name, ()))
+            c = Gui.Command.get(name)
+            if c is not None:
+                for a in (c.getAction() or ()):
+                    if a not in acts:
+                        acts.append(a)
+            if not acts:
+                missing.append(name)
+                continue
+            found += 1
+            for a in acts:
+                a.setIcon(pic)
+                n += 1
+        except Exception:
+            continue
+    menus = _fix_menus()
+    if _cmd_icons["logged"] < 3:
+        _cmd_icons["logged"] += 1
+        try:
+            import FreeCAD as App
+            from . import catalog
+            probe = "Sketcher_BSplineInsertKnot"
+            owners = []
+            for cmd in catalog.ALL:
+                if probe in cmd.natives:
+                    owners.append("%s icon=%s pack=%s fw=%s drawn=%s" % (
+                        cmd.key, cmd.icon, paints(family(cmd.icon)) if cmd.icon else "-",
+                        paints(family("FW_" + cmd.key)), paints(drawn(cmd.key))))
+            state = ("in pictures" if probe in pics else "NOT in pictures") + (", action missing" if probe in missing else
+                                                                              ", action found" if probe in pics else "")
+            App.Console.PrintMessage("FreeCAD icons: %d of %d command names got our picture (%d actions); %s %s; owners: %s; "
+                                     "action objects named so: %d; menus fixed: %d\n" % (found, len(pics), n, probe, state,
+                                                                        " | ".join(owners) or "none in catalog",
+                                                                        len(by_name.get(probe, ())), menus))
+        except Exception as err:
+            try:
+                import FreeCAD as App
+                App.Console.PrintMessage("FreeCAD icons: diagnostics failed: %s\n" % err)
+            except Exception:
+                pass
+    return n
+
+
+def _tick():
+    _cmd_icons["ticks"] += 1
+    apply_command_icons()
+    if _cmd_icons["ticks"] < 12:
+        QtCore.QTimer.singleShot(5000, _tick)
+
+
+def _schedule_command_icons():
+    if _cmd_icons["timer"]:
+        return
+    _cmd_icons["timer"] = True
+    QtCore.QTimer.singleShot(6000, _tick)
+    try:
+        import FreeCADGui as Gui
+        mw = Gui.getMainWindow()
+        if mw is not None and not _cmd_icons["hooked"]:
+            mw.workbenchActivated.connect(lambda *_a: QtCore.QTimer.singleShot(2500, apply_command_icons))
+            _cmd_icons["hooked"] = True
+    except Exception:
+        pass
+
+
+def remove_freecad_overrides():
+    if _ROOT is None:
+        return
+    text = (_ROOT / "fc").as_posix()
+    dark = _dark_dir_text()
+    current = [item for item in QtCore.QDir.searchPaths("icons") if item != text and item != dark]
+    QtCore.QDir.setSearchPaths("icons", current)

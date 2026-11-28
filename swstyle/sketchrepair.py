@@ -254,7 +254,27 @@ class RepairDialog(object):
         lay.addWidget(close, 0, QtCore.Qt.AlignRight)
         self.repaired.setText("Repaired: " + ("; ".join(fixed) + "." if fixed else "nothing to repair."))
         self.search()
+
+        self.watch = QtCore.QTimer(d)
+        self.watch.setInterval(400)
+        self.watch.timeout.connect(self._still_editing)
+        self.watch.start()
         d.show()
+
+    def _still_editing(self):
+        try:
+            gdoc = Gui.ActiveDocument
+            vp = gdoc.getInEdit() if gdoc is not None else None
+            editing = getattr(vp, "Object", None) if vp is not None else None
+            if editing is not None and editing is self.sketch:
+                return
+        except Exception as _fw_err:
+            _fw_log("sketchrepair.py:still_editing", _fw_err)
+        try:
+            self.watch.stop()
+            self.dialog.close()
+        except RuntimeError as _fw_err:
+            _fw_log("sketchrepair.py:still_editing.close", _fw_err)
 
     def search(self, *args):
         self.found = problems(self.sketch, self.gap.value())

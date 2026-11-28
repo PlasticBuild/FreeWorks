@@ -500,6 +500,16 @@ class Binding(QtCore.QObject):
                 return self.shell.binding(shown).icon()
             except Exception as _fw_err:
                 _fw_log("widgets.py:332", _fw_err)
+        if icons.stock():
+            # stockicons-1127: FreeCAD's own picture of the command first (its action, else its Pixmap)
+            icon = self.action.icon() if self.action is not None and alive(self.action) else QtGui.QIcon()
+            if not icons.paints(icon) and self.info and self.info.get("pixmap"):
+                try:
+                    icon = Gui.getIcon(self.info["pixmap"])
+                except Exception:
+                    icon = QtGui.QIcon()
+            if icons.paints(icon):
+                return icon
         icon = icons.family(self.cmd.icon) if self.cmd.icon else QtGui.QIcon()
         if not icons.paints(icon):
 

@@ -1326,7 +1326,7 @@ def pmi_dimension(page, view, o):
 def pmi_items(page, views, kinds, eliminate_duplicates=True):
     """Model Items' Datums, Datum targets, Geometric tolerances and Tolerance dimensions: the part's own 3D
     annotations (its MBD ones), each brought into the view that best shows its face, once per drawing."""
-    made = []
+    made, placed = [], []
     seen = {getattr(o, "SWModelItemKey", "") for o in page.Document.Objects if hasattr(o, "SWModelItemKey")} \
         if eliminate_duplicates else set()
     for o in _unique_objects(views):
@@ -1361,8 +1361,21 @@ def pmi_items(page, views, kinds, eliminate_duplicates=True):
         at = _sheet(best, V(o.TextPosition))
         if math.hypot(at[0] - tip[0], at[1] - tip[1]) < 6.0:
             at = (tip[0] + 10.0, tip[1] + 10.0)
+        at = _clear_of(_off_view(best, at), [p for p in placed if p[0] is best])
+        placed.append((best, at))
         kind, text = o.Kind, o.Text or ""
-        if kind == "Datum":
+        if kind == "SurfaceFinish":
+
+            sym, value, f = _finish_of(o)
+            body, reach = finish_svg(sym, value, at, tip, minimum=f.get("min", ""), method=f.get("method", ""),
+                                     allowance=f.get("allowance", ""), sampling=f.get("sampling", ""),
+                                     other=f.get("other", ""), spacing=f.get("spacing", ""))
+            s = svg_symbol(page, "SurfaceFinish", body, reach, at, "Surface Finish%d" % (1 + len(
+                [x for x in page.Document.Objects if getattr(x, "SWAnnotation", "") == "SurfaceFinish"])),
+                "SurfaceFinish")
+            s.addProperty("App::PropertyString", "SWFinish", "FreeCAD", "symbol and roughness")
+            s.SWFinish = "%s %s" % (sym, value)
+        elif kind == "Datum":
             body, reach = datum_svg(text, at, tip)
             s = svg_symbol(page, "DatumFeature", body, reach, at, "Datum Feature%s" % text, "DatumFeature")
             s.addProperty("App::PropertyString", "SWDatum", "FreeCAD", "datum letter")
@@ -1388,6 +1401,54 @@ def pmi_items(page, views, kinds, eliminate_duplicates=True):
         seen.add(key)
         made.append(s)
     return made
+
+
+def _off_view(view, at, margin=10.0):
+    ""
+
+    try:
+        from . import drawviews as DV
+        x0, y0, x1, y1 = DV.view_box(view)          # on the sheet
+        if x0 < at[0] < x1 and y0 < at[1] < y1:
+            top = y1                                 # and above the dimensions over the view
+            vx, vy = D.view_position(view)
+            for o in view.Document.Objects:
+                if o.TypeId == "TechDraw::DrawViewDimension" and (getattr(o, "References2D", None) or [[None]])[0][0] \
+                        is view and vy + float(o.Y) > top:
+                    top = vy + float(o.Y) + 4.0
+            return at[0], top + margin
+    except Exception as _fw_err:
+        _fw_log("drawannot.py:off_view", _fw_err)
+    return at
+
+
+def _clear_of(at, placed, gap=12.0):
+    ""
+
+    x, y = at
+    for _ in range(40):
+        if all(math.hypot(x - p[1][0], y - p[1][1]) >= gap for p in placed):
+            break
+        y += gap
+    return x, y
+
+
+def _finish_of(o):
+    ""
+    names = {"Basic": "Basic", "Machining required": "Machining Required",
+             "Machining prohibited": "Machining Prohibited"}
+    sym = names.get(str(getattr(o, "SurfaceSymbol", "") or ""), "")
+    text = o.Text or ""
+    if not sym:
+        glyphs = {"\u221a": "Basic", "\u2200": "Machining Required", "\u237b": "Machining Prohibited"}
+        sym = next((v for g, v in glyphs.items() if g in text), "Basic")
+    fields = dict(getattr(o, "SurfaceLayout", {}) or {})
+    value = fields.pop("max", "")
+    if not value:
+        import re
+        m = re.search(r"Ra\s*([0-9.,]+)", text) or re.search(r"([0-9]+(?:[.,][0-9]+)?)", text)
+        value = m.group(1) if m else ""
+    return sym, value, fields
 
 
 def _note_source(o):
@@ -2054,13 +2115,13 @@ def _stack_parallel(dims):
         groups.setdefault((v.Name, o, side), (v, []))[1].append(d)
     moved = 0
     for (_vn, o, side), (v, ds) in groups.items():
-        if len(ds) < 2:
-            continue
+        x0, y0, x1, y1 = DT.view_box(v)
         pos = [float(d.Y) if o == "h" else float(d.X) for d in ds]
         crowded = any(abs(a - b) < bw * 0.75 for i, a in enumerate(pos) for b in pos[i + 1:])
-        if not crowded:
+        lo, hi = (y0, y1) if o == "h" else (x0, x1)
+        inside = any(lo < q < hi for q in pos)
+        if not crowded and not inside:
             continue
-        x0, y0, x1, y1 = DT.view_box(v)
         ds.sort(key=lambda d: abs(DT.value(d)))
         for n, d in enumerate(ds):
             off = fm + n * bw

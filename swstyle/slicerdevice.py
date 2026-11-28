@@ -172,7 +172,7 @@ class AccountBar(QtWidgets.QWidget):
         self.label.setWordWrap(True)
         self.button = QtWidgets.QPushButton()
         self.button.setObjectName("SWStyle_SlicerLogIn")
-        self.button.setIcon(QtGui.QIcon(_icon("login")))
+        self.button.setIcon(_v2(_icon("login")))
         self.button.clicked.connect(self._clicked)
         lay.addWidget(self.label, 1)
         lay.addWidget(self.button)
@@ -219,7 +219,7 @@ class DevicePicker(QtWidgets.QWidget):
         self.combo.setToolTip("The printer the slice is sent to")
         self.combo.currentIndexChanged.connect(self._picked)
         self.add = QtWidgets.QToolButton()
-        self.add.setIcon(QtGui.QIcon(_icon("addprinter")))
+        self.add.setIcon(_v2(_icon("addprinter")))
         self.add.setToolTip("Add Printer: find one on the network or in your Bambu Lab account, or type one in")
         self.add.clicked.connect(self._add)
         lay.addWidget(self.combo, 1)
@@ -1257,3 +1257,9 @@ BUTTONS = (
      "Bambu Lab account.", "Add\nPrinter", "addprinter"),
     ("SlicerLogin", "Log In", "SWStyle_SlicerLogin", "Logs in to your Bambu Lab account.", "Log\nIn", "login"),
 )
+
+
+def _v2(path):
+    """v2last-1127: the V2 pack's themed picture for one of the add-on's own drawings, else the file itself."""
+    from . import icons
+    return icons.family(str(path))

@@ -1133,7 +1133,8 @@ class InterferencePanel:
         n = len(units(self.asm, subassemblies=self.subassemblies.isChecked(), hidden=not self.skip_hidden.isChecked()))
         self.summary.setText("No Interferences" if not live else
                              "%d interference%s among %d components." % (len(live), "" if len(live) == 1 else "s", n))
-        self.ignore.setVisible(False)
+        self.ignore.setVisible(bool(self.shown_found()))
+        self.ignore.setText("Ignore")
         self._show()
 
     def picked_index(self):
@@ -1149,6 +1150,11 @@ class InterferencePanel:
     def toggle_ignore(self):
         k = self.picked_index()
         if k is None:
+            try:            # asmpkg373: nothing picked yet: say what to do first
+                QtWidgets.QToolTip.showText(self.ignore.mapToGlobal(self.ignore.rect().bottomLeft()),
+                                            "Select an interference in Results, then click Ignore.", self.ignore)
+            except Exception as _fw_err:
+                _fw_log("asmtools.toggle_ignore", _fw_err)
             return
         key = self.found[k]["key"]
         set_ignored(self.asm, key, key not in ignored(self.asm))
@@ -1215,7 +1221,7 @@ class InterferencePanel:
     def _picked(self):
         k = self.picked_index()
         if k is None:
-            self.ignore.setVisible(False)
+            self.ignore.setText("Ignore")       # asmpkg373: stays in sight (no dead control: its click says what to pick)
             self._show()
             return
         self.ignore.setVisible(True)

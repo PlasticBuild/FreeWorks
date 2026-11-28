@@ -27,7 +27,7 @@ def picture(name, pack=None):
             return icons.family(fam)
     path = svg(name)
     from PySide import QtGui
-    return QtGui.QIcon(path) if path else QtGui.QIcon()
+    return icons.family(path) if path else QtGui.QIcon()     # v2last-1127: the V2 pack's, themed
 
 
 def family_or_drawing(name):

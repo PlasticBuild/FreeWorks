@@ -224,11 +224,31 @@ def picked_links():
     return links
 
 
+def whole_sketches(links):
+    ""
+
+    out = {}
+    for o, subs in links.items():
+        edges = [s for s in subs if s.startswith("Edge")]
+        if o.isDerivedFrom("Sketcher::SketchObject") and edges and len(edges) == len(subs):
+            try:
+                build(_edges([(o, edges)]))
+            except Exception:
+                try:
+                    build(_edges([(o, [""])]))
+                    out[o] = [""]
+                    continue
+                except Exception as _fw_err:
+                    _fw_log("planarsurface.whole_sketches", _fw_err)
+        out[o] = subs
+    return out
+
+
 def from_selection():
     """The command with the bounding entities picked: makes the surface (one Undo step)."""
     import FreeCADGui as Gui
     doc = App.ActiveDocument
-    links = picked_links()
+    links = whole_sketches(picked_links())
     if doc is None or not links:
         return None
     doc.openTransaction(TITLE)

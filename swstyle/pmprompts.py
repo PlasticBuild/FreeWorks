@@ -27,7 +27,7 @@ import FreeCAD as App
 
 try:
     import FreeCADGui as Gui
-    from PySide import QtCore, QtWidgets
+    from PySide import QtCore, QtGui, QtWidgets
 except ImportError:
     Gui = None
 
@@ -38,6 +38,29 @@ SECTION = "Adjust the section settings or drag the section plane"
 # one for every open tool); shown while the page has no message of its own in the status bar
 FILLET_EMPTY = "Pick the edges, faces, features or loops to round"
 PAGES = {
+    # pkg469: pages that said only "Set the ... options": what to pick first, from each page's first box
+    "Advanced Hole": "Pick the near side face, then click the hole positions",
+    "Stud Wizard": "Pick the face for the stud, then a circular edge or point for its center",
+    "Cut-Loft": "Pick the profiles in order, then any guide curves",
+    "Curve Driven Pattern": "Pick a curve or edge for the direction, then the features to pattern",
+    "Sketch Driven Pattern": "Pick the reference sketch, then the features to pattern",
+    "Table Driven Pattern": "Pick the features to pattern, then type the X and Y of each instance",
+    "Fill Pattern": "Pick the face to fill, then the features to pattern",
+    "Wrap": "Pick the sketch to wrap, then the face to wrap it on",
+    "Intersect": "Pick the bodies, surfaces or planes that intersect",
+    "Surface-Revolve": "Pick the axis of revolution",
+    "Surface-Sweep": "Pick the sweep profile, then the path",
+    "Surface-Loft": "Pick the profiles in order, then any guide curves",
+    "Fill Surface": "Pick the edges of the patch boundary",
+    "Freeform": "Pick the face to deform",
+    "Planar Surface": "Pick the closed edges or the sketch that bound the surface",
+    "Ruled Surface": "Pick the edges for the ruled surface",
+    "Replace Face": "Pick the faces to replace, then the replacement surface",
+    "Delete Hole": "Pick the hole edges, or the faces with the holes",
+    "Extend Surface": "Pick the edges or faces to extend",
+    "Thickened Cut": "Pick the surface to thicken and set the thickness",
+    "Cut with Surface": "Pick the surface or plane to cut with",
+    "Bounding Box": "Click OK to add the bounding box, or pick a plane for its direction",
     "Boss-Extrude": "Set the depth here or drag the arrow in the view",
     "Cut-Extrude": "Set the depth here or drag the arrow in the view",
     "Revolve": "Set the angle here or drag the arrow in the view",
@@ -193,6 +216,36 @@ def _generic(title):
     return "Set the %s options, then click OK" % title if title else None
 
 
+_PICK_WORDS = ("Select", "Pick", "Please select", "Please pick", "Make a ", "Start a ", "Type ", "Click ")
+
+
+def _page_message(view):
+    ""
+
+    if view is None:
+        return None
+    try:
+        labs = [l for l in view.findChildren(QtWidgets.QLabel) if l.isVisible() and l.text().strip()
+                and l.objectName() != "SWStyle_PMTitle"]
+        labs.sort(key=lambda l: l.mapTo(view, QtCore.QPoint(0, 0)).y())
+    except RuntimeError:
+        return None
+    for lab in labs[:4]:
+        text = QtGui.QTextDocumentFragment.fromHtml(lab.text()).toPlainText() if "<" in lab.text() else lab.text()
+        lines = [x.strip() for x in text.splitlines() if x.strip()]
+        if not lines or not lines[0].startswith(_PICK_WORDS):
+            continue
+        line = lines[0]
+        if line.rstrip(":") == "Select" and len(lines) > 1:      # "Select:\n1) A plane or a planar face ..."
+            line = "Pick " + lines[1].lstrip("1)").strip()
+            line = line[:5] + line[5].lower() + line[6:] if len(line) > 6 else line
+        for old, new in (("Please select ", "Pick "), ("Please pick ", "Pick "), ("Select ", "Pick ")):
+            if line.startswith(old):
+                line = new + line[len(old):]
+        return line.rstrip(". ")
+    return None
+
+
 def _sketch_prompt():
     try:
         from . import sketchtoolpm, contextbar
@@ -280,6 +333,7 @@ def prompt():
             return None
     mw = Gui.getMainWindow()
     title = ""
+    views = []
     try:
         from . import propertymanager
         views = [w for w in _task_views(mw) if w.isVisible()]
@@ -300,6 +354,13 @@ def prompt():
         return SWEEP[2]
     if title in PICK_FIRST and views and _only_message(views[0]):      # pkg439: the page still waits for its first pick
         return PICK_FIRST[title]
+    if views and _only_message(views[0]):      # pkg469: Extrude, Revolve, Rib... still wait for a plane or a sketch
+        first = _page_message(views[0])
+        if first:
+            return first
+    if title == "Flatten" and views and any(l.isVisible() and l.text() == "Face/Surface to Flatten"
+                                            for l in views[0].findChildren(QtWidgets.QLabel)):
+        return "Pick the face or surface to flatten, then a vertex or point to flatten from"     # pkg470: Surface Flatten
     light = mw.findChild(QtWidgets.QWidget, "SWLightProperties")
     if light is not None and light.isVisible():      # a light's page: "Point1" is a point light, not Point
         return _generic(title)
@@ -311,7 +372,8 @@ def prompt():
                 return ASM_PAGES[title]
         except Exception as _fw_err:
             _fw_log("pmprompts:asm", _fw_err)
-    return PAGES.get(title) or PAGES.get((title or "").rstrip("0123456789")) or _generic(title)
+    return (PAGES.get(title) or PAGES.get((title or "").rstrip("0123456789"))
+            or _page_message(views[0] if views else None) or _generic(title))
 
 
 def _ours(text):

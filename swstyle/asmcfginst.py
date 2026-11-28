@@ -179,6 +179,11 @@ def set_configuration(comp, name, recompute=True):
         setattr(comp, PROP, name)
         _hide_group(comp)
         reapply(comp)
+    try:        # asmpkg376: patterns with Synchronize configuration: their instances follow this seed
+        from . import asmcpattern
+        asmcpattern.seed_configuration_changed(comp)
+    except Exception as _fw_err:
+        _fw_log("asmcfginst.py:pattern sync", _fw_err)
     if recompute:
         doc.recompute()
     return True

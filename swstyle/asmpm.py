@@ -207,9 +207,13 @@ def _track(panel):
 
         def wrapped(*args, _m=method):
             global OPEN
-            if OPEN is panel:
+            was = OPEN is panel
+            if was:
                 OPEN = None
-            return _m(*args)
+            result = _m(*args)
+            if was and result is False and OPEN is None:
+                OPEN = panel        # asmpkg376: an OK that waits for a pick (no axis, no plane yet) leaves it open
+            return result
         setattr(panel, name, wrapped)
 
 

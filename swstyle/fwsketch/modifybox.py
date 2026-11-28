@@ -460,6 +460,10 @@ class EquationList(QtCore.QObject):
         self.list.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
         self.list.setFocusPolicy(QtCore.Qt.NoFocus)
         self.list.itemClicked.connect(self.pick)
+        # a row lights up under the pointer, and a press puts it in at once: the release can come after
+        # the box lost the focus to the list window (Windows), which used to hide the list first
+        self.list.viewport().setMouseTracking(True)
+        self.list.viewport().installEventFilter(self)
         self.edit.textEdited.connect(self.typed)
         self.edit.installEventFilter(self)
         spin = self.edit.parentWidget()
@@ -546,6 +550,18 @@ class EquationList(QtCore.QObject):
         if not isinstance(event, QtCore.QEvent):
             return False
         t = event.type()
+        if obj is self.list.viewport():
+            if t == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.LeftButton:
+                self.pick(self.list.itemAt(event.position().toPoint() if hasattr(event, "position") else event.pos()))
+                return True
+            if t in (QtCore.QEvent.MouseMove, QtCore.QEvent.Enter):
+                item = self.list.itemAt(self.list.viewport().mapFromGlobal(QtGui.QCursor.pos()))
+                if item is not None and item.flags() & QtCore.Qt.ItemIsSelectable:
+                    self.list.setCurrentItem(item)       # the row under the pointer lights up
+            return False
+        if t == QtCore.QEvent.FocusOut and self.list.isVisible() and \
+                self.list.geometry().contains(QtGui.QCursor.pos()):
+            return False      # a press on the list itself: keep it up for the pick
         if t in (QtCore.QEvent.FocusOut, QtCore.QEvent.Hide):
             self.list.hide()
             return False

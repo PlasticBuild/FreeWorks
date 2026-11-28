@@ -291,6 +291,100 @@ def link(box, text):
     return value
 
 
+PENDING = "sweqpending"          # an equation typed in a field with no property behind it yet ("R1")
+PENDING_VALUE = "sweqpendingvalue"
+
+
+def _names_something(text):
+    ""
+
+    return '"' in text
+
+
+def _equation_value(box, text):
+    ""
+
+    if not _names_something(text):
+        return value_for(box, text)
+    doc = App.ActiveDocument
+    host = (doc.Objects[0] if doc is not None and doc.Objects else None)
+    if host is None:
+        raise ValueError("no document")
+    try:
+        got = host.evalExpression(equations.to_freecad(doc, text))
+    except Exception as error:
+        raise ValueError(str(error))
+    if not hasattr(got, "Unit"):
+        got = App.Units.Quantity(float(got))
+    if got.Unit == App.Units.Unit():
+        if hasattr(box, "text_of"):
+            return float(got.Value) * box._unit()[0]
+        return float(got.Value)
+    try:
+        return float(got.getValueAs("mm")) if hasattr(box, "text_of") else float(got.Value)
+    except Exception as error:
+        raise ValueError(str(error))
+
+
+def set_pending(box, text, value=None):
+    """Keeps (or, with "", drops) the equation a page links its feature to on OK."""
+    box.setProperty(PENDING, text or "")
+    box.setProperty(PENDING_VALUE, float(value) if (text and value is not None) else None)
+    if text:
+        if box.property("swTipBefore") is None:
+            box.setProperty("swTipBefore", box.toolTip())
+        box.setToolTip("= " + text)
+    elif box.property("swTipBefore") is not None:
+        box.setToolTip(box.property("swTipBefore") or "")
+
+
+def pending(box):
+    """The equation typed in the field, while the field still shows its result; "" once a value
+    was typed over it."""
+    text = box.property(PENDING) or ""
+    if not text:
+        return ""
+    try:
+        if abs(float(box.value()) - float(box.property(PENDING_VALUE))) > 1e-9:
+            return ""
+    except Exception:
+        return ""
+    return text
+
+
+def link_pending(box, obj, prop):
+    ""
+
+    text = pending(box)
+    if text:
+        expr = equations.to_freecad(obj.Document, text, target=(obj, prop))
+        equations.accept_expression(obj.Document, obj, prop, expr, prop)
+        return True
+    if box.property(PENDING) and any(p.lstrip(".") == prop for p, _e in (obj.ExpressionEngine or [])):
+        try:
+            from . import configs
+            if configs.configured(obj, prop):
+                return False
+        except Exception as _fw_err:
+            _fw_log("pmvalues.py:link-pending configured", _fw_err)
+        obj.setExpression(prop, None)
+    return False
+
+
+def show_pending_of(box, obj, prop):
+    ""
+    for path, expr in (obj.ExpressionEngine or []):
+        if path.lstrip(".") == prop:
+            try:
+                set_pending(box, equations.to_sw(obj.Document, expr, owner=obj), box.value())
+                edit = box.lineEdit() if hasattr(box, "lineEdit") else None
+                if edit is not None and not edit.text().startswith(MARK.strip()):
+                    edit.setText(MARK + edit.text())
+            except Exception as _fw_err:
+                _fw_log("pmvalues.py:show-pending", _fw_err)
+            return
+
+
 def equation_of(box):
     ""
     bound = binding(box)
@@ -729,10 +823,11 @@ class Field(QtCore.QObject):
             self.end_equation()
             return False
         if binding(self.box) is None:
-            # a field with no property behind it yet (the page makes its feature on OK):
+            # a field with no property behind it yet (the page makes its feature on OK): the equation's
 
+            # Variable ("R1") is kept for the page, which links its feature to it on OK (Σ)
             try:
-                value = value_for(self.box, text[1:])
+                value = _equation_value(self.box, text[1:])
             except ValueError as error:
                 pmmessage.invalid(self.box, "The equation \"%s\" could not be worked out." % text)
                 _fw_log("pmvalues.py:link-plain", error)
@@ -740,7 +835,11 @@ class Field(QtCore.QObject):
                 return True
             pmmessage.valid(self.box)
             self.end_equation()
+            linked = _names_something(text[1:])
+            set_pending(self.box, text[1:].strip() if linked else "", value)    # before the value: the page rebuilds on it
             _set_value(self.box, value)
+            if linked and self.edit is not None:
+                self.edit.setText(MARK + self.edit.text())
             self.box.editingFinished.emit()
             return not tab
         try:

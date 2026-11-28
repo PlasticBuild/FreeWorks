@@ -1764,11 +1764,11 @@ class SlicerPanel:
     def _slice_box(self):
         w = _group("Slice", "SWStyle_SlicerSlice")
         lay = QtWidgets.QVBoxLayout(w)
-        self.slice_button = QtWidgets.QPushButton(QtGui.QIcon(_icon("slice")), "Slice")
+        self.slice_button = QtWidgets.QPushButton(_v2(_icon("slice")), "Slice")
         self.slice_button.setToolTip("Slice the part with %s's engine" % self.slicer.title)
         self.slice_button.clicked.connect(self._slice_clicked)
         lay.addWidget(self.slice_button)
-        self.export_button = QtWidgets.QPushButton(QtGui.QIcon(_icon("export")), "Export G-code...")
+        self.export_button = QtWidgets.QPushButton(_v2(_icon("export")), "Export G-code...")
         self.export_button.clicked.connect(self.export)
         lay.addWidget(self.export_button)
         self.bar = QtWidgets.QProgressBar()
@@ -2301,7 +2301,7 @@ class SlicerPanel:
             self.slice_button.setToolTip("Stop this slice")
         else:
             self.slice_button.setText("Slice")
-            self.slice_button.setIcon(QtGui.QIcon(_icon("slice")))
+            self.slice_button.setIcon(_v2(_icon("slice")))
             self.slice_button.setToolTip("Slice the part with %s's engine" % self.slicer.title)
         # the layer slider is there while the preview shows
         self.layer_slider.setVisible(self.preview.shown)
@@ -3017,3 +3017,9 @@ try:
     _teardown.on_quit(_on_quit)
 except ImportError:
     pass            # without exit1's teardown module there is nothing to hook into
+
+
+def _v2(path):
+    """v2last-1127: the V2 pack's themed picture for one of the add-on's own drawings, else the file itself."""
+    from . import icons
+    return icons.family(str(path))

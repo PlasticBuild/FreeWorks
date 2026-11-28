@@ -438,6 +438,15 @@ class LineTool(SketchTool):
     def on_click(self, d):
         if self.state == self.FIRST:
             self._first_click(d)
+            fixed = orientation()
+            if fixed is not None and infinite() and self.segment == LINE and self.transition == FREE \
+                    and not self.typed_entry:
+                # an infinite line held Horizontal, Vertical or at an Angle needs no second point: one
+                # click puts it through the point clicked (user report 11-27, construction lines)
+                dv = fixed[1]
+                self.end_point = (self.start[0] + dv[0], self.start[1] + dv[1])
+                self.sug2 = []
+                self._place_segment(d)
             return
         pos = d.position
         if self.start is not None and length(sub(pos, self.start)) < 1e-9:

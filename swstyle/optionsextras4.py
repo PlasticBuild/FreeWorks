@@ -82,10 +82,29 @@ def _changed(row):
     return value
 
 
+STOCK_ICONS = "FreeCAD stock icons (next start)"      # stockicons-1127
+
+
 def is_classic_icons():
-    """Icon color = Classic: startup leaves FreeCAD's own icons on its commands."""
+    """Icon color = FreeCAD stock icons: startup leaves FreeCAD's own icons on its commands.
+    v2audit-1127: the old "Classic" choice is gone; a saved Classic becomes Default (the V2 pack)."""
     try:
-        return str(_kept(ICON_COLOR)) == "Classic"
+        value = str(_kept(ICON_COLOR))
+        if value == "Classic":
+            from . import optionspages
+            optionspages.set_stored(ICON_COLOR[0], ICON_COLOR[1], "Default")
+            App.Console.PrintLog("FreeCAD: Icon color Classic -> Default (V2)\n")
+            return False
+        return value == STOCK_ICONS
+    except Exception:
+        return False
+
+
+def is_stock_icons():
+    ""
+
+    try:
+        return str(_kept(ICON_COLOR)) == STOCK_ICONS
     except Exception:
         return False
 

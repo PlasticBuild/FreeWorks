@@ -189,7 +189,7 @@ class SlicerTab(QtWidgets.QWidget):
             b = QtWidgets.QToolButton()
             b.setText(text)
             b.setToolTip(tip)
-            b.setIcon(QtGui.QIcon(str(res / (icon + ".svg"))))
+            b.setIcon(_v2(str(res / (icon + ".svg"))))
             b.setIconSize(QtCore.QSize(24, 24))
             b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
             b.clicked.connect(fn)
@@ -359,9 +359,15 @@ def open_tab(key, title, exe):
         sub = area.addSubWindow(tab)
         sub.setWindowTitle(title)
         icon = Path(__file__).parent / "resources" / "slicer" / "printer.svg"
-        sub.setWindowIcon(QtGui.QIcon(str(icon)))
+        sub.setWindowIcon(_v2(str(icon)))
         sub.showMaximized()
     else:
         tab.show()
     tab.start()
     return tab
+
+
+def _v2(path):
+    """v2last-1127: the V2 pack's themed picture for one of the add-on's own drawings, else the file itself."""
+    from . import icons
+    return icons.family(str(path))

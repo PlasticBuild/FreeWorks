@@ -45,6 +45,18 @@ def wanted():
     return _GROUP[0].GetBool("PickModelInSketch", True)
 
 
+def page_takes_model_clicks():
+    ""
+
+    try:
+        from .. import sketchtoolpm
+        page = sketchtoolpm.current()
+        return page is not None and sketchtoolpm.alive(page) and bool(getattr(page, "TAKES_MODEL_CLICKS", False))
+    except Exception as _fw_err:
+        _fw_log("fwsketch/modelpick.py:page_takes_model_clicks", _fw_err)
+        return False
+
+
 def _colour():
     packed = App.ParamGet("User parameter:BaseApp/Preferences/View").GetUnsigned("HighlightColor", 0xE1E114FF)
     return ((packed >> 24) & 255) / 255.0, ((packed >> 16) & 255) / 255.0, ((packed >> 8) & 255) / 255.0
@@ -339,7 +351,7 @@ class ModelPickWatcher(QtCore.QObject):
             return False
         if t == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.LeftButton:
             # the element lit under the pointer, unless the sketch has the pointer now
-            if self.hover is None or sketch_preselected(sketch):
+            if self.hover is None or sketch_preselected(sketch) or page_takes_model_clicks():
                 return False
             self.pressed = (sketch.Document.Name,) + tuple(self.hover)
             return True

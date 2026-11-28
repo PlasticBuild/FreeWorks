@@ -644,7 +644,7 @@ if Gui is not None:
                 gl.addWidget(self.inplane, 2, 0, 1, 2)
                 gl.addWidget(self.soft, 3, 0, 1, 2)
             else:
-                self.soft.setVisible(False)
+                gl.addWidget(self.soft, 1, 0, 1, 2)          # Buckling: under Number of buckling modes
             ol.insertWidget(0, box)
             sigs = [self.count.valueChanged]
             if self.upper_on is not None:
@@ -658,8 +658,6 @@ if Gui is not None:
             if self.kind == "frequency":
                 v["upper"] = self.upper.value() if self.upper_on.isChecked() else None
                 v["inplane"] = self.inplane.isChecked()
-            else:
-                v.pop("soft", None)
             v.pop("inertial", None)
             return v
 
@@ -676,7 +674,7 @@ if Gui is not None:
                 if self.kind == "frequency":
                     kw["upper"] = v["upper"]
                     kw["inplane"] = v["inplane"]
-                    kw["soft"] = v["soft"]
+                kw["soft"] = v["soft"]
                 simtypes.set_properties(self.a, **kw)
                 set_remark(self.a, v["remark"], v["in_report"])
                 doc.commitTransaction()

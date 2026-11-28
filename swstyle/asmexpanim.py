@@ -25,7 +25,7 @@ import os
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtWidgets
+from PySide import QtCore, QtGui, QtWidgets
 
 from . import asmcore as ac
 from . import asmexplode as ax
@@ -88,6 +88,45 @@ def pose_at(frames, t, collapse=False):
     return {k: _lerp(a[k], b[k], f) for k in a if k in b}
 
 
+# asmpkg373: the controller's pictures: the pack's MotionManager family, else the drawn Motion set, else Qt's media icons
+_BUTTON_ART = {"Start": ("MOTION_PLAY_FROM_START", "SP_MediaSkipBackward"), "Rewind": (None, "SP_MediaSeekBackward"),
+               "Play": ("MOTION_PLAY", "SP_MediaPlay"), "FastForward": (None, "SP_MediaSeekForward"),
+               "End": (None, "SP_MediaSkipForward"), "Pause": (None, "SP_MediaPause"),
+               "Stop": ("MOTION_STOP", "SP_MediaStop"), "Save": ("MOTION_SAVE_ANIMATION", "SP_DialogSaveButton")}
+
+
+def _button_icon(widget, key):
+    family, std = _BUTTON_ART.get(key, (None, None))
+    try:
+        if family:
+            from . import icons
+            icon = icons.family(family)
+            if icons.paints(icon):
+                return icon
+            from . import simicons
+            path = simicons.svg(family)
+            if path:
+                return QtGui.QIcon(path)
+        if std:
+            return widget.style().standardIcon(getattr(QtWidgets.QStyle, std))
+    except Exception as _fw_err:
+        _fw_log("asmexpanim._button_icon", _fw_err)
+    return None
+
+
+def _place(bar):
+    ""
+
+    try:
+        mdi = Gui.getMainWindow().findChild(QtWidgets.QMdiArea)
+        area = mdi.viewport() if mdi is not None else Gui.getMainWindow()
+        top_left = area.mapToGlobal(QtCore.QPoint(24, 64))     # under the heads-up view toolbar
+        bar.adjustSize()
+        bar.move(top_left)
+    except Exception as _fw_err:
+        _fw_log("asmexpanim._place", _fw_err)
+
+
 class AnimationController(QtWidgets.QWidget):
     ""
 
@@ -119,6 +158,11 @@ class AnimationController(QtWidgets.QWidget):
             b.setObjectName("FW_Anim" + key)
             b.setText(text)
             b.setToolTip(tip)
+            icon = _button_icon(self, key)
+            if icon is not None:
+                b.setIcon(icon)
+                b.setIconSize(QtCore.QSize(20, 20))
+                b.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
             b.clicked.connect(slot)
             lay.addWidget(b)
             self.buttons[key] = b
@@ -300,6 +344,7 @@ def animate(view, collapse=False):
             _fw_log("asmexpanim.py:293", _fw_err)
     bar = AnimationController(asm, view, collapse)
     _OPEN["bar"] = bar
+    _place(bar)
     bar.show()
     bar.play()
     return bar

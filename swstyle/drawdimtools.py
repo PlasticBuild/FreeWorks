@@ -1205,18 +1205,21 @@ def _seam_points(view):
     return out
 
 
-def unique_points(view, axis, picked=None):
-    """One vertex per distinct coordinate along axis (0 x, 1 y), lowest first: [(index, point)]. A circle's
-    seam vertex is left out (its centre counts)."""
+def unique_points(view, axis, picked=None, side=0):
+    ""
+
+
+
     seen = {}
     seams = _seam_points(view)
+    other = 1 - axis
     for i, q in DA.vertices(view):
         if picked is not None and i not in picked:
             continue
         if any(abs(q.x - p.x) < 1e-6 and abs(q.y - p.y) < 1e-6 for p in seams):
             continue
         key = round((q.x, q.y)[axis], 5)
-        if key not in seen:
+        if key not in seen or (side and side * ((q.x, q.y)[other] - seen[key][1][other]) > 1e-6):
             seen[key] = (i, (q.x, q.y))
     return [seen[k] for k in sorted(seen)]
 
@@ -1230,7 +1233,8 @@ def autodimension(page, view, h_scheme="Baseline", v_scheme="Baseline", h_place=
     for on, axis, scheme, place, origin in ((h_on, 0, h_scheme, h_place, h_origin), (v_on, 1, v_scheme, v_place, v_origin)):
         if not on:
             continue
-        pts = unique_points(view, axis, picked)
+        flip = place in ("Below view", "Left of view")
+        pts = unique_points(view, axis, picked, -1 if flip else 1)
         if len(pts) < 2:
             continue
         if origin is not None and scheme != "Chain":

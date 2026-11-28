@@ -83,7 +83,7 @@ MEAN_CORRECTION = ("None", "Goodman", "Gerber", "Soderberg")
 LOADING = ("Fully Reversed (LR=-1)", "Zero Based (LR=0)", "Loading Ratio")
 
 NL = "FwNonlinear"
-SOFT_TYPES = ("static", "check", None, "", "frequency")
+SOFT_TYPES = ("static", "check", None, "", "frequency", "buckling")
 INERTIAL = "FwInertialRelief"  # Static "Use inertial relief": the part, unheld, balanced by its own inertia
 SOFT = "FwSoftSpring"        # Static / Frequency "Use soft spring to stabilize the model": weak springs to ground
 INPLANE = "FwInplane"          # a Frequency study's "Use inplane effect": its loads stiffen or soften the part
@@ -1414,7 +1414,7 @@ def set_properties(a, **v):
         raise simpms.SetupError("The study has no solver.")
     if "soft" in v and k in SOFT_TYPES:
         _set(a, SOFT, bool(v["soft"]), "App::PropertyBool", "Options: Use soft spring to stabilize the model")
-    if "inertial" in v and k in SOFT_TYPES and k != "frequency":
+    if "inertial" in v and k in SOFT_TYPES and k not in ("frequency", "buckling"):
         _set(a, INERTIAL, bool(v["inertial"]), "App::PropertyBool", "Options: Use inertial relief")
     if k == "frequency":
         if int(v.get("count", 1)) < 1:
@@ -1469,7 +1469,7 @@ def properties(a):
         return {"count": int(num("EigenmodesCount", 5)), "upper": hi if hi < 1e6 else None,
                 "inplane": bool(getattr(a, INPLANE, False)), "soft": bool(getattr(a, SOFT, False))}
     if k == "buckling":
-        return {"count": int(num("BucklingFactors", 1))}
+        return {"count": int(num("BucklingFactors", 1)), "soft": bool(getattr(a, SOFT, False))}
     if k == "thermomech":
         return {"steady": bool(getattr(s, "ThermoMechSteadyState", True)),
                 "total": num("TimePeriod", num("TimeEnd", 100.0)),

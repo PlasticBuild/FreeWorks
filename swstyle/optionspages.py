@@ -165,7 +165,7 @@ CHOICES = {
     ("Area Hatch/Fill", "Pattern"): ("ANSI31 (Iron BrickStone)", "ANSI32 (Steel)", "ANSI33 (Bronze Brass)",
                                      "ANSI34 (Plastic Rubber)", "ANSI35 (Fire Brick)", "ANSI36 (Marble)",
                                      "ANSI37 (Lead Zinc)", "ANSI38 (Aluminum)", "Concrete", "Earth", "Wood"),
-    ("Colors", "Icon color"): ("Default", "Classic"),
+    ("Colors", "Icon color"): ("Default", "FreeCAD stock icons (next start)"),
     ("Colors", "Current color scheme"): ("Default", "Blue Highlight", "Green Highlight", "Orange Highlight"),  # extapps82
     ("General", "Custom property used as component description"): ("Description", "Title", "Number", "Revision"),
     ("Colors", "Default scene"): ("00 3 point faded", "01 3 point white", "02 Plain white", "03 Studio room"),

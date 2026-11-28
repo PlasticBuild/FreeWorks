@@ -390,6 +390,12 @@ def apply_layer(obj, name=None):
     else:
         c = QtGui.QColor(L.get("color", "#000000") if L is not None else "#000000")
         rgb = (c.redF(), c.greenF(), c.blueF())
+        if L is None and getattr(obj, "SWDrivenPainted", False):
+            try:            # -None-: a dimension added in the drawing goes back to the driven grey, not black
+                from . import drawdocprops
+                rgb = tuple(drawdocprops.driven_color()[:3])
+            except Exception as _fw_err:
+                _fw_log("drawpmparts.py:driven", _fw_err)
         th = L.get("thickness", "Default") if L is not None else "Default"
         try:
             if hasattr(obj, "TextColor"):              # tables (TechDraw spreadsheet views)
