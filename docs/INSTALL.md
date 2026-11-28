@@ -18,7 +18,7 @@ Clone the repository into your user `Mod` folder as `FreeWorks`, for example
 
 ## Windows installer (optional)
 
-Each release can also carry **FreeWorks-0.4.0-alpha-Setup.exe**. It asks your FreeCAD where its user `Mod` folder is, usually `%APPDATA%\FreeCAD\v1-1\Mod`, and installs the add-on there as `FreeWorks` for your Windows user only. You need no administrator rights. If a `FreeWorks` folder is already there, setup moves it aside as a backup and does not delete it. It needs FreeCAD 1.1 to be installed already, and it never installs, changes, or removes FreeCAD itself. To remove the add-on, use **FreeWorks add-on for FreeCAD** in Windows Settings > Apps.
+The **0.4.0-alpha** release includes an optional Windows installer. For **0.4.1-alpha**, use Addon Manager or the ZIP. The older installer asks your FreeCAD where its user `Mod` folder is, usually `%APPDATA%\FreeCAD\v1-1\Mod`, and installs the add-on there as `FreeWorks` for your Windows user only. You need no administrator rights. If a `FreeWorks` folder is already there, setup moves it aside as a backup and does not delete it. It needs FreeCAD 1.1 to be installed already, and it never installs, changes, or removes FreeCAD itself. To remove the add-on, use **FreeWorks add-on for FreeCAD** in Windows Settings > Apps.
 
 ## Manual install
 

@@ -8,13 +8,11 @@
 
 FreeWorks is an independent add-on for FreeCAD. Install it into your existing FreeCAD setup. The application still appears as **FreeCAD**.
 
-[**Download FreeWorks 0.4.1-alpha**](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.1-alpha)
+[**Download the latest release**](https://github.com/PlasticBuild/FreeWorks/releases/latest) · [Installation guide](docs/INSTALL.md) · [Report an issue](https://github.com/PlasticBuild/FreeWorks/issues)
 
-See the [0.4.1-alpha release notes](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.1-alpha) for what is new and for known issues.
+## What's new in 0.4.1-alpha
 
-The alpha icons come in light and dark sets. See [Icons](#icons).
-
-[Download the six-column icon comparison PDF](https://raw.githubusercontent.com/PlasticBuild/FreeWorks/main/docs/FreeWorks-Icon-Comparison.pdf)
+0.4.1-alpha fixes a crash when reopening an assembly with linked parts. It also includes the 0.4.0 improvements, including Smart Dimension drag placement, per-component configurations in assemblies, and theme-matched ribbon and feature-tree icons. [Release notes](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.1-alpha)
 
 ## What you can try
 
@@ -30,14 +28,20 @@ Sketching is the best place to start. The walkthrough below takes you from a sna
 
 ## Screenshots
 
-![FreeWorks part workspace showing the bearing mount, ribbon, feature tree, and rollback bar](docs/images/freeworks-part-alpha1.png)
+**Part workspace.** A bearing mount with the Features ribbon and model tree visible.
 
-![FreeWorks sketch editor showing the shaded bearing mount profile](docs/images/freeworks-sketch-alpha1.png)
+![FreeWorks 0.4.1-alpha part workspace with a bearing mount, Features ribbon, and model tree](docs/images/freeworks-041-part.png)
+
+**Sketch editor.** The bearing collar profile in edit mode with the Sketch ribbon visible.
+
+![FreeWorks 0.4.1-alpha sketch editor with the bearing collar profile in edit mode](docs/images/freeworks-041-sketch.png)
 
 ## Requirements and quick install
 
-- Use stock FreeCAD **1.1.4**. Windows has been tested. Other operating systems are untested.
-- Install with FreeCAD's **Addon Manager** from this repository's URL, download **FreeWorks-0.4.1-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.1-alpha), run the optional Windows installer from the same release, or install from source. The [installation guide](docs/INSTALL.md) covers each way.
+Use stock FreeCAD **1.1.4**. Windows has been tested. Other operating systems are untested.
+
+- **Addon Manager:** add `https://github.com/PlasticBuild/FreeWorks` as a custom repository on branch `main`, then install FreeWorks and restart FreeCAD.
+- **ZIP:** download the add-on ZIP from the latest release and extract it to your FreeCAD `Mod` folder so that `Mod/FreeWorks/InitGui.py` exists. [Download and install](docs/INSTALL.md)
 
 Orca, Bambu, PrusaSlicer, and Diotopo are optional in-app downloads. Each is downloaded separately. The add-on package excludes all four.
 
@@ -83,38 +87,12 @@ Without git, use **Code > Download ZIP** on this page, extract it, and rename th
 3. Remove the practice line so the rectangle is the only profile. Use Smart Dimension on two adjacent edges and enter their lengths in the Modify box.
 4. Exit the sketch, select the rectangle sketch, and use Extrude. Enter a depth and accept the preview.
 
-## Status · 0.3.0-alpha1
+## Alpha feedback
 
-These notes cover 0.3.0-alpha1. Everyone is welcome to report bugs, suggest features, or share feedback in [GitHub Issues](https://github.com/PlasticBuild/FreeWorks/issues). See the [feedback guide](docs/FEEDBACK.md) for what to include.
-
-### Known problems
-
-- **Parting Surface.** The Sharp and Smooth corner options leave corners unfilled.
-- **Dimension Text.** Inspection, Justify, Offset, and the second text line are unavailable. Add Parentheses works.
-- A Distance-Distance chamfer that meets a Vertex chamfer corner can fail to build.
-- Some files may freeze when rebuilding complex surfaces after an edit or during certain drawing steps. Save often.
-- Some drawings may reopen blank. If that happens, try rebuilding with **Ctrl+Q**.
-- Some panel wording and layouts may differ from the intended workflow.
-
-### Shortcomings
-
-- FreeWorks runs on stock FreeCAD 1.1.4 and inherits limits from its geometry kernel and assembly solver.
-- Sheet metal, weldments, and mold tools have had less testing than parts, assemblies, and drawings.
-- Drawing flat patterns, weldment cut-list tables, and the Sketch Blocks and Library Feature panels are still pending.
-
-### Actively being worked on (coming in the next version)
-
-- **Sketching:** smarter snapping and inference lines, and more automatic relations while you draw.
-- **Features:** Thin cut from an open line, Full Round on slot ends, and more fillet and chamfer options on surfaces.
-- **Sheet metal and weldments:** a full pass on flanges, hems, fold and unfold, structural members and cut lists.
-- **Mold tools:** Parting Surface corner options and the rest of the mold panels.
-- **Drawings:** flat pattern views, weldment cut-list tables, and Dimension Text options (Inspection, Justify, Offset, second text line).
-- **Assemblies:** more mate types, Motion Study polish, and Make Independent.
-- **Interface:** panel-by-panel layout and wording polish, Sketch Blocks, and Library Features.
-- **Stability:** fixes from automated tutorial walk-throughs and from tester reports.
+Everyone is welcome to report bugs and suggest improvements. Include your FreeCAD and FreeWorks versions, the steps to reproduce the issue, and any relevant Report View output or screenshots. [GitHub Issues](https://github.com/PlasticBuild/FreeWorks/issues) · [Feedback guide](docs/FEEDBACK.md)
 
 ## Guides
 
 - [Install, update, or remove FreeWorks](docs/INSTALL.md)
-- [Give feedback](docs/FEEDBACK.md)
-- [Alpha status, known problems, and planned work](STATUS.md)
+- [Download the six-column icon comparison PDF](https://raw.githubusercontent.com/PlasticBuild/FreeWorks/main/docs/FreeWorks-Icon-Comparison.pdf)
+- [Historical 0.3.0-alpha1 status notes](STATUS.md)
