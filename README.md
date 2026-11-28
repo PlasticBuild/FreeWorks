@@ -2,15 +2,15 @@
 
 [![Donate on Ko-fi](https://img.shields.io/badge/Donate-Ko--fi-FF5E5B?style=for-the-badge)](https://ko-fi.com/plasticbuild)
 
-**0.4.0-alpha · FreeCAD 1.1.4 · Windows**
+**0.4.1-alpha · FreeCAD 1.1.4 · Windows**
 
 **Like the SOLIDWORKS interface and want to work in FreeCAD?** FreeWorks brings a familiar commercial-CAD workflow to stock FreeCAD 1.1.4, from the first sketch through parts, assemblies, and drawings.
 
 FreeWorks is an independent add-on for FreeCAD. Install it into your existing FreeCAD setup. The application still appears as **FreeCAD**.
 
-[**Download FreeWorks 0.4.0-alpha**](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.0-alpha)
+[**Download FreeWorks 0.4.1-alpha**](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.1-alpha)
 
-See the [0.4.0-alpha release notes](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.0-alpha) for what is new and for known issues.
+See the [0.4.1-alpha release notes](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.1-alpha) for what is new and for known issues.
 
 The alpha icons come in light and dark sets. See [Icons](#icons).
 
@@ -37,7 +37,7 @@ Sketching is the best place to start. The walkthrough below takes you from a sna
 ## Requirements and quick install
 
 - Use stock FreeCAD **1.1.4**. Windows has been tested. Other operating systems are untested.
-- Install with FreeCAD's **Addon Manager** from this repository's URL, download **FreeWorks-0.4.0-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.0-alpha), run the optional Windows installer from the same release, or install from source. The [installation guide](docs/INSTALL.md) covers each way.
+- Install with FreeCAD's **Addon Manager** from this repository's URL, download **FreeWorks-0.4.1-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.1-alpha), run the optional Windows installer from the same release, or install from source. The [installation guide](docs/INSTALL.md) covers each way.
 
 Orca, Bambu, PrusaSlicer, and Diotopo are optional in-app downloads. Each is downloaded separately. The add-on package excludes all four.
 

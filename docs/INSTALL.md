@@ -22,7 +22,7 @@ Each release can also carry **FreeWorks-0.4.0-alpha-Setup.exe**. It asks your Fr
 
 ## Manual install
 
-1. Download **FreeWorks-0.4.0-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.0-alpha). The zip is built from the tagged source in this repository.
+1. Download **FreeWorks-0.4.1-alpha.zip** from [GitHub Releases](https://github.com/PlasticBuild/FreeWorks/releases/tag/v0.4.1-alpha). The zip is built from the tagged source in this repository.
 2. Close FreeCAD. Extract the add-on into your user `Mod` folder as `FreeWorks`. Check that `InitGui.py` sits directly inside `Mod/FreeWorks`.
 3. Restart FreeCAD.
 
