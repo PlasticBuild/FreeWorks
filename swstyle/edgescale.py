@@ -95,8 +95,34 @@ def _styles_kept(vo, obj):
     if got is not None and got[0] == root and got[1]:
         return got[1]
     nodes = _styles(vo)
+    _drop(key)
+    for node in nodes:
+        try:
+            node.ref()          # 0.4.1 (GitHub #6): held while kept, so a node FreeCAD frees cannot be read after
+        except Exception as _fw_err:
+            _fw_log("edgescale.py:ref", _fw_err)
     _found[key] = (root, nodes)
     return nodes
+
+
+def _drop(key):
+    """Forgets one kept entry and lets go of its nodes."""
+    got = _found.pop(key, None)
+    for node in (got[1] if got else ()):
+        try:
+            node.unref()
+        except Exception as _fw_err:
+            _fw_log("edgescale.py:unref", _fw_err)
+
+
+def _is_link(obj):
+    """A link draws another object's scene (often in another file): that object's own view sets its edges.
+    Its nodes are freed when that file is closed or read again (an assembly loading a part fully on open),
+    so keeping them under the link crashed FreeCAD (GitHub #6)."""
+    try:
+        return obj.hasExtension("App::LinkBaseExtension") or "LinkedObject" in obj.PropertiesList
+    except Exception:
+        return False
 
 
 def scale(vo, f=None):
@@ -104,7 +130,7 @@ def scale(vo, f=None):
     if vo is None or "LineWidth" not in getattr(vo, "PropertiesList", ()):
         return 0
     obj = getattr(vo, "Object", None)
-    if obj is None or getattr(obj, "Shape", None) is None:
+    if obj is None or getattr(obj, "Shape", None) is None or _is_link(obj):
         return 0
     f = factor() if f is None else f
     n = 0
@@ -149,11 +175,11 @@ class _AppObserver:
         for key in [k for k in _swept if k[0] == doc.Name]:
             _swept.discard(key)
         for key in [k for k in _found if k[0] == doc.Name]:
-            del _found[key]
+            _drop(key)
 
     def slotDeletedObject(self, obj):
         try:
-            _found.pop((obj.Document.Name, obj.Name), None)
+            _drop((obj.Document.Name, obj.Name))
         except Exception as _fw_err:
             _fw_log("edgescale.py:deleted", _fw_err)
 
